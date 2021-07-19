@@ -136,7 +136,7 @@ def log_anything(pipe, logger, debug):
             except:
                 logger.info('bytes array \'{}\' cannot be converted to utf-8'.format(line))
                 continue
-            logger.debug(line)
+            logger.info(line)
             if debug:
                 print(line)
     except ValueError:

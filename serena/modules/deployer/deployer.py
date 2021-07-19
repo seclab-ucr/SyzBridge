@@ -11,9 +11,6 @@ class Deployer(Case):
     ACTION_BUG_REPRODUCE = 0
     def __init__(self, index, args, action, case_hash, case):
         Case.__init__(self, index, case_hash, args, case, args.debug)
-        self.logger = init_logger(__name__+str(self.index), 
-            cus_format='%(asctime)s Thread {}: %(message)s'.format(self.index),
-            debug=self.debug, propagate=self.debug, handler_type=STREAM_HANDLER)
         self.action = action
     
     def deploy(self):
@@ -21,13 +18,26 @@ class Deployer(Case):
             if not self.has_c_repro:
                 self.logger.error("{} does not have a valid C reproducer".format(self.case_hash))
                 return
-            ret = self.deploy_reproducer()
-            if ret != None:
-                self.logger.info("Trigger a Kasan bug: {}".format(ret))
+            try:
+                ret = self.deploy_reproducer()
+                if ret != None:
+                    self.logger.info("Trigger a Kasan bug: {}".format(ret))
+                    self.logger.info("Copy to succeed")
+                    self.save_to_succeed()
+                else:
+                    self.logger.info("Copy to completed")
+                    self.save_to_completed()
+            except:
+                self.logger.info("Copy to error")
+                self.save_to_error()
+
     
     def deploy_reproducer(self):
-        rep = Reproducer(self.path_case, self.ssh_port, self.logger, self.case_logger, self.debug, 3)
-        report, triggered = rep.prepare(self.case_hash)
+        if self.check_finish_repro():
+            return None
+        self.logger.info("start reproducing bugs")
+        report, triggered = self.prepare(self.case_hash)
+        self.create_finish_repro()
         if triggered:
             is_kasan_bug, title = self._KasanChecker(report)
             if is_kasan_bug:

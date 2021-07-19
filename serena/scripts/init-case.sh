@@ -28,11 +28,9 @@ if [ $NO_C_REPRO != 1 ]; then
   gcc -pthread -o poc poc.c
 fi
 
-rm $CASE_PATH/ubuntu-20.04-snapshot.img || echo "pass"
 rm $CASE_PATH/vmlinux || echo "pass"
 rm $CASE_PATH/id_rsa || echo "pass"
 
-qemu-img create -f qcow2 -b $IMAGE_PATH $CASE_PATH/ubuntu-20.04-snapshot.img
 ln -s $VMLINUX_PATH $CASE_PATH/vmlinux
 ln -s $KEY_PATH $CASE_PATH/id_rsa
 

@@ -1,4 +1,5 @@
 import os, re, stat, sys
+from subprocess import Popen, STDOUT, PIPE
 import logging
 import argparse
 import serena.infra.tool_box as utilities
@@ -9,8 +10,7 @@ from serena.infra.strings import *
 from serena.modules.vm import VM
 
 class Launcher:
-    def __init__(self, case_path, ssh_port, logger, case_logger, debug=False, qemu_num=3):
-        self.logger = logger
+    def __init__(self, case_path, ssh_port, case_logger, debug=False, qemu_num=3):
         self.case_logger = case_logger
         self.case_path = case_path
         self.image_path = "{}/ubuntu-20.04-snapshot.img".format(self.case_path)
@@ -52,7 +52,8 @@ class Launcher:
                 f.write("\n")
     
     def launch(self, th_index, c_hash):
-        qemu = VM(hash_tag=c_hash, vmlinux=self.vmlinux, port=self.ssh_port+th_index, 
+        self.create_snapshot()
+        qemu = VM(hash_tag=c_hash, vmlinux=self.vmlinux, port=self.ssh_port, 
             image=self.image_path, proj_path="{}/".format(self.case_path), 
             log_name="qemu-{}.log".format(c_hash), log_suffix=str(th_index),
             key="{}/id_rsa".format(self.case_path), 
@@ -126,7 +127,7 @@ class Launcher:
                             crash.append(line)
                     out_begin = out_end
         except Exception as e:
-            self.case_logger.error("Exception occur when reporducing crash: {}".format())
+            self.case_logger.error("Exception occur when reporducing crash: {}".format(e))
             if p.poll() == None:
                 p.kill()
         if not extract_report:
@@ -139,8 +140,24 @@ class Launcher:
         ok = qemu.upload("root", [poc_path], "/root")
         if ok != 0:
             return ok
-        ok = qemu.command("chmod +x poc && ./poc", "root")
+        self.case_logger.info("running PoC")
+        script = "serena/scripts/run-script.sh"
+        utilities.chmodX(script)
+        Popen([script, str(self.ssh_port), self.case_path])
+        ok = qemu.command("chmod +x run.sh && ./run.sh", "root")
         return ok
+    
+    def create_snapshot(self):
+        dst = "{}/ubuntu-20.04-snapshot.img".format(self.case_path)
+        src = "{}/tools/images/ubuntu-20.04.img".format(self.path_project)
+        if os.path.isfile(dst):
+            os.remove(dst)
+        cmd = ["qemu-img", "create", "-f", "qcow2", "-b", src, dst]
+        p = Popen(cmd, stderr=STDOUT, stdout=PIPE)
+        with p.stdout:
+            utilities.log_anything(p.stdout, self.case_logger, self.debug)
+        exitcode = p.wait()
+        return exitcode
 
 def args_parse():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,

@@ -109,7 +109,7 @@ class VMInstance(Network):
                     continue
                 if utilities.regx_match(reboot_regx, line) or utilities.regx_match(port_error_regx, line):
                     self.case_logger.error("Booting qemu-{} failed".format(self.log_name))
-                if utilities.regx_match(r'\w+ login:', line):
+                if utilities.regx_match(r'\w+ login:', line) or utilities.regx_match(r'Ubuntu 20.04.2 LTS ubuntu20 ttyS0', line):
                     self.qemu_ready = True
                 self.logger.info(line)
                 self.output.append(line)
