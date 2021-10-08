@@ -11,6 +11,7 @@ class Deployer(Case):
     ACTION_BUG_REPRODUCE = 0
     def __init__(self, index, args, action, case_hash, case):
         Case.__init__(self, index, case_hash, args, case, args.debug)
+        self.case_logger.info("https://syzkaller.appspot.com/bug?id={}".format(case_hash))
         self.action = action
     
     def deploy(self):
@@ -18,22 +19,24 @@ class Deployer(Case):
             if not self.has_c_repro:
                 self.logger.error("{} does not have a valid C reproducer".format(self.case_hash))
                 return
-            try:
-                ret = self.deploy_reproducer()
-                if ret != None:
-                    self.logger.info("Trigger a Kasan bug: {}".format(ret))
-                    self.logger.info("Copy to succeed")
-                    self.save_to_succeed()
-                else:
-                    self.logger.info("Copy to completed")
-                    self.save_to_completed()
-            except:
-                self.logger.info("Copy to error")
-                self.save_to_error()
+            #try:
+            ret = self.deploy_reproducer()
+            if ret != None:
+                self.logger.info("Trigger a Kasan bug: {}".format(ret))
+                self.logger.info("Copy to succeed")
+                self.save_to_succeed()
+            else:
+                self.logger.info("Copy to completed")
+                self.save_to_completed()
+            #except Exception as e:
+            #    self.logger.error(e)
+            #    self.logger.info("Copy to error")
+            #    self.save_to_error()
 
     
     def deploy_reproducer(self):
         if self.check_finish_repro():
+            self.logger.info("{} already finished reproducing".format(self.case_hash))
             return None
         self.logger.info("start reproducing bugs")
         report, triggered = self.prepare(self.case_hash)

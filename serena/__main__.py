@@ -22,8 +22,7 @@ def args_parse():
                         help='Linux image for bug reproducing')
     parser.add_argument('-v', '--vmlinux', nargs='?', action='store',
                         help='vmlinux for debugging')
-    parser.add_argument('-k', '--key', nargs='*', action='store',
-                        default=[''],
+    parser.add_argument('-k', '--key', action='append',
                         help='The keywords for detecting cases.\n'
                              '(By default, it retrieve all cases)\n'
                              'This argument could be multiple values')
@@ -113,6 +112,8 @@ def prepare_cases(index, args):
 
 if __name__ == '__main__':
     args = args_parse()
+    if args.key == None:
+        args.key = ['']
     check_kvm()
     install_requirments()
 

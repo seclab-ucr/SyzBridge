@@ -24,6 +24,7 @@ class VMInstance(Network):
         self.kill_qemu = False
         self.hash_tag = hash_tag
         self.log_name = log_name
+        self.qemu_fail = False
         self.output = []
         log_name += log_suffix
         self.logger = utilities.init_logger(os.path.join(proj_path, log_name), debug=debug, propagate=debug)
@@ -70,17 +71,13 @@ class VMInstance(Network):
             f.write(" ".join(cmd))
             f.close()
 
-    def upload(self, user, src: list, dst):
-        ok = self.scp("localhost", user, self.port, self.key, " ".join(src), dst)
-        if ok != 0:
-            self.logger.warning("scp failed: check the log for details")
-        return ok
+    def upload(self, user, src: list, dst, wait: bool):
+        self.scp("localhost", user, self.port, self.key, " ".join(src), dst, wait)
+        return
 
-    def command(self, cmds, user='root'):
-        ok = self.ssh("localhost", user, self.port, self.key, cmds)
-        if ok != 0:
-            self.logger.warning("ssh failed: check the log for details")
-        return ok
+    def command(self, cmds, user, wait: bool):
+        self.ssh("localhost", user, self.port, self.key, cmds, wait)
+        return
 
     def monitor_execution(self):
         count = 0
@@ -95,12 +92,13 @@ class VMInstance(Network):
             if poll != None:
                 return
         self.case_logger.info('Time out, kill qemu')
+        self.qemu_fail = True
         self._qemu.kill()
     
     def __log_qemu(self, pipe):
         try:
             self.logger.info("\n".join(self.cmd_launch)+"\n")
-            self.logger.info("pid: {}".format(self._qemu.pid))
+            self.logger.info("pid: {}  timeout: {}".format(self._qemu.pid, self.timeout))
             for line in iter(pipe.readline, b''):
                 try:
                     line = line.decode("utf-8").strip('\n').strip('\r')

@@ -1,10 +1,11 @@
 import os, re, stat, sys
-from subprocess import Popen, STDOUT, PIPE
+from subprocess import Popen, STDOUT, PIPE, call
 import logging
 import argparse
 import serena.infra.tool_box as utilities
 import threading
 import queue
+import time
 
 from serena.infra.strings import *
 from serena.modules.vm import VM
@@ -25,12 +26,18 @@ class Launcher:
         self.kill_qemu = False
         res = []
         trigger = False
+        ever_success = False
         
         for i in range(0, self.qemu_num):
             x = threading.Thread(target=self.launch, args=(i, syz_commit, ), name="trigger-{}".format(i))
             x.start()
-
-            [crashes, high_risk] = self.queue.get(block=True)
+            x.join()
+            
+            [crashes, high_risk, qemu_fail] = self.queue.get(block=True)
+            if not ever_success:
+                ever_success = qemu_fail
+                if self.qemu_num < 5:
+                    self.qemu_num += 1
             if not trigger and high_risk:
                 trigger = high_risk
                 res = crashes
@@ -57,7 +64,7 @@ class Launcher:
             image=self.image_path, proj_path="{}/".format(self.case_path), 
             log_name="qemu-{}.log".format(c_hash), log_suffix=str(th_index),
             key="{}/id_rsa".format(self.case_path), 
-            timeout=10*100, debug=self.debug)
+            timeout=10*60, debug=self.debug)
         qemu.logger.info("QEMU-{} launched.\n".format(th_index))
         
         poc_path = os.path.join(self.case_path, "poc")
@@ -86,11 +93,7 @@ class Launcher:
                 if p.poll() != None and not qemu.qemu_ready:
                     qemu_close = True
                 if qemu.qemu_ready and out_begin == 0:
-                    ok = self.run_poc(qemu, poc_path)
-                    if ok != 0:
-                        self.logger.warning("Fail to run poc")
-                        p.kill()
-                        break
+                    self.run_poc(qemu, poc_path)
                     extract_report=True
                 if extract_report:
                     out_end = len(qemu.output)
@@ -132,20 +135,39 @@ class Launcher:
                 p.kill()
         if not extract_report:
             res = ['QEMU threaded {}: Error occur at booting qemu'.format(th_index)]
+            self.kill_proc_by_port(self.ssh_port)
             if p.poll() == None:
                 p.kill()
-        self.queue.put([res, trgger_hunted_bug])
+        self.queue.put([res, trgger_hunted_bug, qemu.qemu_fail])
 
     def run_poc(self, qemu, poc_path):
-        ok = qemu.upload("root", [poc_path], "/root")
-        if ok != 0:
-            return ok
+        qemu.upload(user="root", src=[poc_path], dst="/root", wait=True)
         self.case_logger.info("running PoC")
         script = "serena/scripts/run-script.sh"
         utilities.chmodX(script)
-        Popen([script, str(self.ssh_port), self.case_path])
-        ok = qemu.command("chmod +x run.sh && ./run.sh", "root")
-        return ok
+        Popen([script, str(self.ssh_port), self.case_path],
+            stderr=STDOUT,
+            stdout=PIPE)
+        # It looks like scp returned without waiting for all file finishing uploading.
+        # Sleeping for 1 second to ensure everything is ready in vm
+        time.sleep(1)
+        qemu.command(cmds="chmod +x run.sh && ./run.sh", user="root", wait=False)
+        return
+
+    def kill_proc_by_port(self, ssh_port):
+        p = Popen("lsof -i :{} | awk '{{print $2}}'".format(ssh_port), shell=True, stdout=PIPE, stderr=PIPE)
+        is_pid = False
+        pid = -1
+        with p.stdout as pipe:
+            for line in iter(pipe.readline, b''):
+                line = line.strip().decode('utf-8')
+                if line == 'PID':
+                    is_pid = True
+                    continue
+                if is_pid:
+                    pid = int(line)
+                    call("kill -9 {}".format(pid), shell=True)
+                    break
     
     def create_snapshot(self):
         dst = "{}/ubuntu-20.04-snapshot.img".format(self.case_path)

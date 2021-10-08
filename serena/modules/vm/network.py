@@ -8,8 +8,20 @@ class Network:
         self.debug = debug
         if logger == None and self.logger == None:
             self.logger = init_logger(logger_id="network", debug=self.debug, propagate=propagate)
+    
+    def scp(self, ip, user, port, key, src, dst, wait):
+        x = threading.Thread(target=self._scp, args=(ip, user, port, key, src, dst,), name="scp logger")
+        x.start()
+        if wait:
+            x.join()
+    
+    def ssh(self, ip, user, port, key, command, wait):
+        x = threading.Thread(target=self._ssh, args=(ip, user, port, key, command,), name="ssh logger")
+        x.start()
+        if wait:
+            x.join()
 
-    def scp(self, ip, user, port, key, src, dst):
+    def _scp(self, ip, user, port, key, src, dst):
         cmd = ["scp", "-F", "/dev/null", "-o", "UserKnownHostsFile=/dev/null", \
             "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=no", \
             "-i", key, "-P", str(port), src, "{}@{}:{}".format(user, ip, dst)]
@@ -23,7 +35,7 @@ class Network:
         exitcode = p.wait()
         return exitcode
     
-    def ssh(self, ip, user, port, key, command):
+    def _ssh(self, ip, user, port, key, command):
         cmd = ["ssh", "-F", "/dev/null", "-o", "UserKnownHostsFile=/dev/null", 
         "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=no", 
         "-i", key, 
@@ -34,6 +46,6 @@ class Network:
         stderr=STDOUT)
         with p.stdout:
             if self.logger != None:
-                x = threading.Thread(target=log_anything, args=(p.stdout, self.logger, self.debug,), name="ssh logger")
-                x.start()
-        return 0
+                log_anything(p.stdout, self.logger, self.debug)
+        exitcode = p.wait()
+        return exitcode

@@ -104,7 +104,7 @@ class Case(Reproducer):
         self.case_logger.info("Copy to {}".format(folder))
         src = self.path_case
         base = os.path.basename(src)
-        dst = "{}/work/{}".format(self.path_project, folder)
+        dst = "{}/work/{}/{}".format(self.path_project, folder, base)
         if os.path.isdir(dst):
             try:
                 os.rmdir(dst)

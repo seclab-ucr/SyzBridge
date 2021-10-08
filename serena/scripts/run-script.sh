@@ -18,14 +18,10 @@ cat << EOF > run.sh
 #!/bin/bash
 set -ex
 
-if [ -f "./poc" ]; then
-    for i in {1..1000}
-    do
-        ./poc
-    done
-fi
-
-echo "Done running 1000 times poc" > done
+while [ 1 ]
+do
+    ./poc
+done
 EOF
 
 CMD="scp -F /dev/null -o UserKnownHostsFile=/dev/null \
