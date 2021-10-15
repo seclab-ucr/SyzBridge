@@ -7,11 +7,9 @@ from serena.infra.tool_box import *
 from .error import *
 from serena.modules.reproducer import *
 
-base_ssh_port = 36777
 reserve_port = 7
-
 class Case(Reproducer):
-    def __init__(self, index, case_hash, args, case, debug=False):
+    def __init__(self, index, case_hash, args, cfg, case, debug=False):
         self.index = index
         self.debug = debug
         self.case_hash = case_hash[:7]
@@ -19,19 +17,24 @@ class Case(Reproducer):
         self.path_package = os.path.join(self.path_project, "serena")
         self.path_case = self._get_case_path()
         self.case = case
-        self.ssh_port = base_ssh_port + index * reserve_port
-        self.ssh_key = args.ssh_key[0]
+        self.cfg = cfg
         self.args = args
         self.has_c_repro = True
-        self.image_path = ""
-        self.vmlinux_path = ""
         self.logger = init_logger(__name__+str(self.index), 
             cus_format='%(asctime)s Thread {}: %(message)s'.format(self.index),
             debug=self.debug, propagate=self.debug, handler_type=STREAM_HANDLER)
+        if args.ssh_key != None:
+            self.cfg.ssh_key = args.ssh_key[0]
         if args.ssh != None:
-            self.ssh_port = args.ssh + index * reserve_port
+            self.cfg.ssh_port = args.ssh + index * reserve_port
+        else:
+            self.cfg.ssh_port += index * reserve_port
+        if self.args.image != None:
+            self.cfg.image_path = self.args.image[0]
+        if self.args.vmlinux != None:
+            self.cfg.vmlinux_path = self.args.vmlinux[0]
         self._init_case()
-        Reproducer.__init__(self, self.path_case, self.ssh_port, self.case_logger, self.debug, 3)
+        Reproducer.__init__(self, self.path_case, self.cfg.ssh_port, self.case_logger, self.debug, 3)
     
     def create_finish_repro(self):
         self._create_stamp("FINISH_REPRO")
@@ -67,15 +70,10 @@ class Case(Reproducer):
             self.has_c_repro = False
             return
         
-        if self.args.image != None:
-            self.image_path = self.args.image[0]
-        if self.args.vmlinux != None:
-            self.vmlinux_path = self.args.vmlinux[0]
-        
         script = os.path.join(self.path_package, "scripts/init-case.sh")
         chmodX(script)
         self.logger.info("run: scripts/init-case.sh")
-        p = Popen([script, self.path_case, self.image_path, self.vmlinux_path, self.ssh_key, c_prog],
+        p = Popen([script, self.path_case, self.cfg.image_path, self.cfg.vmlinux_path, self.cfg.ssh_key, c_prog],
                 stdout=PIPE,
                 stderr=STDOUT)
         with p.stdout:

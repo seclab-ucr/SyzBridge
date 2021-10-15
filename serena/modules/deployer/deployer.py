@@ -4,15 +4,24 @@ import re
 from serena.infra.tool_box import STREAM_HANDLER, init_logger, regx_match
 from serena.infra.strings import *
 from serena.modules.reproducer import Reproducer
+from serena.modules.analyzor import AnalysisModule, AnalysisModuleError
 from .case import Case
 from .error import *
 
 class Deployer(Case):
     ACTION_BUG_REPRODUCE = 0
-    def __init__(self, index, args, action, case_hash, case):
-        Case.__init__(self, index, case_hash, args, case, args.debug)
+    def __init__(self, index, args, cfg, action, case_hash, case):
+        Case.__init__(self, index, case_hash, args, cfg, case, args.debug)
         self.case_logger.info("https://syzkaller.appspot.com/bug?id={}".format(case_hash))
         self.action = action
+    
+    def use_module(self, module):
+        if not isinstance(module, AnalysisModule):
+            raise AnalysisModuleError
+        
+        module.cfg = self._cfg
+        module.setup(self)
+        return module
     
     def deploy(self):
         if self.action == Deployer.ACTION_BUG_REPRODUCE:
@@ -26,6 +35,7 @@ class Deployer(Case):
                 self.logger.info("Copy to succeed")
                 self.save_to_succeed()
             else:
+                self.failure_analysis()
                 self.logger.info("Copy to completed")
                 self.save_to_completed()
             #except Exception as e:
@@ -46,6 +56,9 @@ class Deployer(Case):
             if is_kasan_bug:
                 return title
         return None
+    
+    def failure_analysis(self):
+        self.analysis.failure_analysis()
     
     def _KasanChecker(self, report):
         title = None
