@@ -40,6 +40,11 @@ config_wrong_type = """
 }
 """
 
+def create_mini_cfg():
+    cfg = Config()
+    cfg.load(json.loads(config_normal))
+    return cfg
+
 def test_config_normal():
     cfg = Config()
     cfg.load(json.loads(config_normal))

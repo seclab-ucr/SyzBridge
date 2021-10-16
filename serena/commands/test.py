@@ -13,6 +13,7 @@ class TestCommand(Command):
     def add_arguments(self, parser):
         parser.add_argument('--all',  action='store_true', help='test all modules')
         parser.add_argument('--config',  action='store_true', help='test config module')
+        parser.add_argument('--failure-analyzor',  action='store_true', help='test failure_analyzor module')
 
     def run(self, args):
         if args.all:
@@ -20,6 +21,8 @@ class TestCommand(Command):
         else:
             if args.config:
                 self.test_target('config')
+            if args.failure_analyzor:
+                self.test_target('failure_analyzor')
     
     def test_target(self, name):
         try:
