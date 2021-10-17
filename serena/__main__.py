@@ -16,8 +16,11 @@ def create_parser():
         class_name = "{}{}Command".format(cmd[0].upper(), cmd[1:])
         module = importlib.import_module("commands.{}".format(cmd))
         new_class = getattr(module, class_name)
-        parser_cmd = subparser.add_parser(cmd, help=new_class.__doc__)
-        commands_list[cmd] = new_class(parser_cmd)
+        A = new_class()
+        A.custom_subparser(subparser, cmd)
+        parser_cmd = A.custom_subparser(subparser, cmd)
+        A.add_arguments(parser_cmd)
+        commands_list[cmd] = A
         #parser_cmd.add_argument('--config',  action='store_true', help='test config module')
         #parser.parse_args(['run -h'])
     

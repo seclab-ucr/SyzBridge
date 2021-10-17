@@ -187,8 +187,15 @@ def test_module_check4():
     fa.cfg = cfg
     return fa.run()
 
+def test_module_check5():
+    cfg = create_mini_cfg()
+    fa = FailureAnalysis(logger, report=failed_kasan_report)
+    fa.cfg = cfg
+    return fa.run()
+
 def test_all():
     assert test_module_check1(), "Can not locate CONFIG_INET"
     assert (not test_module_check2()), "WTF, they shouldn't enable CONFIG_QRTR"
     assert test_module_check3(), "Can not locate do_syscall_64"
     assert test_module_check4(), "Can not pass normal_kasan_report"
+    assert (not test_module_check5()), "WTF, thery shouldn't pass failed_kasan_report"

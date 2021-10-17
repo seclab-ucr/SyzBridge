@@ -1,6 +1,6 @@
 import logging
 import math
-import serena.infra.tool_box as utilities
+import infra.tool_box as utilities
 
 from subprocess import Popen, PIPE, STDOUT, TimeoutExpired
 from pwn import *

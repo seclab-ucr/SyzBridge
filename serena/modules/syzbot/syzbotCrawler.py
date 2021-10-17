@@ -15,7 +15,7 @@ class Crawler:
     def __init__(self,
                  url="https://syzkaller.appspot.com/upstream/fixed",
                  keyword=[''], max_retrieve=10, filter_by_reported=-1, 
-                 filter_by_closed=-1, include_high_risk=False, debug=False):
+                 filter_by_closed=-1, include_high_risk=True, debug=False):
         self.url = url
         if type(keyword) == list:
             self.keyword = keyword

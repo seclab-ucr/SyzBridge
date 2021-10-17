@@ -8,14 +8,6 @@ if [ ! -f "$(pwd)/tools/.stamp/ENV_SETUP" ]; then
   sudo apt-get -y install git qemu-system-x86 debootstrap flex bison libssl-dev libelf-dev cmake libxml2-dev
 fi
 
-if [ ! -d "work/completed" ]; then
-  mkdir -p work/completed
-fi
-
-if [ ! -d "work/incomplete" ]; then
-  mkdir -p work/incomplete
-fi
-
 TOOLS_PATH="$(pwd)/tools"
 if [ ! -d "$TOOLS_PATH/.stamp" ]; then
   mkdir -p $TOOLS_PATH/.stamp

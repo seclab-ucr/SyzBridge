@@ -1,13 +1,21 @@
 import os, json
+import logging
 
-from .error import *
+from infra.error import *
 
 base_ssh_port = 36777
 
+logger = logging.getLogger(__name__)
+
 class Config:
-    def __init__(self) -> None:
-        self.keys_list = ["vendor_image", "vmlinux", "max_retrieval", "max_parallel", "ssh_port", "ssh_key", "vendor_src", "vendor_name"]
+    def __init__(self):
+        self.keys_list = ["vendor_image", "vmlinux", "ssh_port", "ssh_key", "vendor_src", "vendor_name"]
         self._ssh_port = base_ssh_port
+        self._vendor_image = None
+        self._vmlinux = None
+        self._ssh_key = None
+        self._vendor_src = None
+        self._vendor_name = None
 
     def load_from_file(self, config):
         work_path = os.getcwd()
@@ -19,9 +27,9 @@ class Config:
             with open(config_path, 'r') as f:
                 cfg = json.load(f)
                 f.close()
-                self.load(cfg)
+                return self.load(cfg)
         else:
-            print("Cannot find config file: {}".format(config))
+            raise TargetFileNotExist(config)
     
     def load(self, cfg):
         for key in cfg:
@@ -79,26 +87,6 @@ class Config:
         if not os.path.exists(value):
             raise TargetFileNotExist(value)
         self._vendor_src = value
-    
-    @property
-    def max_retrieval(self):
-        return self._max_retrieval
-    
-    @max_retrieval.setter
-    def max_retrieval(self, n):
-        if type(n) != int:
-            raise TargetFormatNotMatch(n, type(n), int)
-        self._max_retrieval = n
-
-    @property
-    def max_parallel(self):
-        return self._max_parallel
-    
-    @max_parallel.setter
-    def max_parallel(self, n):
-        if type(n) != int:
-            raise TargetFormatNotMatch(n, type(n), int)
-        self._max_parallel = n
     
     @property
     def ssh_port(self):

@@ -6,14 +6,17 @@ from serena.commands import Command
 logger = logging.getLogger(__name__)
 
 class TestCommand(Command):
-    def __init__(self, parser):
+    def __init__(self):
         super().__init__()
-        self.add_arguments(parser)
 
     def add_arguments(self, parser):
+        super().add_arguments(parser)
         parser.add_argument('--all',  action='store_true', help='test all modules')
         parser.add_argument('--config',  action='store_true', help='test config module')
         parser.add_argument('--failure-analyzor',  action='store_true', help='test failure_analyzor module')
+
+    def custom_subparser(self, parser, cmd):
+        return parser.add_parser(cmd, help='Modular test (Debug only)')
 
     def run(self, args):
         if args.all:

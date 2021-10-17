@@ -4,7 +4,8 @@ class CannotFindConfigForObject(Exception):
         super().__init__(message)
 
 class AnalysisModuleError(Exception):
-    pass
+    def __init__(self, message, *args: object) -> None:
+        super().__init__(message)
 
 class CannotFindKernelConfig(Exception):
     def __init__(self, *args: object) -> None:

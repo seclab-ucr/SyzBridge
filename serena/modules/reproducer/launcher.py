@@ -2,13 +2,13 @@ import os, re, stat, sys
 from subprocess import Popen, STDOUT, PIPE, call
 import logging
 import argparse
-import serena.infra.tool_box as utilities
+import infra.tool_box as utilities
 import threading
 import queue
 import time
 
-from serena.infra.strings import *
-from serena.modules.vm import VM
+from infra.strings import *
+from modules.vm import VM
 
 class Launcher:
     def __init__(self, case_path, ssh_port, case_logger, debug=False, qemu_num=3):

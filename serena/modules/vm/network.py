@@ -1,6 +1,6 @@
 import threading
 
-from serena.infra.tool_box import *
+from infra.tool_box import *
 from subprocess import Popen, PIPE, STDOUT
 
 class Network:

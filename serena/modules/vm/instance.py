@@ -2,7 +2,7 @@ import threading
 import logging
 import time
 import os
-import serena.infra.tool_box as utilities
+import infra.tool_box as utilities
 
 from subprocess import Popen, PIPE, STDOUT, call
 from .network import Network
