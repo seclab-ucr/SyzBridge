@@ -8,7 +8,7 @@ def create_parser():
     parser = argparse.ArgumentParser()
     subparser = parser.add_subparsers(dest='cmd', help='sub-command help')
 
-    proj_dir = os.path.join(os.getcwd(), "serena")
+    proj_dir = os.path.join(os.getcwd(), "syzmorph")
     command_dir = os.path.join(proj_dir, "commands")
     commands = [ cmd[:-3] for cmd in os.listdir(command_dir)
                     if cmd.endswith('.py') and not cmd == '__init__.py']

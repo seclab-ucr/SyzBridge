@@ -17,7 +17,7 @@ class Case(Reproducer):
         self.case_hash = case_hash[:7]
         self.path_serena = os.getcwd()
         self.path_project = owner.proj_dir
-        self.path_package = os.path.join(self.path_serena, "serena")
+        self.path_package = os.path.join(self.path_serena, "syzmorph")
         self.path_case = self._get_case_path()
         self.case = case
         self.has_c_repro = True

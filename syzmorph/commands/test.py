@@ -1,7 +1,7 @@
 import importlib
 import logging
 
-from serena.commands import Command
+from syzmorph.commands import Command
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +29,9 @@ class TestCommand(Command):
     
     def test_target(self, name):
         try:
-            module = importlib.import_module("serena.test.{}_test".format(name))
+            module = importlib.import_module("syzmorph.test.{}_test".format(name))
         except ModuleNotFoundError:
-            logger.error("serena.test.{}_test module not found".format(name))
+            logger.error("syzmorph.test.{}_test module not found".format(name))
             return
         self._test(module)
 

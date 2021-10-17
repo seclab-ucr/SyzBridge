@@ -143,7 +143,7 @@ class Launcher:
     def run_poc(self, qemu, poc_path):
         qemu.upload(user="root", src=[poc_path], dst="/root", wait=True)
         self.case_logger.info("running PoC")
-        script = "serena/scripts/run-script.sh"
+        script = "syzmorph/scripts/run-script.sh"
         utilities.chmodX(script)
         Popen([script, str(self.ssh_port), self.case_path],
             stderr=STDOUT,

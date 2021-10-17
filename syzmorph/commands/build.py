@@ -20,7 +20,7 @@ class BuildCommand(Command):
         self.install_requirments()
     
     def check_kvm(self):
-        proj_path = os.path.join(os.getcwd(), "serena")
+        proj_path = os.path.join(os.getcwd(), "syzmorph")
         check_kvm_path = os.path.join(proj_path, "scripts/check-kvm.sh")
         st = os.stat(check_kvm_path)
         os.chmod(check_kvm_path, st.st_mode | stat.S_IEXEC)
@@ -29,7 +29,7 @@ class BuildCommand(Command):
             exit(0)
 
     def install_requirments(self):
-        proj_path = os.path.join(os.getcwd(), "serena")
+        proj_path = os.path.join(os.getcwd(), "syzmorph")
         requirements_path = os.path.join(proj_path, "scripts/install-requirements.sh")
         st = os.stat(requirements_path)
         os.chmod(requirements_path, st.st_mode | stat.S_IEXEC)

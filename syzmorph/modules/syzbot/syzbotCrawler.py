@@ -3,7 +3,7 @@ import logging
 import os
 import re
 
-from serena.infra.tool_box import request_get, extract_vul_obj_offset_and_size
+from syzmorph.infra.tool_box import request_get, extract_vul_obj_offset_and_size
 from bs4 import BeautifulSoup
 from bs4 import element
 

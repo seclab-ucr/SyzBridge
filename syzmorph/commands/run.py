@@ -88,7 +88,7 @@ class RunCommand(Command):
         print("Thread {} exit->".format(index))
 
     def parse_config(self, config):
-        from serena.infra.config import Config
+        from syzmorph.infra.config import Config
         
         cfg = Config()
         cfg.load_from_file(config)

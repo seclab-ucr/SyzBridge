@@ -1,6 +1,6 @@
 import logging
 
-from serena.modules.analyzor.failure_analyzor import FailureAnalysis
+from syzmorph.modules.analyzor.failure_analyzor import FailureAnalysis
 from .config_test import create_mini_cfg
 
 logger = logging.getLogger(__name__)

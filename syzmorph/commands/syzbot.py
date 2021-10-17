@@ -48,7 +48,7 @@ class SyzbotCommand(Command):
         if self.args.key == None:
             self.args.key = ['']
 
-        from serena.modules.syzbot import Crawler
+        from syzmorph.modules.syzbot import Crawler
 
         crawler = Crawler(url=self.args.url, keyword=self.args.key, max_retrieve=int(self.args.max_retrieval), 
             filter_by_reported=int(self.args.filter_by_reported), filter_by_closed=int(self.args.filter_by_closed), 

@@ -1,7 +1,7 @@
 import json
 import logging
 
-from serena.infra.config import Config
+from syzmorph.infra.config import Config
 
 logger = logging.getLogger(__name__)
 
