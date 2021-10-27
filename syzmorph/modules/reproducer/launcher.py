@@ -1,26 +1,42 @@
-import os, re, stat, sys
-from subprocess import Popen, STDOUT, PIPE, call
-import logging
-import argparse
-import infra.tool_box as utilities
+import os
 import threading
 import queue
 import time
 
 from infra.strings import *
-from modules.vm import VM
+from subprocess import Popen, STDOUT, PIPE, call
+from infra.tool_box import chmodX, log_anything, regx_match
+from modules.vm import VMInstance, VM
+from modules.reproducer.error import CreateSnapshotError
 
 class Launcher:
-    def __init__(self, case_path, ssh_port, case_logger, debug=False, qemu_num=3):
+    def __init__(self, path_case, path_syzmorph, ssh_port, case_logger, path_linux=None, debug=False, qemu_num=3):
         self.case_logger = case_logger
-        self.case_path = case_path
-        self.image_path = "{}/ubuntu-20.04-snapshot.img".format(self.case_path)
-        self.vmlinux = "{}/vmlinux".format(self.case_path)
+        self.path_case = path_case
+        self.path_syzmorph = path_syzmorph
+        self.image_path = None
+        self.vmlinux = None
+        self.ssh_key = None
+        self.path_linux = path_linux
         self.qemu_num = qemu_num
         self.ssh_port = ssh_port
+        self.type_name = ""
         self.debug = debug
         self.kill_qemu = False
         self.queue = queue.Queue()
+    
+    def setup(self, vmtype):
+        self.vmtype = vmtype
+        if vmtype == VMInstance.LTS:
+            self.image_path = "{}/img/stretch.img".format(self.path_case)
+            self.vmlinux = "{}/vmlinux".format(self.path_case)
+            self.ssh_key = "{}/img/stretch.img.key".format(self.path_case)
+            self.type_name = "lts"
+        if vmtype == VMInstance.UBUNTU:
+            self.image_path = "{}/ubuntu-20.04-snapshot.img".format(self.path_case)
+            self.vmlinux = "{}/vmlinux".format(self.path_case)
+            self.ssh_key = "{}/id_rsa".format(self.path_case)
+            self.type_name = "ubuntu"
     
     def prepare(self, syz_commit):
         self.kill_qemu = False
@@ -42,7 +58,7 @@ class Launcher:
                 trigger = high_risk
                 res = crashes
                 self.kill_qemu = True
-                self.save_crash_log(res, "ori")
+                self.save_crash_log(res, self.type_name)
                 if res == []:
                     res = crashes
                 break
@@ -52,22 +68,24 @@ class Launcher:
         return res, trigger
         
     def save_crash_log(self, log, name):
-        with open("{}/crash_log-{}".format(self.case_path, name), "w+") as f:
+        with open("{}/crash_log-{}".format(self.path_case, name), "w+") as f:
             for each in log:
                 for line in each:
                     f.write(line+"\n")
                 f.write("\n")
     
     def launch(self, th_index, c_hash):
-        self.create_snapshot()
-        qemu = VM(hash_tag=c_hash, vmlinux=self.vmlinux, port=self.ssh_port, 
-            image=self.image_path, proj_path="{}/".format(self.case_path), 
-            log_name="qemu-{}.log".format(c_hash), log_suffix=str(th_index),
-            key="{}/id_rsa".format(self.case_path), 
-            timeout=10*60, debug=self.debug)
+        if self.vmtype == VMInstance.UBUNTU:
+            if self.create_snapshot():
+                raise CreateSnapshotError
+        log_name = "qemu-{0}-{1}.log".format(c_hash, self.type_name)
+        qemu = VM(linux=self.path_linux, vmtype=self.vmtype, hash_tag=c_hash, vmlinux=self.vmlinux, port=self.ssh_port, 
+            image=self.image_path, proj_path="{}/".format(self.path_case), cpu="8", mem="8G",
+            log_name=log_name, log_suffix=str(th_index),
+            key=self.ssh_key, timeout=10*60, debug=self.debug)
         qemu.logger.info("QEMU-{} launched.\n".format(th_index))
         
-        poc_path = os.path.join(self.case_path, "poc")
+        poc_path = os.path.join(self.path_case, "poc")
         self.launch_qemu(th_index, qemu, poc_path)
         return
     
@@ -98,11 +116,11 @@ class Launcher:
                 if extract_report:
                     out_end = len(qemu.output)
                     for line in qemu.output[out_begin:]:
-                        if utilities.regx_match(call_trace_regx, line) or \
-                        utilities.regx_match(message_drop_regx, line):
+                        if regx_match(call_trace_regx, line) or \
+                        regx_match(message_drop_regx, line):
                             record_flag = 1
-                        if utilities.regx_match(boundary_regx, line) or \
-                        utilities.regx_match(panic_regx, line):
+                        if regx_match(boundary_regx, line) or \
+                        regx_match(panic_regx, line):
                             if record_flag == 1:
                                 res.append(crash)
                                 crash = []
@@ -118,13 +136,13 @@ class Launcher:
                                     break
                             record_flag = 1
                             continue
-                        if (utilities.regx_match(kasan_mem_regx, line) and 'null-ptr-deref' not in line):
+                        if (regx_match(kasan_mem_regx, line) and 'null-ptr-deref' not in line):
                             kasan_flag = 1
-                        if utilities.regx_match(write_regx, line):
+                        if regx_match(write_regx, line):
                             write_flag = 1
-                        if utilities.regx_match(kasan_double_free_regx, line):
+                        if regx_match(kasan_double_free_regx, line):
                             double_free_flag = 1
-                        if utilities.regx_match(read_regx, line):
+                        if regx_match(read_regx, line):
                             read_flag = 1
                         if record_flag or kasan_flag:
                             crash.append(line)
@@ -144,10 +162,12 @@ class Launcher:
         qemu.upload(user="root", src=[poc_path], dst="/root", wait=True)
         self.case_logger.info("running PoC")
         script = "syzmorph/scripts/run-script.sh"
-        utilities.chmodX(script)
-        Popen([script, str(self.ssh_port), self.case_path],
+        chmodX(script)
+        p = Popen([script, str(self.ssh_port), self.path_case, self.ssh_key],
             stderr=STDOUT,
             stdout=PIPE)
+        with p.stdout:
+            log_anything(p.stdout, self.case_logger, self.debug)
         # It looks like scp returned without waiting for all file finishing uploading.
         # Sleeping for 1 second to ensure everything is ready in vm
         time.sleep(1)
@@ -170,54 +190,14 @@ class Launcher:
                     break
     
     def create_snapshot(self):
-        dst = "{}/ubuntu-20.04-snapshot.img".format(self.case_path)
-        src = "{}/tools/images/ubuntu-20.04.img".format(self.path_project)
+        dst = "{}/ubuntu-20.04-snapshot.img".format(self.path_case)
+        src = "{}/tools/images/ubuntu-20.04.img".format(self.path_syzmorph)
         if os.path.isfile(dst):
             os.remove(dst)
         cmd = ["qemu-img", "create", "-f", "qcow2", "-b", src, dst]
         p = Popen(cmd, stderr=STDOUT, stdout=PIPE)
         with p.stdout:
-            utilities.log_anything(p.stdout, self.case_logger, self.debug)
+            log_anything(p.stdout, self.case_logger, self.debug)
         exitcode = p.wait()
         return exitcode
-
-def args_parse():
-    parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter,
-                                     description='Determine if the new crashes are from the same root cause of the old one\n'
-                                                 'eg. python crash.py -i 7fd1cbe3e1d2b3f0366d5026854ee5754d451405')
-    parser.add_argument('-i', '--input', nargs='?', action='store',
-                        help='By default it analyze all cases under folder \'succeed\', but you can indicate a specific one.')
-    parser.add_argument('--ignore', nargs='?', action='store',
-                        help='A file contains cases hashs which are ignored. One line for each hash.')
-    parser.add_argument('-r', '--reproduce', action='store_true',
-                        help='Reproduce cases with the original testcase')
-    parser.add_argument('-pm', '--parallel-max', nargs='?', action='store',
-                        default='5', help='The maximum of parallel processes\n'
-                        '(default valus is 5)')
-    parser.add_argument('--folder', const='succeed', nargs='?', default='succeed',
-                        choices=['succeed', 'completed', 'incomplete', 'error'],
-                        help='Reproduce cases with the original testcase')
-    parser.add_argument('--linux', nargs='?', action='store',
-                        default='-1',
-                        help='Indicate which linux repo to be used for running\n'
-                            '(--parallel-max will be set to 1)')
-    parser.add_argument('-p', '--port', nargs='?',
-                        default='3777',
-                        help='The default port that is used by reproducing\n'
-                        '(default value is 3777)')
-    parser.add_argument('--identify-by-trace', '-ibt', action='store_true',
-                        help='Reproduce on fixed kernel')
-    parser.add_argument('--store-read', action='store_true',
-                        help='Do not ignore memory reading')
-    parser.add_argument('--identify-by-patch', '-ibp', action='store_true',
-                        help='Reproduce on unfixed kernel')
-    parser.add_argument('--test-original-poc', action='store_true',
-                        help='Reproduce with original PoC')
-    parser.add_argument('--debug', action='store_true',
-                        help='Enable debug mode')
-    args = parser.parse_args()
-    return args
-
-if __name__ == '__main__':
-    pass
         

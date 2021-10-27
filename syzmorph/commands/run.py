@@ -4,7 +4,7 @@ import json, gc, logging
 
 from commands import Command
 from infra.error import *
-from modules.deployer.deployer import Deployer
+from deployer.deployer import Deployer
 
 sys.path.append(os.getcwd())
 from queue import Empty
@@ -34,6 +34,8 @@ class RunCommand(Command):
         # Task                    
         parser.add_argument('--failure-analysis', action='store_true',
                             help='Run failure analysis on target project')
+        parser.add_argument('--lts-analysis', action='store_true',
+                            help='Run LTS analysis on target project')
         parser.add_argument('--bug-reproduce', action='store_true',
                             help='Run bug reproduce on target project')
 

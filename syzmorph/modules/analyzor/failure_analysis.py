@@ -1,6 +1,6 @@
 import os
 
-from infra.tool_box import extrace_call_trace, extract_debug_info, regx_get, regx_getall, regx_match
+from infra.tool_box import extrace_call_trace, extract_debug_info, regx_get, regx_getall, regx_match, request_get
 from infra.strings import source_file_regx
 from . import AnalysisModule
 from .error import *
@@ -11,19 +11,46 @@ class FailureAnalysis(AnalysisModule):
     REPORT_END =   "==================================================================="
     REPORT_NAME = "Report_FailureAnalysis"
 
-    def __init__(self, report=None):
+    def __init__(self):
         super().__init__()
-        self.kasan_report = report.split('\n')
+        self.kasan_report = None
         self.config_cache = {}
+        self._prepared = False
 
         self.calltrace = None
         self.vul_module = None
         self.cfg = None
         self.report = []
         self.config_cache['vendor_config_path'] = ''
+    
+    def check(func):
+        def inner(self):
+            ret = func(self)
+            if func(self):
+                self.main_logger.info("[Failure analysis] All modules passed")
+            else:
+                self.main_logger.info("[Failure analysis] At least one module failed to find in {}".format(self.cfg.vendor_name))
+            return ret
+        return inner
+    
+    def prepare(self):
+        report = request_get(self.case['report'])
+        return self.prepare_on_demand(report.text)
+    
+    def prepare_on_demand(self, report):
+        self._prepared = True
+        self.kasan_report = report.split('\n')
+        if self.kasan_report == []:
+            return False
+        return True
 
+    @check
     def run(self):
         res = True
+
+        if not self._prepared:
+            self.logger.error("Module {} is not prepared".format(FailureAnalysis.NAME))
+            return False
         self.report.append(FailureAnalysis.REPORT_START)
         self.calltrace = extrace_call_trace(self.kasan_report)
         for each_line in self.calltrace:
@@ -34,11 +61,12 @@ class FailureAnalysis(AnalysisModule):
             if vul_src_file == None:
                 raise AnalysisModuleError("Can not extract source file from \"{}\"".format(dbg_info))
 
-            if not self.module_check(vul_src_file):
+            if self.module_check(vul_src_file):
+                self.report.append("Check {} ---> Pass".format(vul_src_file))
+            else:
                 self.logger.info("Vendor {0} does not have {1} module enabled".format(self.cfg.vendor_name, self.vul_module))
                 self.report.append("Check {} ---> Fail".format(vul_src_file))
                 res = False
-            self.report.append("Check {} ---> Pass".format(vul_src_file))
         self.report.append(FailureAnalysis.REPORT_END)
         return res
     
@@ -60,7 +88,16 @@ class FailureAnalysis(AnalysisModule):
             return True
         
         vul_obj = basename[:-2]
-        config = self._find_config_in_vendor(vul_obj, dirname)
+        self.vul_module = vul_obj
+        try:
+            config = self._find_config_in_vendor(vul_obj, dirname)
+            if config == None:
+                # if can not find target Makefile 
+                # or can not find target config in Makefile
+                # return True
+                return True
+        except CannotFindConfigForObject:
+            return False
 
         vendor_config_path = os.path.join(self.cfg.vendor_src, "debian/build/build-generic/.config")
         if not os.path.exists(vendor_config_path):
@@ -92,6 +129,8 @@ class FailureAnalysis(AnalysisModule):
 
             self.logger.debug("Finding {} at {}".format(vul_obj, makefile))
             config = None
+            if not os.path.exists(makefile):
+                return None
             with open(makefile, "r") as f:
                 texts = f.readlines()
                 config = self._find_obj_in_Makefile(vul_obj, texts)
@@ -110,16 +149,16 @@ class FailureAnalysis(AnalysisModule):
         return None
 
     def _find_obj_in_Makefile(self, vul_obj, content):
-        obj_y = r'obj-y'
+        assignment = r'=|:=|\+='
         obj_config = r'(CONFIG_\w+)'
-        obj_o = r'(\w+)\.o|(\w+)/'
+        obj_o = r'([a-zA-Z0-9_-]+)\.o|([a-zA-Z0-9_-]+)/'
 
         value = None
 
         for line in content:
             if line[0] == '#' or line[0] == '\n' or regx_match(r'endif', line):
                 value = None
-            if regx_match(obj_y, line):
+            if regx_match(assignment, line):
                 value = 'y'
             v = regx_get(obj_config, line, 0)
             if v != None:

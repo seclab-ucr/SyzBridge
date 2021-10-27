@@ -9,13 +9,15 @@ logger = logging.getLogger(__name__)
 
 class Config:
     def __init__(self):
-        self.keys_list = ["vendor_image", "vmlinux", "ssh_port", "ssh_key", "vendor_src", "vendor_name"]
+        self.keys_list = ["vendor_image", "vmlinux", "ssh_port", "ssh_key", "vendor_src", "vendor_name", "vendor_code_name", "vendor_version"]
         self._ssh_port = base_ssh_port
         self._vendor_image = None
         self._vmlinux = None
         self._ssh_key = None
         self._vendor_src = None
         self._vendor_name = None
+        self._vendor_code_name = None
+        self._vendor_version = None
 
     def load_from_file(self, config):
         work_path = os.getcwd()
@@ -107,3 +109,23 @@ class Config:
         if type(n) != str:
             raise TargetFormatNotMatch(n, type(n), str)
         self._vendor_name = n
+    
+    @property
+    def vendor_code_name(self):
+        return self._vendor_code_name
+    
+    @vendor_code_name.setter
+    def vendor_code_name(self, n):
+        if type(n) != str:
+            raise TargetFormatNotMatch(n, type(n), str)
+        self._vendor_code_name = n
+
+    @property
+    def vendor_version(self):
+        return self._vendor_version
+    
+    @vendor_version.setter
+    def vendor_version(self, n):
+        if type(n) != str:
+            raise TargetFormatNotMatch(n, type(n), str)
+        self._vendor_version = n

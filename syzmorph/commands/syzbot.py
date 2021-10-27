@@ -63,12 +63,14 @@ class SyzbotCommand(Command):
                     for line in text:
                         line = line.strip('\n')
                         crawler.run_one_case(line)
+        else:
+            crawler.run()
 
         self.save_cases(crawler.cases, args.proj) 
     
     def check_essential_args(self):
-        if self.args.get == None or self.args.proj == None:
-            logger.error("--get or --proj must be specified.")
+        if self.args.proj == None:
+            logger.error("--proj must be specified.")
             return True
         return False
 

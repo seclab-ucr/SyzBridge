@@ -6,6 +6,7 @@ from subprocess import call
 class BuildCommand(Command):
     def __init__(self):
         super().__init__()
+        self.args = None
 
     def add_arguments(self, parser):
         super().add_arguments(parser)
@@ -15,7 +16,8 @@ class BuildCommand(Command):
     def custom_subparser(self, parser, cmd):
         return parser.add_parser(cmd, help='Build essential components')
 
-    def run(self):
+    def run(self, args):
+        self.args = args
         self.check_kvm()
         self.install_requirments()
     

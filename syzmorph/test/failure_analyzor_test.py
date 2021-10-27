@@ -1,9 +1,11 @@
-import logging
+import logging, sys
 
-from syzmorph.modules.analyzor.failure_analyzor import FailureAnalysis
+from syzmorph.modules.analyzor.failure_analysis import FailureAnalysis
 from .config_test import create_mini_cfg
 
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.NOTSET)
 
 normal_kasan_report = """
 netdevsim netdevsim0 netdevsim1: set [1, 0] type 2 family 0 port 6081 - 0
@@ -163,33 +165,38 @@ Rebooting in 86400 seconds..
 def test_module_check1():
     #CONFIG_INET
     cfg = create_mini_cfg()
-    fa = FailureAnalysis(logger, report=normal_kasan_report)
+    fa = FailureAnalysis()
+    fa.prepare_on_demand(normal_kasan_report)
     fa.cfg = cfg
     return fa.module_check("net/ipv4/udp_offload.c")
 
 def test_module_check2():
     #CONFIG_QRTR
     cfg = create_mini_cfg()
-    fa = FailureAnalysis(logger, report=normal_kasan_report)
+    fa = FailureAnalysis()
+    fa.prepare_on_demand(normal_kasan_report)
     fa.cfg = cfg
     return fa.module_check("net/qrtr/qrtr.c")
 
 def test_module_check3():
     #CONFIG_QRTR
     cfg = create_mini_cfg()
-    fa = FailureAnalysis(logger, report=normal_kasan_report)
+    fa = FailureAnalysis()
+    fa.prepare_on_demand(normal_kasan_report)
     fa.cfg = cfg
     return fa.module_check("arch/x86/entry/common.c")
 
 def test_module_check4():
     cfg = create_mini_cfg()
-    fa = FailureAnalysis(logger, report=normal_kasan_report)
+    fa = FailureAnalysis()
+    fa.prepare_on_demand(normal_kasan_report)
     fa.cfg = cfg
     return fa.run()
 
 def test_module_check5():
     cfg = create_mini_cfg()
-    fa = FailureAnalysis(logger, report=failed_kasan_report)
+    fa = FailureAnalysis()
+    fa.prepare_on_demand(failed_kasan_report)
     fa.cfg = cfg
     return fa.run()
 

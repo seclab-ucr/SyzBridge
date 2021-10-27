@@ -2,6 +2,7 @@ import os, re, stat, sys
 import requests
 import logging
 import random
+import datetime
 
 from .strings import *
 
@@ -209,6 +210,83 @@ def log_anything(pipe, logger, debug):
     except ValueError:
         if pipe.close:
             return
+
+def set_compiler_version(time, config_url):
+    GCC = 0
+    CLANG = 1
+    regx_gcc_version = r'gcc \(GCC\) (\d+).\d+.\d+ (\d+)'
+    regx_clang_version = r'clang version (\d+).\d+.\d+ \(https:\/\/github\.com\/llvm\/llvm-project\/ (\w+)\)'
+    compiler = -1
+    ret = ""
+    
+    r = request_get(config_url)
+    text = r.text.split('\n')
+    for line in text:
+        if line.find('Compiler:') != -1:
+            if regx_match(regx_gcc_version, line):
+                compiler = GCC
+                version = regx_get(regx_gcc_version, line, 0)
+                commit = regx_get(regx_gcc_version, line, 1)
+            if regx_match(regx_clang_version, line):
+                compiler = CLANG
+                version = regx_get(regx_clang_version, line, 0)
+                commit = regx_get(regx_clang_version, line, 1)
+            break
+        if line.find('CONFIG_CC_VERSION_TEXT') != -1:
+            if regx_match(regx_gcc_version, line):
+                compiler = GCC
+                version = regx_get(regx_gcc_version, line, 0)
+                commit = regx_get(regx_gcc_version, line, 1)
+            if regx_match(regx_clang_version, line):
+                compiler = CLANG
+                version = regx_get(regx_clang_version, line, 0)
+                commit = regx_get(regx_clang_version, line, 1)
+            break
+    
+    if compiler == GCC:
+        if version == '7':
+            ret = "gcc-7"
+        if version == '8':
+            ret = "gcc-8.0.1-20180412"
+        if version == '9':
+            ret = "gcc-9.0.0-20181231"
+        if version == '10':
+            ret = "gcc-10.1.0-20200507"
+
+    if compiler == CLANG:
+        if version == '7' and version.find('329060'):
+            ret = "clang-7-329060"
+        if version == '7' and version.find('334104'):
+            ret = "clang-7-334104"
+        if version == '8':
+            ret = "clang-8-343298"
+        if version == '10':
+            #clang-10-c2443155 seems corrput (Compiler lacks asm-goto support)
+            #return clang-11-ca2dcbd030e
+            ret = "clang-11-ca2dcbd030e"
+        if version == '11':
+            ret = "clang-11-ca2dcbd030e"
+    
+    if compiler == -1:
+        #filter by timestamp
+        t1 = datetime.datetime(2018, 3, 1)
+        t2 = datetime.datetime(2018, 4, 12)
+        t3 = datetime.datetime(2018, 12, 31)
+        t4 = datetime.datetime(2020, 5, 7)
+
+        if time < t1:
+            ret = "gcc-7"
+        if time >= t1 and time < t2:
+            #gcc-8.0.1-20180301 seems corrput (Compiler lacks asm-goto support)
+            #return "gcc-8.0.1-20180301"
+            ret = "gcc-8.0.1-20180412"
+        if time >= t2 and time < t3:
+            ret = "gcc-8.0.1-20180412"
+        if time >= t3 and time < t4:
+            ret = "gcc-9.0.0-20181231"
+        if time >= t4:
+            ret = "gcc-10.1.0-20200507"
+    return ret
 
 if __name__ == '__main__':
     pass

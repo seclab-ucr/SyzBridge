@@ -11,6 +11,9 @@ reboot_regx = r'reboot: machine restart'
 port_error_regx = r'Could not set up host forwarding rule'
 
 class VMInstance(Network):
+    LTS = 0
+    UBUNTU = 1
+
     def __init__(self, hash_tag, proj_path='/tmp/', log_name='vm.log', log_suffix="", logger=None, debug=False):
         self.proj_path = proj_path
         self.port = None
@@ -25,6 +28,7 @@ class VMInstance(Network):
         self.hash_tag = hash_tag
         self.log_name = log_name
         self.qemu_fail = False
+        self.qemu_ready_bar = ""
         self.output = []
         log_name += log_suffix
         self.logger = utilities.init_logger(os.path.join(proj_path, log_name), debug=debug, propagate=debug)
@@ -34,21 +38,11 @@ class VMInstance(Network):
         self._qemu = None
         Network.__init__(self, self.case_logger, self.debug, self.debug)
 
-    def setup(self, port, image, key, mem="2G", cpu="2", gdb_port=None, mon_port=None, timeout=None):
-        self.port = port
-        self.image = image
-        self.key = key
-        self.timeout = timeout
-        self.cmd_launch = ["qemu-system-x86_64", "-m", mem, "-smp", cpu]
-        if gdb_port != None:
-            self.cmd_launch.extend(["-gdb", "tcp::{}".format(gdb_port)])
-        if mon_port != None:
-            self.cmd_launch.extend(["-monitor", "tcp::{},server,nowait,nodelay,reconnect=-1".format(mon_port)])
-        if self.port != None:
-            self.cmd_launch.extend(["-net", "nic,model=e1000", "-net", "user,host=10.0.2.10,hostfwd=tcp::{}-:22".format(self.port)])
-        self.cmd_launch.extend(["-display", "none", "-serial", "stdio", "-no-reboot", "-enable-kvm", "-cpu", "host,migratable=off",  
-                    "-drive", "file={}".format(self.image)])
-        self.write_cmd_to_script(self.cmd_launch, "launch_vm.sh")
+    def setup(self, type, **kwargs):
+        if type == VMInstance.LTS:
+            self._setup_upstream(**kwargs)
+        if type == VMInstance.UBUNTU:
+            self._setup_ubuntu(**kwargs)
         return
         
     def run(self):
@@ -95,6 +89,60 @@ class VMInstance(Network):
         self.qemu_fail = True
         self._qemu.kill()
     
+    def _setup_ubuntu(self, port, image, key, mem="2G", cpu="2", gdb_port=None, mon_port=None, timeout=None):
+        self.qemu_ready_bar = r'(\w+ login:)|(Ubuntu \d+\.\d+\.\d+ LTS ubuntu20 ttyS0)'
+        self.port = port
+        self.image = image
+        self.key = key
+        self.timeout = timeout
+        self.cmd_launch = ["qemu-system-x86_64", "-m", mem, "-smp", cpu]
+        if gdb_port != None:
+            self.cmd_launch.extend(["-gdb", "tcp::{}".format(gdb_port)])
+        if mon_port != None:
+            self.cmd_launch.extend(["-monitor", "tcp::{},server,nowait,nodelay,reconnect=-1".format(mon_port)])
+        if self.port != None:
+            self.cmd_launch.extend(["-net", "nic,model=e1000", "-net", "user,host=10.0.2.10,hostfwd=tcp::{}-:22".format(self.port)])
+        self.cmd_launch.extend(["-display", "none", "-serial", "stdio", "-no-reboot", "-enable-kvm", "-cpu", "host,migratable=off",  
+                    "-drive", "file={}".format(self.image)])
+        self.write_cmd_to_script(self.cmd_launch, "launch_ubuntu.sh")
+    
+    def _setup_upstream(self, port, image, linux, mem="2G", cpu="2", key=None, gdb_port=None, mon_port=None, opts=None, timeout=None):
+        self.qemu_ready_bar = r'Debian GNU\/Linux \d+ syzkaller ttyS\d+'
+        cur_opts = ["root=/dev/sda", "console=ttyS0"]
+        def_opts = ["kasan_multi_shot=1", "earlyprintk=serial", "oops=panic", "nmi_watchdog=panic", "panic=1", \
+                        "ftrace_dump_on_oops=orig_cpu", "rodata=n", "vsyscall=native", "net.ifnames=0", \
+                        "biosdevname=0", "kvm-intel.nested=1", \
+                        "kvm-intel.unrestricted_guest=1", "kvm-intel.vmm_exclusive=1", \
+                        "kvm-intel.fasteoi=1", "kvm-intel.ept=1", "kvm-intel.flexpriority=1", \
+                        "kvm-intel.vpid=1", "kvm-intel.emulate_invalid_guest_state=1", \
+                        "kvm-intel.eptad=1", "kvm-intel.enable_shadow_vmcs=1", "kvm-intel.pml=1", \
+                        "kvm-intel.enable_apicv=1"]
+        gdb_arg = ""
+        self.port = port
+        self.image = image
+        self.linux = linux
+        self.key = key
+        self.timeout = timeout
+        self.cmd_launch = ["qemu-system-x86_64", "-m", mem, "-smp", cpu]
+        if gdb_port != None:
+            self.cmd_launch.extend(["-gdb", "tcp::{}".format(gdb_port)])
+        if mon_port != None:
+            self.cmd_launch.extend(["-monitor", "tcp::{},server,nowait,nodelay".format(mon_port)])
+        if self.port != None:
+            self.cmd_launch.extend(["-net", "nic,model=e1000", "-net", "user,host=10.0.2.10,hostfwd=tcp::{}-:22".format(self.port)])
+        self.cmd_launch.extend(["-display", "none", "-serial", "stdio", "-no-reboot", "-enable-kvm", "-cpu", "host,migratable=off", 
+                    "-hda", "{}".format(self.image), 
+                    "-snapshot", "-kernel", "{}/arch/x86_64/boot/bzImage".format(self.linux),
+                    "-append"])
+        if opts == None:
+            cur_opts.extend(def_opts)
+        else:
+            cur_opts.extend(opts)
+        if type(cur_opts) == list:
+            self.cmd_launch.append(" ".join(cur_opts))
+        self.write_cmd_to_script(self.cmd_launch, "launch_upstream.sh")
+        return
+    
     def __log_qemu(self, pipe):
         try:
             self.logger.info("\n".join(self.cmd_launch)+"\n")
@@ -107,7 +155,7 @@ class VMInstance(Network):
                     continue
                 if utilities.regx_match(reboot_regx, line) or utilities.regx_match(port_error_regx, line):
                     self.case_logger.error("Booting qemu-{} failed".format(self.log_name))
-                if utilities.regx_match(r'\w+ login:', line) or utilities.regx_match(r'Ubuntu 20.04.2 LTS ubuntu20 ttyS0', line):
+                if utilities.regx_match(self.qemu_ready_bar, line):
                     self.qemu_ready = True
                 self.logger.info(line)
                 self.output.append(line)

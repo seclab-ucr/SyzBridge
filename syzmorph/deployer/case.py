@@ -1,4 +1,4 @@
-from logging import NOTSET
+import json
 import shutil
 
 from os import path
@@ -8,18 +8,19 @@ from .error import *
 from modules.reproducer import *
 
 reserve_port = 7
-class Case(Reproducer):
+class Case:
     def __init__(self, index, owner, case_hash, case):
         self.cfg = owner.cfg
         self.args = owner.args
         self.index = index
         self.debug = self.args.debug
         self.case_hash = case_hash[:7]
-        self.path_serena = os.getcwd()
+        self.path_syzmorph = os.getcwd()
         self.path_project = owner.proj_dir
-        self.path_package = os.path.join(self.path_serena, "syzmorph")
+        self.path_package = os.path.join(self.path_syzmorph, "syzmorph")
         self.path_case = self._get_case_path()
         self.case = case
+        self.lts = None
         self.has_c_repro = True
         if self.args.ssh_key != None:
             self.cfg.ssh_key = self.args.ssh_key[0]
@@ -31,18 +32,19 @@ class Case(Reproducer):
             self.cfg.image_path = self.args.image[0]
         if self.args.vmlinux != None:
             self.cfg.vmlinux_path = self.args.vmlinux[0]
-        self._init_case()
-        Reproducer.__init__(self, self.path_case, self.cfg.ssh_port, self.case_logger, self.debug, 3)
-    
-    def create_finish_repro(self):
-        self._create_stamp("FINISH_REPRO")
-    
-    def check_finish_repro(self):
-        return self._check_stamp("FINISH_REPRO")
+        self._init_case(case_hash)
+        if self.lts != None:
+            self.path_linux = os.path.join(self.path_case, "linux/linux-{}".format(self.lts["version"]))
+        else:
+             self.path_linux = None
+        self.repro = Reproducer(path_linux=self.path_linux, path_case=self.path_case, path_syzmorph=self.path_syzmorph, 
+            ssh_port=self.cfg.ssh_port, case_logger=self.case_logger, debug= self.debug, qemu_num=3)
     
     def save_to_others(self):
         dirname = os.path.dirname(self.path_case)
         folder = os.path.basename(dirname)
+        if folder == 'incomplete':
+            folder = 'completed'
         self._save_to(folder)
         return folder
     
@@ -55,7 +57,7 @@ class Case(Reproducer):
     def save_to_error(self):
         self._save_to("error")
     
-    def _init_case(self):
+    def _init_case(self, case_hash):
         dst = "{}/incomplete/{}".format(self.path_project, self.case_hash)
         if os.path.exists(self.path_case):
             if not os.path.exists(dst):
@@ -67,6 +69,8 @@ class Case(Reproducer):
         self.case_logger = init_logger(self.path_case+"/log", 
             cus_format='%(asctime)s %(message)s',
             debug=self.debug, propagate=self.debug)
+        
+        self.case_logger.info("https://syzkaller.appspot.com/bug?id={}".format(case_hash))
         
         c_prog = self.case["c_repro"]
         if c_prog == None:
@@ -84,7 +88,31 @@ class Case(Reproducer):
             log_anything(p.stdout, self.case_logger, self.debug)
         exitcode = p.wait()
         self.case_logger.info("scripts/init-case.sh was done with exitcode {}".format(exitcode))
+        self.lts = self._determine_lts()
     
+    def _determine_lts(self):
+        vendor_name = self.cfg.vendor_name.lower()
+        code_name = self.cfg.vendor_code_name.lower()
+        codename2LTS_path = os.path.join(self.path_package, "resources/codename2LTS.json")
+        data = self._read_json(codename2LTS_path)
+        if vendor_name not in data:
+            self.case_logger.error("Cannot find vendor {}, try add it manually in resources/codename2LTS.json".format(vendor_name))
+            return None
+        if code_name not in data[vendor_name]:
+            self.case_logger.error("Cannot find code name {}, try add it manually in resources/codename2LTS.json".format(code_name))
+            return None
+
+        if self.cfg.vendor_version == None and len(data[vendor_name][code_name]) > 1:
+            self.case_logger.error("Multiple vendor version found in resources/codename2LTS.json, specify a version in config using \"vendor_version\"")
+            return None
+
+        for each in data[vendor_name][code_name]:
+            if self.cfg.vendor_version != None:
+                if each['version'] == self.cfg.vendor_version:
+                    return each
+            else:
+                return each
+
     def _get_case_path(self):
         path_case = None
         path_work = self.path_project
@@ -115,10 +143,9 @@ class Case(Reproducer):
         shutil.move(src, dst)
         self.path_case = dst
     
-    def _create_stamp(self, stamp):
-        dst = "{}/.stamp/{}".format(self.case_path, stamp)
-        call(['touch',dst])
-    
-    def _check_stamp(self, stamp):
-        dst = "{}/.stamp/{}".format(self.case_path, stamp)
-        return os.path.exists(dst)
+    def _read_json(self, json_path):
+        with open(json_path, 'r') as f:
+            d = json.load(f)
+            f.close()
+            return d
+        return None

@@ -171,10 +171,12 @@ class Crawler:
             if table.caption.text.find('Crash') != -1:
                 for case in table.tbody.contents:
                     if type(case) == element.Tag:
+                        """ We dont need to ignore other source anymore as long as they can reproduce
                         kernel = case.find('td', {"class": "kernel"})
                         if kernel.text != "upstream":
                             self.logger.debug("skip kernel: '{}'".format(kernel.text))
                             continue
+                        """
                         count += 1
                         if count < index:
                             continue
