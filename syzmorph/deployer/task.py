@@ -2,9 +2,11 @@ from modules.analyzor import AnalysisModule, AnalysisModuleError
 
 class Task:
     TASK_ALL = 0
-    TASK_REPRODUCE = 1 << 1
+    TASK_TEMPLATE = 0
+    TASK_BUG_REPRODUCE = 1 << 1
     TASK_FAILURE_ANALYSIS = 1 << 2
     TASK_LTS_ANALYSIS = 1 << 3
+    TASK_TRACE_ANALYSIS = 1 << 4
 
     def __init__(self, args):
         self.args = args
@@ -22,14 +24,18 @@ class Task:
         return self.task_class[task]
     
     def iterate_all_tasks(self):
-        return (Task.TASK_LTS_ANALYSIS, Task.TASK_REPRODUCE, Task.TASK_FAILURE_ANALYSIS)
+        return (Task.TASK_LTS_ANALYSIS, Task.TASK_BUG_REPRODUCE, Task.TASK_FAILURE_ANALYSIS, Task.TASK_TRACE_ANALYSIS)
 
     def _get_tasks(self):
         task = Task.TASK_ALL
+        if self.args.bug_reproduce:
+            task |= Task.TASK_BUG_REPRODUCE
         if self.args.failure_analysis:
             task |= Task.TASK_FAILURE_ANALYSIS
         if self.args.lts_analysis:
             task |= Task.TASK_LTS_ANALYSIS
+        if self.args.trace_analysis:
+            task |= Task.TASK_TRACE_ANALYSIS
         return task
     
     def _capable(self, cap):

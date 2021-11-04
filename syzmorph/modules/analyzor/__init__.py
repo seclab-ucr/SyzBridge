@@ -12,12 +12,14 @@ class AnalysisModule:
 
     def __init__(self):
         self.logger = logger
+        self._move_to_success = False
         self._analyzor = None
 
     def setup(self, manager):
         if not isinstance(manager, Case):
             raise AnalysisModuleError("setup() requires class Case")
 
+        self.manager = manager
         self.case = manager.case
         self.args = manager.args
         self.repro = manager.repro
@@ -66,6 +68,10 @@ class AnalysisModule:
         return self.analyzor.generate_report()
     
     @check
+    def success(self):
+        return self.analyzor.success()
+    
+    @check
     def check_stamp(self):
         """
         Bool: True if stamp found, otherwise return False
@@ -93,3 +99,8 @@ class AnalysisModule:
     def _check_stamp(self, stamp):
         dst = "{}/.stamp/{}".format(self.path_case, stamp)
         return os.path.exists(dst)
+    
+    def _write_to(self, content, name):
+        with open("{}/{}".format(self.path_case, name), "w") as f:
+            f.write(content)
+            f.truncate()

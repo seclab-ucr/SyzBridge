@@ -38,6 +38,8 @@ class RunCommand(Command):
                             help='Run LTS analysis on target project')
         parser.add_argument('--bug-reproduce', action='store_true',
                             help='Run bug reproduce on target project')
+        parser.add_argument('--trace-analysis', action='store_true',
+                            help='Run trace analysis on target project')
 
         # Regular arguments
         parser.add_argument('--image', nargs=1, action='store',

@@ -26,7 +26,7 @@ class FailureAnalysis(AnalysisModule):
     def check(func):
         def inner(self):
             ret = func(self)
-            if func(self):
+            if ret:
                 self.main_logger.info("[Failure analysis] All modules passed")
             else:
                 self.main_logger.info("[Failure analysis] At least one module failed to find in {}".format(self.cfg.vendor_name))
@@ -43,6 +43,9 @@ class FailureAnalysis(AnalysisModule):
         if self.kasan_report == []:
             return False
         return True
+    
+    def success(self):
+        return self._move_to_success
 
     @check
     def run(self):
@@ -170,9 +173,4 @@ class FailureAnalysis(AnalysisModule):
                 for e in each_obj:
                     if e == vul_obj:
                         return value
-    
-    def _write_to(self, content, name):
-        with open("{}/{}".format(self.path_case, name), "w") as f:
-            f.write(content)
-            f.truncate()
 

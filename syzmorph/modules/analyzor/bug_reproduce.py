@@ -1,78 +1,56 @@
 import re
-import datetime
 
-from infra.tool_box import regx_match, chmodX, set_compiler_version
 from . import AnalysisModule
-from .error import *
-from subprocess import Popen, STDOUT, PIPE
-from dateutil import parser as time_parser
-from modules.vm import VM
-from infra.strings import *
+from syzmorph.modules.vm import VMInstance
+from syzmorph.infra.tool_box import regx_match
+from syzmorph.infra.strings import *
 
-class LtsAnalysis(AnalysisModule):
-    NAME = "LtsAnalysis"
-    REPORT_START = "======================LTS Analysis Report======================"
+class BugReproduce(AnalysisModule):
+    NAME = "BugReproduce"
+    REPORT_START = "======================BugReproduce Report======================"
     REPORT_END =   "==================================================================="
-    REPORT_NAME = "Report_LTSAnalysis"
+    REPORT_NAME = "Report_BugReproduce"
 
     def __init__(self):
         super().__init__()
-        self.case = None
-        self.report = ""
-        self._prepared = False
-    
+        self.report = ''
+        
     def prepare(self):
         return self.prepare_on_demand()
     
     def prepare_on_demand(self):
         self._prepared = True
-        if self.lts == None:
-            return False
         return True
     
-    def success(self):
-        return self._move_to_success
+    def check(func):
+        def inner(self):
+            ret = func(self)
+            if ret:
+                self.main_logger.info("Trigger a Kasan bug: {}".format(ret))
+                self._move_to_success = True
+            else:
+                self.main_logger.info("Fail to trigger the bug")
+            return ret
+        return inner
 
+    @check
     def run(self):
-        if not self._prepared:
-            self.logger.error("Module {} is not prepared".format(LtsAnalysis.NAME))
-            return None
-        self.logger.info("Start reproducing bugs on upstream LTS")
-        self.build_env_LTS()
-        self.repro.setup(VM.LTS)
-        self.report, triggered = self.repro.prepare(self.case_hash)
+        self.logger.info("start reproducing bugs on {}".format(self.cfg.vendor_name))
+        self.repro.setup(getattr(VMInstance, self.cfg.vendor_name.upper()))
+        report, triggered = self.repro.reproduce(self.case_hash)
         if triggered:
-            is_kasan_bug, title = self._KasanChecker(self.report)
+            is_kasan_bug, title = self._KasanChecker(report)
             if is_kasan_bug:
                 return title
         return None
     
-    def build_env_LTS(self):
-        image_switching_date = datetime.datetime(2020, 3, 15)
-        time = self.case["time"]
-        case_time = time_parser.parse(time)
-        if image_switching_date <= case_time:
-            image = "stretch"
-        else:
-            image = "wheezy"
-        
-        gcc_version = set_compiler_version(time_parser.parse(self.case["time"]), self.case["config"])
-        script = "syzmorph/scripts/deploy-linux.sh"
-        chmodX(script)
-        p = Popen([script, gcc_version, self.path_case, str(self.args.parallel_max), 
-                self.case["commit"], self.case["config"], image, self.lts['snapshot'], self.lts["version"], str(self.index)],
-            stderr=STDOUT,
-            stdout=PIPE)
-        with p.stdout:
-            self._log_subprocess_output(p.stdout)
-        exitcode = p.wait()
-        self.logger.info("script/deploy.sh is done with exitcode {}".format(exitcode))
-        return exitcode
+    def success(self):
+        return self._move_to_success
     
     def generate_report(self):
         final_report = "\n".join(self.report)
         self.logger.info(final_report)
-        self._write_to(final_report, LtsAnalysis.REPORT_NAME)
+        self._write_to(final_report, BugReproduce.REPORT_NAME)
     
     def _KasanChecker(self, report):
         title = None
@@ -110,3 +88,4 @@ class LtsAnalysis(AnalysisModule):
                             flag_kasan_read = True
                             break
         return ret, title
+

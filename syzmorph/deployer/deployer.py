@@ -20,7 +20,7 @@ class Deployer(Case, Task):
         self.analysis = AnalysisModule()
         self.analysis.setup(self)
         self.build_analyzor_modules()
-        self._reproduce_success = False
+        self._success = False
     
     def use_module(self, module):
         if not isinstance(module, AnalysisModule):
@@ -40,61 +40,19 @@ class Deployer(Case, Task):
             self.analysis.run()
             self.analysis.generate_report()
             self.analysis.create_stamp()
+            self._success = self.analysis.success
     
     def deploy(self):
         for task in self.iterate_all_tasks():
             if self._capable(task):
                 self.do_task(task)
-        """if self._capable(Deployer.TASK_REPRODUCE):
-            self._set_task(Deployer.TASK_REPRODUCE)
-            if not self.has_c_repro:
-                self.logger.error("{} does not have a valid C reproducer".format(self.case_hash))
-                return
-            #try:
-            if not self.check_finish_repro():
-                ret = self.deploy_reproducer()
-                if ret != None:
-                    self.logger.info("Trigger a Kasan bug: {}".format(ret))
-                    self._reproduce_success = True
-                else:
-                    self.logger.info("Fail to trigger the bug")
-            else:
-                self.logger.info("{} already finished reproducing".format(self.case_hash))
-        
-        if self._capable(Deployer.TASK_FAILURE_ANALYSIS):
-            if not self._reproduce_success:
-                self.logger.info("{} is ready for failure analysis".format(self.case_hash))
-                self.failure_analysis()
-            else:
-                self.logger.info("{} has succeed in bug reproducing, no need for failure analysis.".format(self.case_hash))
-        """
-        if self._reproduce_success:
+
+        if self._success:
             self.save_to_succeed()
             self.logger.info("Copy to succeed")
         else:
             folder = self.save_to_others()
             self.logger.info("Copy to {}".format(folder))
-            #except Exception as e:
-            #    self.logger.error(e)
-            #    self.logger.info("Copy to error")
-            #    self.save_to_error()
-
-    
-    def deploy_reproducer(self):
-        self.logger.info("start reproducing bugs on upstream LTS")
-        self.build_env_LTS()
-        self.repro.setup(VMInstance.LTS)
-        report, triggered = self.repro.prepare(self.case_hash)
-
-        self.logger.info("start reproducing bugs on {}".format(self.cfg.vendor_name))
-        self.repro.setup(getattr(VMInstance, self.cfg.vendor_name.upper()))
-        report, triggered = self.repro.prepare(self.case_hash)
-        self.create_finish_repro()
-        if triggered:
-            is_kasan_bug, title = self._KasanChecker(report)
-            if is_kasan_bug:
-                return title
-        return None
     
     def failure_analysis(self):
         rep = request_get(self.case['report'])

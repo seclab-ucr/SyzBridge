@@ -1,7 +1,7 @@
 import threading
 import logging
 import time
-import os
+import os, queue
 import infra.tool_box as utilities
 
 from subprocess import Popen, PIPE, STDOUT, call
@@ -29,13 +29,16 @@ class VMInstance(Network):
         self.log_name = log_name
         self.qemu_fail = False
         self.qemu_ready_bar = ""
+        self.alternative_func = None
+        self.alternative_func_args = None
+        self.alternative_func_output = None
         self.output = []
         log_name += log_suffix
         self.logger = utilities.init_logger(os.path.join(proj_path, log_name), debug=debug, propagate=debug)
         self.case_logger = self.logger
         if logger != None:
             self.case_logger = logger
-        self._qemu = None
+        self.instance = None
         Network.__init__(self, self.case_logger, self.debug, self.debug)
 
     def setup(self, type, **kwargs):
@@ -45,19 +48,33 @@ class VMInstance(Network):
             self._setup_ubuntu(**kwargs)
         return
         
-    def run(self):
+    def run(self, alternative_func=None, args=()):
+        """
+        alternative_func: function to be called when qemu is ready
+        args: arguments to be passed to alternative_func
+
+        return:
+            p: process of qemu
+            queue: queue of alternative_func's custom output
+        """
         p = Popen(self.cmd_launch, stdout=PIPE, stderr=STDOUT)
-        self._qemu = p
+        self.instance = p
         if self.timeout != None:
             x = threading.Thread(target=self.monitor_execution, name="{} qemu killer".format(self.hash_tag))
             x.start()
         x1 = threading.Thread(target=self.__log_qemu, args=(p.stdout,), name="{} qemu logger".format(self.hash_tag))
         x1.start()
 
-        return p
+        self.alternative_func = alternative_func
+        self.alternative_func_args = args
+
+        if self.alternative_func != None:
+            self.alternative_func_output = queue.Queue()
+
+        return p, self.alternative_func_output
 
     def kill_vm(self):
-        self._qemu.kill()
+        self.instance.kill()
     
     def write_cmd_to_script(self, cmd, name):
         path_name = os.path.join(self.proj_path, name)
@@ -78,18 +95,36 @@ class VMInstance(Network):
         while (count <self.timeout/10):
             if self.kill_qemu:
                 self.case_logger.info('Signal kill qemu received.')
-                self._qemu.kill()
+                self.instance.kill()
                 return
             count += 1
             time.sleep(10)
-            poll = self._qemu.poll()
+            poll = self.instance.poll()
             if poll != None:
+                if not self.qemu_ready:
+                    self.kill_proc_by_port(self.port)
+                    self.case_logger.error('QEMU: Error occur at booting qemu')
                 return
         self.case_logger.info('Time out, kill qemu')
         self.qemu_fail = True
-        self._qemu.kill()
+        self.instance.kill()
     
-    def _setup_ubuntu(self, port, image, key, mem="2G", cpu="2", gdb_port=None, mon_port=None, timeout=None):
+    def kill_proc_by_port(self, ssh_port):
+        p = Popen("lsof -i :{} | awk '{{print $2}}'".format(ssh_port), shell=True, stdout=PIPE, stderr=PIPE)
+        is_pid = False
+        pid = -1
+        with p.stdout as pipe:
+            for line in iter(pipe.readline, b''):
+                line = line.strip().decode('utf-8')
+                if line == 'PID':
+                    is_pid = True
+                    continue
+                if is_pid:
+                    pid = int(line)
+                    call("kill -9 {}".format(pid), shell=True)
+                    break
+    
+    def _setup_ubuntu(self, port, image, linux, key, mem="2G", cpu="2", gdb_port=None, mon_port=None, timeout=None):
         self.qemu_ready_bar = r'(\w+ login:)|(Ubuntu \d+\.\d+\.\d+ LTS ubuntu20 ttyS0)'
         self.port = port
         self.image = image
@@ -146,7 +181,7 @@ class VMInstance(Network):
     def __log_qemu(self, pipe):
         try:
             self.logger.info("\n".join(self.cmd_launch)+"\n")
-            self.logger.info("pid: {}  timeout: {}".format(self._qemu.pid, self.timeout))
+            self.logger.info("pid: {}  timeout: {}".format(self.instance.pid, self.timeout))
             for line in iter(pipe.readline, b''):
                 try:
                     line = line.decode("utf-8").strip('\n').strip('\r')
@@ -157,6 +192,8 @@ class VMInstance(Network):
                     self.case_logger.error("Booting qemu-{} failed".format(self.log_name))
                 if utilities.regx_match(self.qemu_ready_bar, line):
                     self.qemu_ready = True
+                    if self.alternative_func != None:
+                        self.alternative_func(self, *self.alternative_func_args)
                 self.logger.info(line)
                 self.output.append(line)
         except EOFError:

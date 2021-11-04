@@ -1,3 +1,4 @@
+from logging import log
 import os
 import threading
 import queue
@@ -38,14 +39,14 @@ class Launcher:
             self.ssh_key = "{}/id_rsa".format(self.path_case)
             self.type_name = "ubuntu"
     
-    def prepare(self, syz_commit):
+    def reproduce(self, syz_commit):
         self.kill_qemu = False
         res = []
         trigger = False
         ever_success = False
         
         for i in range(0, self.qemu_num):
-            x = threading.Thread(target=self.launch, args=(i, syz_commit, ), name="trigger-{}".format(i))
+            x = threading.Thread(target=self._reproduce, args=(i, syz_commit, ), name="trigger-{}".format(i))
             x.start()
             x.join()
             
@@ -74,23 +75,27 @@ class Launcher:
                     f.write(line+"\n")
                 f.write("\n")
     
-    def launch(self, th_index, c_hash):
+    def _reproduce(self, th_index, c_hash, log_name=None, cpu="8", mem="8G"):
+        qemu = self.launch_qemu(c_hash, log_suffix=str(th_index), log_name=log_name, cpu=cpu, mem=mem)
+        
+        poc_path = os.path.join(self.path_case, "poc")
+        self.start_reproducing(th_index, qemu, poc_path)
+        return
+    
+    def launch_qemu(self, c_hash, log_suffix="", log_name=None, cpu="8", mem="8G"):
         if self.vmtype == VMInstance.UBUNTU:
             if self.create_snapshot():
                 raise CreateSnapshotError
-        log_name = "qemu-{0}-{1}.log".format(c_hash, self.type_name)
+        if log_name is None:
+            log_name = "qemu-{0}-{1}.log".format(c_hash, self.type_name)
         qemu = VM(linux=self.path_linux, vmtype=self.vmtype, hash_tag=c_hash, vmlinux=self.vmlinux, port=self.ssh_port, 
-            image=self.image_path, proj_path="{}/".format(self.path_case), cpu="8", mem="8G",
-            log_name=log_name, log_suffix=str(th_index),
+            image=self.image_path, proj_path="{}/".format(self.path_case), cpu=cpu, mem=mem,
+            log_name=log_name, log_suffix=log_suffix,
             key=self.ssh_key, timeout=10*60, debug=self.debug)
-        qemu.logger.info("QEMU-{} launched.\n".format(th_index))
-        
-        poc_path = os.path.join(self.path_case, "poc")
-        self.launch_qemu(th_index, qemu, poc_path)
-        return
+        qemu.logger.info("QEMU-{} launched.\n".format(log_suffix))
+        return qemu
     
-    def launch_qemu(self, th_index, qemu, poc_path):
-        extract_report = False
+    def capture_kasan(self, qemu, th_index, poc_path):
         qemu_close = False
         out_begin = 0
         record_flag = 0
@@ -101,61 +106,57 @@ class Launcher:
         crash = []
         res = []
         trgger_hunted_bug = False
-        self.case_logger.info("Waiting qemu to launch")
 
-        p = qemu.run()
-
+        self.run_poc(qemu, poc_path)
         try:
             while not qemu_close:
-                # We need one more iteration to get remain output from qemu
-                if p.poll() != None and not qemu.qemu_ready:
+                if qemu.instance.poll() != None and not qemu.qemu_ready:
                     qemu_close = True
-                if qemu.qemu_ready and out_begin == 0:
-                    self.run_poc(qemu, poc_path)
-                    extract_report=True
-                if extract_report:
-                    out_end = len(qemu.output)
-                    for line in qemu.output[out_begin:]:
-                        if regx_match(call_trace_regx, line) or \
-                        regx_match(message_drop_regx, line):
-                            record_flag = 1
-                        if regx_match(boundary_regx, line) or \
-                        regx_match(panic_regx, line):
-                            if record_flag == 1:
-                                res.append(crash)
-                                crash = []
-                                if kasan_flag and (write_flag or read_flag or double_free_flag):
-                                    trgger_hunted_bug = True
-                                    if write_flag:
-                                        self.logger.debug("QEMU threaded {}: OOB/UAF write triggered".format(th_index))
-                                    if double_free_flag:
-                                        self.logger.debug("QEMU threaded {}: Double free triggered".format(th_index))
-                                    if read_flag:
-                                        self.logger.debug("QEMU threaded {}: OOB/UAF read triggered".format(th_index)) 
-                                    qemu.kill_qemu = True                      
-                                    break
-                            record_flag = 1
-                            continue
-                        if (regx_match(kasan_mem_regx, line) and 'null-ptr-deref' not in line):
-                            kasan_flag = 1
-                        if regx_match(write_regx, line):
-                            write_flag = 1
-                        if regx_match(kasan_double_free_regx, line):
-                            double_free_flag = 1
-                        if regx_match(read_regx, line):
-                            read_flag = 1
-                        if record_flag or kasan_flag:
-                            crash.append(line)
-                    out_begin = out_end
+                out_end = len(qemu.output)
+                for line in qemu.output[out_begin:]:
+                    if regx_match(call_trace_regx, line) or \
+                    regx_match(message_drop_regx, line):
+                        record_flag = 1
+                    if regx_match(boundary_regx, line) or \
+                    regx_match(panic_regx, line):
+                        if record_flag == 1:
+                            res.append(crash)
+                            crash = []
+                            if kasan_flag and (write_flag or read_flag or double_free_flag):
+                                trgger_hunted_bug = True
+                                if write_flag:
+                                    self.logger.debug("QEMU threaded {}: OOB/UAF write triggered".format(th_index))
+                                if double_free_flag:
+                                    self.logger.debug("QEMU threaded {}: Double free triggered".format(th_index))
+                                if read_flag:
+                                    self.logger.debug("QEMU threaded {}: OOB/UAF read triggered".format(th_index)) 
+                                qemu.kill_qemu = True                      
+                                break
+                        record_flag = 1
+                        continue
+                    if (regx_match(kasan_mem_regx, line) and 'null-ptr-deref' not in line):
+                        kasan_flag = 1
+                    if regx_match(write_regx, line):
+                        write_flag = 1
+                    if regx_match(kasan_double_free_regx, line):
+                        double_free_flag = 1
+                    if regx_match(read_regx, line):
+                        read_flag = 1
+                    if record_flag or kasan_flag:
+                        crash.append(line)
+                out_begin = out_end
         except Exception as e:
-            self.case_logger.error("Exception occur when reporducing crash: {}".format(e))
-            if p.poll() == None:
-                p.kill()
-        if not extract_report:
-            res = ['QEMU threaded {}: Error occur at booting qemu'.format(th_index)]
-            self.kill_proc_by_port(self.ssh_port)
-            if p.poll() == None:
-                p.kill()
+                self.case_logger.error("Exception occur when reporducing crash: {}".format(e))
+                if qemu.instance.poll() == None:
+                    qemu.instance.kill()
+        self.alternative_func_output.put([res, trgger_hunted_bug, qemu.qemu_fail])
+    
+    def start_reproducing(self, th_index, qemu, poc_path):
+        self.case_logger.info("Waiting qemu to launch")
+
+        _, qemu_queue = qemu.run(alternative_func=self.capture_kasan, args=(th_index, poc_path, ))
+
+        [res, trgger_hunted_bug] = qemu_queue.get(block=True)
         self.queue.put([res, trgger_hunted_bug, qemu.qemu_fail])
 
     def run_poc(self, qemu, poc_path):
