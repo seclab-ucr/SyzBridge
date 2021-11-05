@@ -33,10 +33,9 @@ class Case:
         if self.args.vmlinux != None:
             self.cfg.vmlinux_path = self.args.vmlinux[0]
         self._init_case(case_hash)
-        if self.lts != None:
-            self.path_linux = os.path.join(self.path_case, "linux/linux-{}".format(self.lts["version"]))
-        else:
-             self.path_linux = None
+        #if self.lts != None:
+        #    self.path_linux = os.path.join(self.path_case, "linux/linux-{}".format(self.lts["version"]))
+        self.path_linux = os.path.join(self.path_case, "linux")
         self.repro = Reproducer(path_linux=self.path_linux, path_case=self.path_case, path_syzmorph=self.path_syzmorph, 
             ssh_port=self.cfg.ssh_port, case_logger=self.case_logger, debug= self.debug, qemu_num=3)
     

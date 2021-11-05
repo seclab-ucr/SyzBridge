@@ -6,6 +6,7 @@ import infra.tool_box as utilities
 
 from subprocess import Popen, PIPE, STDOUT, call
 from .network import Network
+from .error import AlternativeFunctionError
 
 reboot_regx = r'reboot: machine restart'
 port_error_regx = r'Could not set up host forwarding rule'
@@ -13,6 +14,7 @@ port_error_regx = r'Could not set up host forwarding rule'
 class VMInstance(Network):
     LTS = 0
     UBUNTU = 1
+    UPSTREAM = 2
 
     def __init__(self, hash_tag, proj_path='/tmp/', log_name='vm.log', log_suffix="", logger=None, debug=False):
         self.proj_path = proj_path
@@ -46,6 +48,8 @@ class VMInstance(Network):
             self._setup_upstream(**kwargs)
         if type == VMInstance.UBUNTU:
             self._setup_ubuntu(**kwargs)
+        if type == VMInstance.UPSTREAM:
+            self._setup_upstream(**kwargs)
         return
         
     def run(self, alternative_func=None, args=()):
@@ -83,7 +87,15 @@ class VMInstance(Network):
             f.close()
 
     def upload(self, user, src: list, dst, wait: bool):
-        self.scp("localhost", user, self.port, self.key, " ".join(src), dst, wait)
+        if type(src) != list:
+            self.logger.error("src must be a list")
+        self.scp("localhost", user, self.port, self.key, " ".join(src), dst, True, wait)
+        return
+    
+    def download(self, user, src: list, dst, wait: bool):
+        if type(src) != list:
+            self.logger.error("src must be a list")
+        self.scp("localhost", user, self.port, self.key, " ".join(src), dst, False, wait)
         return
 
     def command(self, cmds, user, wait: bool):
@@ -192,8 +204,12 @@ class VMInstance(Network):
                     self.case_logger.error("Booting qemu-{} failed".format(self.log_name))
                 if utilities.regx_match(self.qemu_ready_bar, line):
                     self.qemu_ready = True
-                    if self.alternative_func != None:
-                        self.alternative_func(self, *self.alternative_func_args)
+                    try:
+                        if self.alternative_func != None:
+                            self.alternative_func(self, *self.alternative_func_args)
+                    except Exception as e:
+                        self.logger.error("alternative_func failed: {}".format(e))
+                        raise AlternativeFunctionError
                 self.logger.info(line)
                 self.output.append(line)
         except EOFError:

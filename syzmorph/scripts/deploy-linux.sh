@@ -41,6 +41,16 @@ function get_linux() {
   cd linux-$version
 }
 
+function build_linux_folder {
+  LINUX_FOLDER=$1
+  LINUX0=$2
+  if [ $LINUX0 == "LINUX0" ]; then
+    git clone https://github.com/torvalds/linux.git $LINUX_FOLDER
+  else
+    cp -rp $LINUX0 $LINUX_FOLDER
+  fi
+}
+
 if [ $# -ne 9 ]; then
   echo "Usage ./deploy_linux gcc_version case_path max_compiling_kernel linux_commit config_url image linux_repo linux_version index"
   exit 1
@@ -87,7 +97,9 @@ echo "[+] Building kernel"
 OLD_INDEX=`ls -l linux | cut -d'-' -f 3`
 if [ "$OLD_INDEX" != "$INDEX" ]; then
   rm -rf "./linux" || echo "No linux repo"
-  ls $PROJECT_PATH/tools/linux-$INDEX || mkdir $PROJECT_PATH/tools/linux-$INDEX
+  LINUX0=$PROJECT_PATH/tools/linux-0
+  ls $LINUX0 || LINUX0="LINUX0"
+  ls $PROJECT_PATH/tools/linux-$INDEX || build_linux_folder $PROJECT_PATH/tools/linux-$INDEX $LINUX0
   ln -s $PROJECT_PATH/tools/linux-$INDEX ./linux
   if [ -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
       rm $CASE_PATH/.stamp/BUILD_KERNEL
@@ -100,7 +112,14 @@ if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
         echo "This kernel is using by other thread"
         exit 1
     fi
-    cd linux-$LINUX_VERSION || get_linux $LINUX_REPO $LINUX_VERSION
+    if [ $COMMIT == "0" ]; then
+      cd linux-$LINUX_VERSION || get_linux $LINUX_REPO $LINUX_VERSION
+    else
+      git stash || echo "it's ok"
+      make clean > /dev/null || echo "it's ok"
+      git clean -fdx -e THIS_KERNEL_IS_BEING_USED > /dev/null || echo "it's ok"
+      git checkout -f $COMMIT || (git pull https://github.com/torvalds/linux.git master > /dev/null 2>&1 && git checkout -f $COMMIT)
+    fi
     curl $CONFIG > .config
     # Panic on data corruption may stop the fuzzing session
     CONFIGKEYSENABLE="
@@ -109,7 +128,29 @@ if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
     CONFIG_KASAN_OUTLINE
     CONFIG_DEBUG_INFO
     CONFIG_FRAME_POINTER
-    CONFIG_UNWINDER_FRAME_POINTER"
+    CONFIG_UNWINDER_FRAME_POINTER
+    CONFIG_KPROBES
+    CONFIG_OPTPROBES
+    CONFIG_KPROBES_ON_FTRACE
+    CONFIG_KRETPROBES
+    CONFIG_FUNCTION_TRACER
+    CONFIG_FUNCTION_GRAPH_TRACER
+    CONFIG_DYNAMIC_FTRACE
+    CONFIG_DYNAMIC_FTRACE_WITH_REGS
+    CONFIG_DYNAMIC_FTRACE_WITH_DIRECT_CALLS
+    CONFIG_FUNCTION_PROFILER
+    CONFIG_STACK_TRACER
+    CONFIG_TRACER_MAX_TRACE
+    CONFIG_SCHED_TRACER
+    CONFIG_FTRACE_SYSCALLS
+    CONFIG_TRACER_SNAPSHOT
+    CONFIG_KPROBE_EVENTS
+    CONFIG_BPF_KPROBE_OVERRIDE
+    CONFIG_FTRACE_MCOUNT_RECORD
+    CONFIG_TRACING_MAP
+    CONFIG_HIST_TRIGGERS
+    CONFIG_FUNCTION_ERROR_INJECTION
+    "
 
     CONFIGKEYSDISABLE="
     CONFIG_BUG_ON_DATA_CORRUPTION
@@ -120,6 +161,13 @@ if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
     CONFIG_BOOTPARAM_SOFTLOCKUP_PANIC
     CONFIG_BOOTPARAM_HARDLOCKUP_PANIC
     CONFIG_BOOTPARAM_HUNG_TASK_PANIC
+    CONFIG_F2FS_IO_TRACE
+    CONFIG_AFS_FS
+    CONFIG_TRACER_SNAPSHOT_PER_CPU_SWAP
+    CONFIG_KPROBE_EVENTS_ON_NOTRACE
+    CONFIG_SYNTH_EVENT_GEN_TEST
+    CONFIG_KPROBE_EVENT_GEN_TEST
+    CONFIG_FAIL_FUNCTION
     "
 
     for key in $CONFIGKEYSDISABLE;

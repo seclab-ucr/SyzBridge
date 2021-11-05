@@ -60,7 +60,7 @@ class LtsAnalysis(AnalysisModule):
         script = "syzmorph/scripts/deploy-linux.sh"
         chmodX(script)
         p = Popen([script, gcc_version, self.path_case, str(self.args.parallel_max), 
-                self.case["commit"], self.case["config"], image, self.lts['snapshot'], self.lts["version"], str(self.index)],
+                "0", self.case["config"], image, self.lts['snapshot'], self.lts["version"], str(self.index)],
             stderr=STDOUT,
             stdout=PIPE)
         with p.stdout:

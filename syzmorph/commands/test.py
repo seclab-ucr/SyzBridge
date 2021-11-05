@@ -13,7 +13,10 @@ class TestCommand(Command):
         super().add_arguments(parser)
         parser.add_argument('--all',  action='store_true', help='test all modules')
         parser.add_argument('--config',  action='store_true', help='test config module')
-        parser.add_argument('--failure-analyzor',  action='store_true', help='test failure_analysis module')
+        parser.add_argument('--failure-analysis',  action='store_true', help='test failure_analysis module')
+        parser.add_argument('--lts-analysis', action='store_true', help='test lts_analysis module')
+        parser.add_argument('--bug-reproduce', action='store_true', help='test bug_reproduce module')
+        parser.add_argument('--trace-analysis', action='store_true', help='test trace_analysis module')
 
     def custom_subparser(self, parser, cmd):
         return parser.add_parser(cmd, help='Modular test (Debug only)')
@@ -24,8 +27,12 @@ class TestCommand(Command):
         else:
             if args.config:
                 self.test_target('config')
-            if args.failure_analysis:
-                self.test_target('failure_analysis')
+            if args.lts_analysis:
+                self.test_target('lts_analysis')
+            if args.bug_reproduce:
+                self.test_target('bug_reproduce')
+            if args.trace_analysis:
+                self.test_target('trace_analysis')
     
     def test_target(self, name):
         try:

@@ -38,6 +38,11 @@ class Launcher:
             self.vmlinux = "{}/vmlinux".format(self.path_case)
             self.ssh_key = "{}/id_rsa".format(self.path_case)
             self.type_name = "ubuntu"
+        if vmtype == VMInstance.UPSTREAM:
+            self.image_path = "{}/img/stretch.img".format(self.path_case)
+            self.vmlinux = "{}/vmlinux".format(self.path_case)
+            self.ssh_key = "{}/img/stretch.img.key".format(self.path_case)
+            self.type_name = "upstream"
     
     def reproduce(self, syz_commit):
         self.kill_qemu = False
@@ -149,7 +154,7 @@ class Launcher:
                 self.case_logger.error("Exception occur when reporducing crash: {}".format(e))
                 if qemu.instance.poll() == None:
                     qemu.instance.kill()
-        self.alternative_func_output.put([res, trgger_hunted_bug, qemu.qemu_fail])
+        qemu.alternative_func_output.put([res, trgger_hunted_bug, qemu.qemu_fail])
     
     def start_reproducing(self, th_index, qemu, poc_path):
         self.case_logger.info("Waiting qemu to launch")
