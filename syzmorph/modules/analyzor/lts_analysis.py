@@ -48,14 +48,7 @@ class LtsAnalysis(AnalysisModule):
         return None
     
     def build_env_LTS(self):
-        image_switching_date = datetime.datetime(2020, 3, 15)
-        time = self.case["time"]
-        case_time = time_parser.parse(time)
-        if image_switching_date <= case_time:
-            image = "stretch"
-        else:
-            image = "wheezy"
-        
+        image = "stretch"
         gcc_version = set_compiler_version(time_parser.parse(self.case["time"]), self.case["config"])
         script = "syzmorph/scripts/deploy-linux.sh"
         chmodX(script)

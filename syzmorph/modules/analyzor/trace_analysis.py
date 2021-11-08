@@ -5,7 +5,8 @@ from . import AnalysisModule
 from syzmorph.modules.vm import VMInstance
 from subprocess import Popen, PIPE, STDOUT, call
 from dateutil import parser as time_parser
-from infra.tool_box import regx_match, chmodX, request_get, set_compiler_version
+from infra.tool_box import regx_match, chmodX, request_get, set_compiler_version, extrace_call_trace, extract_alloc_trace, extract_free_trace
+from infra.betterFtrace.trace import Trace
 
 class TraceAnalysis(AnalysisModule):
     NAME = "TraceAnalysis"
@@ -31,23 +32,42 @@ class TraceAnalysis(AnalysisModule):
         if not self._prepared:
             self.logger.error("Module {} is not prepared".format(TraceAnalysis.NAME))
             return None
-        #trace_vendor = self.get_vendor_trace()
+        trace_vendor = self.get_vendor_trace()
         trace_upstream = self.get_upstream_trace()
         ret = self.analyze_trace(trace_vendor, trace_upstream)
         return ret
     
     def analyze_trace(self, trace1, trace2):
-        pass
+        #begin_nodes = self.serialize_trace(trace1)
+        #for each in begin_nodes:
+        #    each.dump_to_file(self.path_case + "/better_trace-cpu{}-ubuntu.text".format(each.cpu))
+        begin_nodes = self.serialize_trace(trace2)
+        for each in begin_nodes:
+            each.dump_to_file(self.path_case + "/better_trace-cpu{}-upstream.text".format(each.cpu))
+        req = request_get(url=self.case["report"])
+        use_trace, alloc_trace, free_trace = self._get_trace_from_kasan(req.text.split('\n'))
+
+        if not self.match_trace(use_trace, out1):
+            return False
+        if not self.match_trace(alloc_trace, out1):
+            return False
+        if not self.match_trace(free_trace, out1):
+            return False
+        return True
+    
+    def _get_trace_from_kasan(self, report):
+        use_trace = extrace_call_trace(report)
+        alloc_trace = extract_alloc_trace(report)
+        free_trace = extract_free_trace(report)
+        return use_trace, alloc_trace, free_trace
+    
+    def serialize_trace(self, trace):
+        t = Trace(logger=self.logger, debug=self.debug)
+        t.load_tracefile(trace)
+        return t.serialize()
     
     def build_env_upstream(self):
-        image_switching_date = datetime.datetime(2020, 3, 15)
-        time = self.case["time"]
-        case_time = time_parser.parse(time)
-        if image_switching_date <= case_time:
-            image = "stretch"
-        else:
-            image = "wheezy"
-        
+        image = "stretch"
         gcc_version = set_compiler_version(time_parser.parse(self.case["time"]), self.case["config"])
         script = "syzmorph/scripts/deploy-linux.sh"
         chmodX(script)
@@ -117,17 +137,18 @@ done""".format(cmd)
         return script_path
     
     def _get_trace(self, vmtype):
+        self.repro.setup(vmtype)
+        trace_path = os.path.join(self.path_case, "trace-{}.report".format(self.repro.type_name))
+        if os.path.exists(trace_path):
+            return trace_path
         if vmtype == VMInstance.UPSTREAM:
             if self.build_env_upstream() != 0:
                 self.logger.error("Failed to build upstream environment")
                 return None
 
-        self.repro.setup(vmtype)
         qemu = self.repro.launch_qemu(self.case_hash, log_name="qemu-{}".format(self.repro.type_name))
         _, qemu_queue = qemu.run(alternative_func=self._run_trace_cmd, args=("trace-{}".format(self.repro.type_name), ))
         [done] = qemu_queue.get(block=True)
-
-        trace_path = os.path.join(self.path_case, "trace-{}.report".format(self.repro.type_name))
         return trace_path
     
     def _get_trace_functions(self, qemu):

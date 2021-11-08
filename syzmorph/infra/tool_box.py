@@ -130,6 +130,38 @@ def extract_vul_obj_offset_and_size(report):
             size = offset
     return offset, size
 
+def extract_alloc_trace(report):
+        res = []
+        record_flag = 0
+        call_trace_end = [r"entry_SYSENTER", r"entry_SYSCALL", r"ret_from_fork", r"bpf_prog_[a-z0-9]{16}\+", r"Freed by"]
+        for line in report:
+            if record_flag and is_trace(line):
+                res.append(line)
+                if is_kasan_func(extract_debug_info(line)):
+                    res = []
+            if regx_match(r'Allocated by task \d+', line):
+                record_flag ^= 1
+            if record_flag == 1 and regx_match_list(call_trace_end, line):
+                record_flag ^= 1
+                break
+        return res[:-2]
+
+def extract_free_trace(report):
+        res = []
+        record_flag = 0
+        call_trace_end = [r"entry_SYSENTER", r"entry_SYSCALL", r"ret_from_fork", r"bpf_prog_[a-z0-9]{16}\+", r"The buggy address belongs", r"Memory state around"]
+        for line in report:
+            if record_flag and is_trace(line):
+                res.append(line)
+                if is_kasan_func(extract_debug_info(line)):
+                    res = []
+            if regx_match(r'Freed by task \d+', line):
+                record_flag ^= 1
+            if record_flag == 1 and regx_match_list(call_trace_end, line):
+                record_flag ^= 1
+                break
+        return res[:-2]
+
 def extrace_call_trace(report):
     regs_regx = r'[A-Z0-9]+:( )+[a-z0-9]+'
     implicit_call_regx = r'\[.+\]  \?.*'

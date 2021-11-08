@@ -9,6 +9,7 @@ if [ ! -f "$(pwd)/tools/.stamp/ENV_SETUP" ]; then
   touch $TOOLS_PATH/.stamp/ENV_SETUP
 fi
 
+PROJECT_PATH=$(pwd)
 TOOLS_PATH="$(pwd)/tools"
 if [ ! -d "$TOOLS_PATH/.stamp" ]; then
   mkdir -p $TOOLS_PATH/.stamp
@@ -33,12 +34,11 @@ if [ ! -f "$TOOLS_PATH/.stamp/BUILD_IMAGE" ]; then
   fi
   cd img
   if [ ! -f "stretch.img" ]; then
-    wget https://storage.googleapis.com/syzkaller/stretch.img > /dev/null
-    wget https://storage.googleapis.com/syzkaller/stretch.img.key > /dev/null
+    cp $PROJECT_PATH/syzmorph/scripts/create-image.sh ./
+    chmod +x ./create-image.sh
+    ./create-image.sh -s 10240
+    mv stretch.id_rsa stretch.img.key
     chmod 400 stretch.img.key
-    wget https://storage.googleapis.com/syzkaller/wheezy.img > /dev/null
-    wget https://storage.googleapis.com/syzkaller/wheezy.img.key > /dev/null
-    chmod 400 wheezy.img.key
     touch $TOOLS_PATH/.stamp/BUILD_IMAGE
   fi
   cd ..

@@ -80,10 +80,14 @@ class VMInstance(Network):
     def kill_vm(self):
         self.instance.kill()
     
-    def write_cmd_to_script(self, cmd, name):
+    def write_cmd_to_script(self, cmd, name, build_append=False):
         path_name = os.path.join(self.proj_path, name)
         with open(path_name, "w") as f:
-            f.write(" ".join(cmd))
+            if build_append:
+                f.write(" ".join(cmd[:-1]))
+                f.write(" \"" + cmd[-1:][0] + "\"")
+            else:
+                f.write(" ".join(cmd))
             f.close()
 
     def upload(self, user, src: list, dst, wait: bool):
@@ -153,10 +157,10 @@ class VMInstance(Network):
                     "-drive", "file={}".format(self.image)])
         self.write_cmd_to_script(self.cmd_launch, "launch_ubuntu.sh")
     
-    def _setup_upstream(self, port, image, linux, mem="2G", cpu="2", key=None, gdb_port=None, mon_port=None, opts=None, timeout=None):
+    def _setup_upstream(self, port, image, linux, mem="2G", cpu="2", key=None, gdb_port=None, mon_port=None, opts=None, timeout=None, kasan_multi_shot=0):
         self.qemu_ready_bar = r'Debian GNU\/Linux \d+ syzkaller ttyS\d+'
         cur_opts = ["root=/dev/sda", "console=ttyS0"]
-        def_opts = ["kasan_multi_shot=1", "earlyprintk=serial", "oops=panic", "nmi_watchdog=panic", "panic=1", \
+        def_opts = ["kasan_multi_shot={}".format(kasan_multi_shot), "earlyprintk=serial", "nmi_watchdog=panic", \
                         "ftrace_dump_on_oops=orig_cpu", "rodata=n", "vsyscall=native", "net.ifnames=0", \
                         "biosdevname=0", "kvm-intel.nested=1", \
                         "kvm-intel.unrestricted_guest=1", "kvm-intel.vmm_exclusive=1", \
@@ -187,10 +191,18 @@ class VMInstance(Network):
             cur_opts.extend(opts)
         if type(cur_opts) == list:
             self.cmd_launch.append(" ".join(cur_opts))
-        self.write_cmd_to_script(self.cmd_launch, "launch_upstream.sh")
+        self.write_cmd_to_script(self.cmd_launch, "launch_upstream.sh", build_append=True)
         return
     
+    def _prepare_alternative_func(self):
+        try:
+            self.alternative_func(self, *self.alternative_func_args)
+        except Exception as e:
+            self.logger.error("alternative_func failed: {}".format(e))
+            raise AlternativeFunctionError
+    
     def __log_qemu(self, pipe):
+        run_alternative_func = False
         try:
             self.logger.info("\n".join(self.cmd_launch)+"\n")
             self.logger.info("pid: {}  timeout: {}".format(self.instance.pid, self.timeout))
@@ -204,12 +216,10 @@ class VMInstance(Network):
                     self.case_logger.error("Booting qemu-{} failed".format(self.log_name))
                 if utilities.regx_match(self.qemu_ready_bar, line):
                     self.qemu_ready = True
-                    try:
-                        if self.alternative_func != None:
-                            self.alternative_func(self, *self.alternative_func_args)
-                    except Exception as e:
-                        self.logger.error("alternative_func failed: {}".format(e))
-                        raise AlternativeFunctionError
+                    if self.alternative_func != None and not run_alternative_func:
+                        x = threading.Thread(target=self._prepare_alternative_func, name="{} qemu killer".format(self.hash_tag))
+                        x.start()
+                        run_alternative_func = True
                 self.logger.info(line)
                 self.output.append(line)
         except EOFError:
