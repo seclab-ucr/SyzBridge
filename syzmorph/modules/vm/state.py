@@ -7,13 +7,13 @@ class VMState:
     INITIAL = 0
     KERNEL_BASE = 0
 
-    def __init__(self, vmlinux, gdb_port, arch, log_suffix="", proj_path=None, debug=False):
+    def __init__(self, vmlinux, gdb_port, arch, log_suffix="", work_path=None, debug=False):
         self.vmlinux = vmlinux
         self.gdb_port = gdb_port
         self.vm = None
         self._kasan_report = 0
         self._kasan_ret = 0
-        self._proj_path = proj_path
+        self._proj_path = work_path
         self.kernel = None
         self.addr_bytes = 8
         self.log_suffix = log_suffix

@@ -16,8 +16,8 @@ class VMInstance(Network):
     UBUNTU = 1
     UPSTREAM = 2
 
-    def __init__(self, hash_tag, proj_path='/tmp/', log_name='vm.log', log_suffix="", logger=None, debug=False):
-        self.proj_path = proj_path
+    def __init__(self, hash_tag, work_path='/tmp/', log_name='vm.log', log_suffix="", logger=None, debug=False):
+        self.work_path = work_path
         self.port = None
         self.image = None
         self.cmd_launch = None
@@ -36,7 +36,7 @@ class VMInstance(Network):
         self.alternative_func_output = None
         self.output = []
         log_name += log_suffix
-        self.logger = utilities.init_logger(os.path.join(proj_path, log_name), debug=debug, propagate=debug)
+        self.logger = utilities.init_logger(os.path.join(work_path, log_name), debug=debug, propagate=debug)
         self.case_logger = self.logger
         if logger != None:
             self.case_logger = logger
@@ -81,7 +81,7 @@ class VMInstance(Network):
         self.instance.kill()
     
     def write_cmd_to_script(self, cmd, name, build_append=False):
-        path_name = os.path.join(self.proj_path, name)
+        path_name = os.path.join(self.work_path, name)
         with open(path_name, "w") as f:
             if build_append:
                 f.write(" ".join(cmd[:-1]))
@@ -93,18 +93,18 @@ class VMInstance(Network):
     def upload(self, user, src: list, dst, wait: bool):
         if type(src) != list:
             self.logger.error("src must be a list")
-        self.scp("localhost", user, self.port, self.key, " ".join(src), dst, True, wait)
-        return
+        ret = self.scp("localhost", user, self.port, self.key, src, dst, True, wait)
+        return ret
     
     def download(self, user, src: list, dst, wait: bool):
         if type(src) != list:
             self.logger.error("src must be a list")
-        self.scp("localhost", user, self.port, self.key, " ".join(src), dst, False, wait)
-        return
+        ret = self.scp("localhost", user, self.port, self.key, src, dst, False, wait)
+        return ret
 
     def command(self, cmds, user, wait: bool):
-        self.ssh("localhost", user, self.port, self.key, cmds, wait)
-        return
+        ret = self.ssh("localhost", user, self.port, self.key, cmds, wait)
+        return ret
 
     def monitor_execution(self):
         count = 0
@@ -122,7 +122,8 @@ class VMInstance(Network):
                     self.case_logger.error('QEMU: Error occur at booting qemu')
                 return
         self.case_logger.info('Time out, kill qemu')
-        self.qemu_fail = True
+        if not self.qemu_ready:
+            self.qemu_fail = True
         self.instance.kill()
     
     def kill_proc_by_port(self, ssh_port):
@@ -160,7 +161,7 @@ class VMInstance(Network):
     def _setup_upstream(self, port, image, linux, mem="2G", cpu="2", key=None, gdb_port=None, mon_port=None, opts=None, timeout=None, kasan_multi_shot=0):
         self.qemu_ready_bar = r'Debian GNU\/Linux \d+ syzkaller ttyS\d+'
         cur_opts = ["root=/dev/sda", "console=ttyS0"]
-        def_opts = ["kasan_multi_shot={}".format(kasan_multi_shot), "earlyprintk=serial", "nmi_watchdog=panic", \
+        def_opts = ["earlyprintk=serial", "nmi_watchdog=panic", \
                         "ftrace_dump_on_oops=orig_cpu", "rodata=n", "vsyscall=native", "net.ifnames=0", \
                         "biosdevname=0", "kvm-intel.nested=1", \
                         "kvm-intel.unrestricted_guest=1", "kvm-intel.vmm_exclusive=1", \
@@ -217,7 +218,7 @@ class VMInstance(Network):
                 if utilities.regx_match(self.qemu_ready_bar, line):
                     self.qemu_ready = True
                     if self.alternative_func != None and not run_alternative_func:
-                        x = threading.Thread(target=self._prepare_alternative_func, name="{} qemu killer".format(self.hash_tag))
+                        x = threading.Thread(target=self._prepare_alternative_func, name="{} qemu call back".format(self.hash_tag))
                         x.start()
                         run_alternative_func = True
                 self.logger.info(line)
@@ -235,5 +236,4 @@ class VMInstance(Network):
             # for line in iter(pipe.readline, b''):                                                                │
             # ValueError: PyMemoryView_FromBuffer(): info->buf must not be NULL
             pass
-        self.qemu_ready = False
         return

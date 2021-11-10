@@ -1,6 +1,6 @@
-import threading
+import threading, queue
 
-from infra.tool_box import init_logger
+from infra.tool_box import init_logger, set_timer
 from subprocess import Popen, PIPE, STDOUT
 
 class Network:
@@ -11,27 +11,41 @@ class Network:
             self.logger = init_logger(logger_id="network", debug=self.debug, propagate=propagate)
     
     def scp(self, ip, user, port, key, src, dst, upload, wait):
-        x = threading.Thread(target=self._scp, args=(ip, user, port, key, src, dst, upload), name="scp logger")
+        ret_queue = queue.Queue()
+        x = threading.Thread(target=self._scp, args=(ip, user, port, key, src, dst, upload, ret_queue), name="scp logger")
         x.start()
         if wait:
             x.join()
+            exitcode = ret_queue.get(block=False)
+            return exitcode
+        return None
     
     def ssh(self, ip, user, port, key, command, wait):
-        x = threading.Thread(target=self._ssh, args=(ip, user, port, key, command,), name="ssh logger")
+        ret_queue = queue.Queue()
+        x = threading.Thread(target=self._ssh, args=(ip, user, port, key, command, ret_queue), name="ssh logger")
         x.start()
         if wait:
             x.join()
+            exitcode = ret_queue.get(block=False)
+            return exitcode
+        return None
 
-    def _scp(self, ip, user, port, key, src, dst, upload):
+    def _scp(self, ip, user, port, key, src, dst, upload, ret_queue):
         if upload:
             cmd = ["scp", "-F", "/dev/null", "-o", "UserKnownHostsFile=/dev/null", \
                 "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=no", \
-                "-i", key, "-P", str(port), src, "{}@{}:{}".format(user, ip, dst)]
+                "-i", key, "-P", str(port)]
+            cmd.extend(src)
+            cmd.append("{}@{}:{}".format(user, ip, dst))
         else:
             cmd = ["scp", "-F", "/dev/null", "-o", "UserKnownHostsFile=/dev/null", \
                 "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=no", \
-                "-i", key, "-P", str(port), "{}@{}:{}".format(user, ip, src), dst]
+                "-i", key, "-P", str(port)]
+            for each in src:
+                cmd.append("{}@{}:{}".format(user, ip, each))
+            cmd.append(dst)
         
+        self.logger.debug(" ".join(cmd))
         p = Popen(cmd,
         stdout=PIPE,
         stderr=STDOUT)
@@ -39,21 +53,27 @@ class Network:
             if self.logger != None:
                 self.log_anything(p.stdout, self.logger, self.debug)
         exitcode = p.wait()
+        ret_queue.put(exitcode, block=False)
         return exitcode
     
-    def _ssh(self, ip, user, port, key, command):
+    def _ssh(self, ip, user, port, key, command, ret_queue, timeout=None):
         cmd = ["ssh", "-F", "/dev/null", "-o", "UserKnownHostsFile=/dev/null", 
         "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=no", 
         "-i", key, 
         "-p", str(port), "{}@{}".format(user, ip), command]
 
+        self.logger.debug(" ".join(cmd))
         p = Popen(cmd,
         stdout=PIPE,
         stderr=STDOUT)
+        if timeout != None:
+            x = threading.Thread(target=set_timer, args=(3*60, p, ), name="ssh timer")
+            x.start()
         with p.stdout:
             if self.logger != None:
                 self.log_anything(p.stdout, self.logger, self.debug)
         exitcode = p.wait()
+        ret_queue.put(exitcode, block=False)
         return exitcode
     
     def log_anything(self, pipe, logger, debug):

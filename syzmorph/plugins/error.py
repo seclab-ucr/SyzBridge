@@ -11,3 +11,7 @@ class CannotFindKernelConfig(Exception):
     def __init__(self, *args: object) -> None:
         message = "Can not find \"debian/build/build-generic/.config\""
         super().__init__(message)
+
+class PluginFolderReachMaximumNumber(Exception):
+    def __init__(self, message, *args: object) -> None:
+        super().__init__(message)

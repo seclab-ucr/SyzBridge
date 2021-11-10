@@ -1,6 +1,6 @@
 import os
 
-from infra.tool_box import extrace_call_trace, extract_debug_info, regx_get, regx_getall, regx_match, request_get
+from infra.tool_box import *
 from infra.strings import source_file_regx
 from . import AnalysisModule
 from .error import *
@@ -16,10 +16,12 @@ class FailureAnalysis(AnalysisModule):
         self.kasan_report = None
         self.config_cache = {}
         self._prepared = False
+        self._move_to_success = False
 
         self.calltrace = None
         self.vul_module = None
         self.cfg = None
+        self.path_plugin = None
         self.report = []
         self.config_cache['vendor_config_path'] = ''
     
@@ -42,6 +44,7 @@ class FailureAnalysis(AnalysisModule):
         self.kasan_report = report.split('\n')
         if self.kasan_report == []:
             return False
+        self.logger = self._get_child_logger(self.case_logger)
         return True
     
     def success(self):
@@ -173,4 +176,15 @@ class FailureAnalysis(AnalysisModule):
                 for e in each_obj:
                     if e == vul_obj:
                         return value
+    
+    def _get_child_logger(self, logger):
+        child_logger = logger.getChild(self.NAME)
+        child_logger.propagate = True
+        child_logger.setLevel(logger.level)
+
+        handler = logging.FileHandler("{}/log".format(self.path_plugin))
+        format = logging.Formatter('%(message)s')
+        handler.setFormatter(format)
+        child_logger.addHandler(handler)
+        return child_logger
 

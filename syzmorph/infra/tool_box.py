@@ -1,8 +1,9 @@
 import os, re, stat, sys
+from time import sleep
 import requests
 import logging
 import random
-import datetime
+import datetime, json
 
 from .strings import *
 
@@ -319,6 +320,138 @@ def set_compiler_version(time, config_url):
         if time >= t4:
             ret = "gcc-10.1.0-20200507"
     return ret
+
+def make_syz_commands(text, support_enable_features, i386, repeat=True):
+        command = "/syz-execprog -executor=/syz-executor "
+        if text[0][:len(command)] == command:
+            # If read from repro.command, text[0] was already the command
+            return text[0]
+        enabled = "-enable="
+        normal_pm = {"arch":"amd64", "threaded":"false", "collide":"false", "sandbox":"none", "fault_call":"-1", "fault_nth":"0"}
+        for line in text:
+            if line.find('{') != -1 and line.find('}') != -1:
+                pm = {}
+                try:
+                    pm = json.loads(line[1:])
+                except json.JSONDecodeError:
+                    pm = syzrepro_convert_format(line[1:], repeat)
+                for each in normal_pm:
+                    if each in pm and pm[each] != "":
+                        command += "-" + each + "=" +str(pm[each]).lower() + " "
+                    else:
+                        if each=='arch' and i386:
+                            command += "-" + each + "=386" + " "
+                        else:
+                            command += "-" + each + "=" +str(normal_pm[each]).lower() + " "
+                if "procs" in pm and str(pm["procs"]) != "1":
+                    num = int(pm["procs"])
+                    command += "-procs=" + str(num*2) + " "
+                else:
+                    command += "-procs=1" + " "
+                if "repeat" in pm and pm["repeat"] != "":
+                    if repeat:
+                        command += "-repeat=" + "0 "
+                    else:
+                        command += "-repeat=" + "1 "
+                if "slowdown" in pm and pm["slowdown"] != "":
+                    command += "-slowdown=" + "1 "
+                #It makes no sense that limiting the features of syz-execrpog, just enable them all
+                
+                if support_enable_features != 2:
+                    if "tun" in pm and str(pm["tun"]).lower() == "true":
+                        enabled += "tun,"
+                    if "binfmt_misc" in pm and str(pm["binfmt_misc"]).lower() == 'true':
+                        enabled += "binfmt_misc,"
+                    if "cgroups" in pm and str(pm["cgroups"]).lower() == "true":
+                        enabled += "cgroups,"
+                    if "close_fds" in pm and str(pm["close_fds"]).lower() == "true":
+                        enabled += "close_fds,"
+                    if "devlinkpci" in pm and str(pm["devlinkpci"]).lower() == "true":
+                        enabled += "devlink_pci,"
+                    if "netdev" in pm and str(pm["netdev"]).lower() == "true":
+                        enabled += "net_dev,"
+                    if "resetnet" in pm and str(pm["resetnet"]).lower() == "true":
+                        enabled += "net_reset,"
+                    if "usb" in pm and str(pm["usb"]).lower() == "true":
+                        enabled += "usb,"
+                    if "ieee802154" in pm and str(pm["ieee802154"]).lower() == "true":
+                        enabled += "ieee802154,"
+                    if "sysctl" in pm and str(pm["sysctl"]).lower() == "true":
+                        enabled += "sysctl,"
+                    if "vhci" in pm and str(pm["vhci"]).lower() == "true":
+                        enabled += "vhci,"
+                    if "wifi" in pm and str(pm["wifi"]).lower() == "true":
+                        enabled += "wifi," 
+                
+                if enabled[-1] == ',':
+                    command += enabled[:-1] + " testcase"
+                else:
+                    command += "testcase"
+                break
+        return command
+
+def syzrepro_convert_format(line, repeat):
+        res = {}
+        p = re.compile(r'({| )(\w+):([0-9a-zA-Z-]*)')
+        raw = p.sub(r'\1"\2":"\3",', line)
+        new_line =raw[:raw.find('}')-1] + "}"
+        pm = json.loads(new_line)
+        for each in pm:
+            if each == 'Threaded':
+                res['threaded']=pm[each]
+            if each == 'Collide':
+                res['collide']=pm[each]
+            if each == 'Repeat':
+                if repeat:
+                    res['repeat']=pm[each]
+            if each == 'Procs':
+                res['procs']=pm[each]
+            if each == 'Sandbox':
+                res['sandbox']=pm[each]
+            if each == 'FaultCall':
+                res['fault_call']=pm[each]
+            if each == 'FaultNth':
+                res['fault_nth']=pm[each]
+            if each == 'EnableTun' or each == 'NetInjection':
+                res['tun']=pm[each]
+            if each == 'EnableCgroups' or each == 'Cgroups':
+                res['cgroups']=pm[each]
+            if each == 'UseTmpDir':
+                res['tmpdir']=pm[each]
+            if each == 'HandleSegv':
+                res['segv']=pm[each]
+            if each == 'Fault':
+                res['fault']=pm[each]
+            if each == 'WaitRepeat':
+                res['wait_repeat']=pm[each]
+            if each == 'Debug':
+                res['debug']=pm[each]
+            if each == 'Repro':
+                res['repro']=pm[each]
+            if each == 'NetDevices':
+                res['netdev']=pm[each]
+            if each == 'NetReset':
+                res['resetnet']=pm[each]
+            if each == 'BinfmtMisc':
+                res['binfmt_misc']=pm[each]
+            if each == 'CloseFDs':
+                res['close_fds']=pm[each]
+            if each == 'DevlinkPCI':
+                res['devlinkpci']=pm[each]
+            if each == 'USB':
+                res['usb']=pm[each]
+        #if len(pm) != len(res):
+        #    self.logger.info("parameter is missing:\n%s\n%s", new_line, str(res))
+        return res
+    
+def set_timer(timeout, p):
+    count = 0
+    while (count < timeout):
+        count += 1
+        sleep(1)
+    if p.poll() is None:
+        p.kill()
+    return
 
 if __name__ == '__main__':
     pass

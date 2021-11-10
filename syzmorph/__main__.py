@@ -17,7 +17,6 @@ def create_parser():
         module = importlib.import_module("commands.{}".format(cmd))
         new_class = getattr(module, class_name)
         A = new_class()
-        A.custom_subparser(subparser, cmd)
         parser_cmd = A.custom_subparser(subparser, cmd)
         A.add_arguments(parser_cmd)
         commands_list[cmd] = A

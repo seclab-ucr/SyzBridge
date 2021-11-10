@@ -1,3 +1,4 @@
+import json
 from ..tool_box import regx_getall
 from .error import NodeScopeError, NodeTextError
 
@@ -146,4 +147,3 @@ class Node:
                 node = node.next_node
                 f.write(node.text + '\n')
             f.close()
-        

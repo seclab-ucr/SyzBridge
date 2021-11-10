@@ -1,6 +1,6 @@
 import logging, sys
 
-from syzmorph.modules.analyzor.failure_analysis import FailureAnalysis
+from syzmorph.plugins.failure_analysis import FailureAnalysis
 from .config_test import create_mini_cfg
 
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)

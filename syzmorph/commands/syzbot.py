@@ -1,14 +1,13 @@
 import os, json
-import logging
 
 from commands import Command
-
-logger = logging.getLogger(__name__)
-logger.setLevel = logging.INFO
+from infra.tool_box import STREAM_HANDLER, init_logger
 
 class SyzbotCommand(Command):
     def __init__(self):
         super().__init__()
+        self.proj_dir = None
+        self.logger = init_logger(__name__, handler_type=STREAM_HANDLER)
 
     def add_arguments(self, parser):
         super().add_arguments(parser)
@@ -47,12 +46,16 @@ class SyzbotCommand(Command):
 
         if self.args.key == None:
             self.args.key = ['']
+        
+        self.proj_dir = self.build_proj_dir(args.proj)
+        if self.proj_dir == None:
+            return
 
         from syzmorph.modules.syzbot import Crawler
 
         crawler = Crawler(url=self.args.url, keyword=self.args.key, max_retrieve=int(self.args.max_retrieval), 
             filter_by_reported=int(self.args.filter_by_reported), filter_by_closed=int(self.args.filter_by_closed), 
-            debug=self.args.debug)
+            debug=self.args.debug, log_path = self.proj_dir)
         
         if self.args.get != None:
             if len(self.args.get) == 40:
@@ -70,31 +73,29 @@ class SyzbotCommand(Command):
     
     def check_essential_args(self):
         if self.args.proj == None:
-            logger.error("--proj must be specified.")
+            self.logger.error("--proj must be specified.")
             return True
         return False
 
     def build_proj_dir(self, name):
         proj_dir = os.path.join(os.getcwd(), "projects/{}".format(name))
-        try:
-            os.makedirs(proj_dir, exist_ok=False)
-        except OSError:
-            logger.error("Project {} already existed.".format(name))
+        os.makedirs(proj_dir, exist_ok=True)
+        
+        if os.path.exists(os.path.join(proj_dir, "cases.json")):
+            self.logger.error("Project {} already existed.".format(name))
             return None
         return proj_dir
     
     def print_args_info(self):
-        logger.info("[*] proj: {}".format(self.args.proj))
-        logger.info("[*] hash: {}".format(self.args.get))
-        logger.info("[*] url: {}".format(self.args.url))
-        logger.info("[*] max_retrieval: {}".format(self.args.max_retrieval))
+        self.logger.info("[*] proj: {}".format(self.args.proj))
+        self.logger.info("[*] hash: {}".format(self.args.get))
+        self.logger.info("[*] url: {}".format(self.args.url))
+        self.logger.info("[*] url: {}".format(self.args.key))
+        self.logger.info("[*] max_retrieval: {}".format(self.args.max_retrieval))
 
     def save_cases(self, cases, name):
-        proj_dir = self.build_proj_dir(name)
-        if proj_dir == None:
-            return
-        cases_json_path = os.path.join(proj_dir, "cases.json")
+        cases_json_path = os.path.join(self.proj_dir, "cases.json")
         with open(cases_json_path, 'w') as f:
             json.dump(cases, f)
             f.close()
-        logger.info("Created a new project {}".format(name))
+        self.logger.info("Created a new project {}".format(name))

@@ -1,6 +1,6 @@
 import logging, sys
 
-from syzmorph.modules.analyzor.trace_analysis import TraceAnalysis
+from syzmorph.plugins.trace_analysis import TraceAnalysis
 from syzmorph.infra.betterFtrace.trace import Trace
 from .config_test import create_mini_cfg
 from .syzbot_test import get_case

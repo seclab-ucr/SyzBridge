@@ -19,6 +19,7 @@ class Case:
         self.path_project = owner.proj_dir
         self.path_package = os.path.join(self.path_syzmorph, "syzmorph")
         self.path_case = self._get_case_path()
+        self.path_ori = self.path_case
         self.case = case
         self.lts = None
         self.has_c_repro = True
@@ -40,7 +41,7 @@ class Case:
             ssh_port=self.cfg.ssh_port, case_logger=self.case_logger, debug= self.debug, qemu_num=3)
     
     def save_to_others(self):
-        dirname = os.path.dirname(self.path_case)
+        dirname = os.path.dirname(self.path_ori)
         folder = os.path.basename(dirname)
         if folder == 'incomplete':
             folder = 'completed'
@@ -73,9 +74,8 @@ class Case:
         
         c_prog = self.case["c_repro"]
         if c_prog == None:
-            c_prog == ""
+            c_prog = ""
             self.has_c_repro = False
-            return
         
         script = os.path.join(self.path_package, "scripts/init-case.sh")
         chmodX(script)

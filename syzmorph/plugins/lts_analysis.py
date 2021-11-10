@@ -1,7 +1,6 @@
-import re
-import datetime
+import re, os
 
-from infra.tool_box import regx_match, chmodX, set_compiler_version
+from infra.tool_box import *
 from . import AnalysisModule
 from .error import *
 from subprocess import Popen, STDOUT, PIPE
@@ -20,6 +19,7 @@ class LtsAnalysis(AnalysisModule):
         self.case = None
         self.report = ""
         self._prepared = False
+        self.path_plugin = None
     
     def prepare(self):
         return self.prepare_on_demand()
@@ -28,6 +28,7 @@ class LtsAnalysis(AnalysisModule):
         self._prepared = True
         if self.lts == None:
             return False
+        self.logger = init_logger("{}/log".format(self.path_plugin), debug=self.debug, propagate=self.debug)
         return True
     
     def success(self):

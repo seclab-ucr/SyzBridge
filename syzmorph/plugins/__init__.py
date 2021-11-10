@@ -1,9 +1,9 @@
 import logging
-import os
+import os, shutil
 
 from subprocess import call
 from deployer.case import Case
-from .error import AnalysisModuleError
+from .error import *
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class AnalysisModule:
         self.args = manager.args
         self.repro = manager.repro
         self.case_hash = manager.case_hash
-        self.logger = manager.case_logger
+        self.case_logger = manager.case_logger
         self.main_logger = manager.logger
         self.cfg = manager.cfg
         self.path_case = manager.path_case
@@ -60,6 +60,8 @@ class AnalysisModule:
     @check
     def prepare(self, **kargs):
         self.main_logger.debug("Preparing {}".format(self.analyzor.NAME))
+        self.analyzor.path_plugin = os.path.join(self.path_case, self.analyzor.NAME)
+        self._build_plugin_folder()
         return self.analyzor.prepare(**kargs)
 
     @check
@@ -88,6 +90,16 @@ class AnalysisModule:
         self.main_logger.info("Finish {}".format(self.analyzor.NAME))
         return self._create_stamp(stamp)
     
+    def _build_plugin_folder(self):
+        if os.path.exists(self.analyzor.path_plugin):
+            for i in range(1, 100):
+                if not os.path.exists( self.analyzor.path_plugin+"-{}".format(i)):
+                    shutil.move(self.analyzor.path_plugin, self.analyzor.path_plugin+"-{}".format(i))
+                    break
+                if i == 99:
+                    raise PluginFolderReachMaximumNumber
+        os.makedirs(self.analyzor.path_plugin, exist_ok=True)
+    
     def _log_subprocess_output(self, pipe):
         for line in iter(pipe.readline, b''):
             self.logger.info(line)
@@ -101,6 +113,6 @@ class AnalysisModule:
         return os.path.exists(dst)
     
     def _write_to(self, content, name):
-        with open("{}/{}".format(self.path_case, name), "w") as f:
+        with open("{}/{}".format(self.analyzor.path_plugin, name), "w") as f:
             f.write(content)
             f.truncate()

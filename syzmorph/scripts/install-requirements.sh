@@ -97,6 +97,29 @@ if [ ! -f "$TOOLS_PATH/.stamp/BUILD_GCC_CLANG" ]; then
   rm clang-11-prerelease-ca2dcbd030e.tar.xz
 
   touch $TOOLS_PATH/.stamp/BUILD_GCC_CLANG
+  cd ..
+fi
+
+echo "[+] Setup golang environment"
+if [ ! -f "$TOOLS_PATH/.stamp/SETUP_GOLANG" ]; then
+  wget https://dl.google.com/go/go1.14.2.linux-amd64.tar.gz
+  tar -xf go1.14.2.linux-amd64.tar.gz
+  mv go goroot
+  GOPATH=`pwd`/gopath
+  if [ ! -d "gopath" ]; then
+    mkdir gopath
+  fi
+  rm go1.14.2.linux-amd64.tar.gz
+  touch $TOOLS_PATH/.stamp/SETUP_GOLANG
+fi
+
+echo "[+] Setup syzkaller"
+if [ ! -f "$TOOLS_PATH/.stamp/SETUP_SYZKALLER" ]; then
+  mkdir -p $GOPATH/src/github.com/google/ || echo "Dir exists"
+  cd $GOPATH/src/github.com/google/
+  rm -rf syzkaller || echo "syzkaller does not exist"
+  git clone https://github.com/google/syzkaller.git
+  touch $TOOLS_PATH/.stamp/SETUP_SYZKALLER
 fi
 
 #BUG: If multiple instances are running, may clean up others' flag

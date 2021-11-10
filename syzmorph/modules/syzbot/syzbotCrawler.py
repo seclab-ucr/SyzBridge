@@ -3,7 +3,7 @@ import logging
 import os
 import re
 
-from syzmorph.infra.tool_box import request_get, extract_vul_obj_offset_and_size
+from syzmorph.infra.tool_box import init_logger, request_get, extract_vul_obj_offset_and_size
 from bs4 import BeautifulSoup
 from bs4 import element
 
@@ -14,7 +14,7 @@ num_of_elements = 8
 class Crawler:
     def __init__(self,
                  url="https://syzkaller.appspot.com/upstream/fixed",
-                 keyword=[''], max_retrieve=10, filter_by_reported=-1, 
+                 keyword=[''], max_retrieve=10, filter_by_reported=-1, log_path = "",
                  filter_by_closed=-1, include_high_risk=True, debug=False):
         self.url = url
         if type(keyword) == list:
@@ -24,30 +24,10 @@ class Crawler:
         self.max_retrieve = max_retrieve
         self.cases = {}
         self.patches = {}
-        self.logger = None
-        self.logger2file = None
         self.include_high_risk = include_high_risk
-        self.init_logger(debug)
+        self.logger = init_logger(log_path + "/syzbot.log", debug = debug, propagate=True)
         self.filter_by_reported = filter_by_reported
         self.filter_by_closed = filter_by_closed
-
-    def init_logger(self, debug):
-        handler = logging.FileHandler("{}/info".format(os.getcwd()))
-        format =  logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-        handler.setFormatter(format)
-        self.logger = logging.getLogger(__name__)
-        self.logger2file = logging.getLogger("log2file")
-        if debug:
-            self.logger.setLevel(logging.DEBUG)
-            self.logger.propagate = True
-            self.logger2file.setLevel(logging.DEBUG)
-            self.logger2file.propagate = True
-        else:
-            self.logger.setLevel(logging.INFO)
-            self.logger.propagate = False
-            self.logger2file.setLevel(logging.INFO)
-            self.logger2file.propagate = False
-        self.logger2file.addHandler(handler)
 
     def run(self):
         cases_hash, high_risk_impacts = self.gather_cases()
@@ -164,7 +144,7 @@ class Crawler:
         tables = self.__get_table(url)
         if tables == []:
             print("error occur in request_detail: {}".format(hash))
-            self.logger2file.info("[Failed] {} error occur in request_detail".format(url))
+            self.logger.error("[Failed] {} error occur in request_detail".format(url))
             return []
         count = 0
         for table in tables:
@@ -187,6 +167,8 @@ class Crawler:
                             time_str = time.text
                             tags = case.find_all('td', {"class": "tag"})
                             m = re.search(r'id=([0-9a-z]*)', tags[0].next.attrs['href'])
+                            if m is None:
+                                m = re.search(r'commits\/([0-9a-z]*)', tags[0].next.attrs['href'])
                             commit = m.groups()[0]
                             self.logger.debug("Kernel commit: {}".format(commit))
                             m = re.search(r'commits\/([0-9a-z]*)', tags[1].next.attrs['href'])
@@ -206,27 +188,24 @@ class Crawler:
                                 syz_repro = syzbot_host_url + repros[2].next.attrs['href']
                                 self.logger.debug("Testcase URL: {}".format(syz_repro))
                             except:
-                                self.logger.info(
-                                    "Repro is missing. Failed to retrieve case {}{}{}".format(syzbot_host_url, syzbot_bug_base_url, hash))
-                                self.logger2file.info("[Failed] {} Repro is missing".format(url))
+                                self.logger.debug("[Failed] {} Repro is missing".format(url))
                                 break
                             try:
                                 c_repro = syzbot_host_url + repros[3].next.attrs['href']
                                 self.logger.debug("C prog URL: {}".format(c_repro))
                             except:
                                 c_repro = None
-                                self.logger.info("No c prog found")
+                                self.logger.debug("No c prog found")
                         except Exception as e:
                             self.logger.info("Failed to retrieve case {}{}{}".format(syzbot_host_url, syzbot_bug_base_url, hash))
-                            self.logger.error(e)
+                            self.logger.debug(e)
                             continue
                         return [commit, syzkaller, config, syz_repro, log, c_repro, time_str, manager_str, report, offset, size]
                 break
-        self.logger2file.info("[Failed] {} fail to find a proper crash".format(url))
         return []
 
     def __get_table(self, url):
-        self.logger.info("Get table from {}".format(url))
+        self.logger.debug("Get table from {}".format(url))
         req = requests.request(method='GET', url=url)
         soup = BeautifulSoup(req.text, "html.parser")
         tables = soup.find_all('table', {"class": "list_table"})

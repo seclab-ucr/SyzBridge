@@ -2,8 +2,8 @@ import importlib, os
 
 from infra.tool_box import STREAM_HANDLER, init_logger, request_get
 from infra.strings import *
-from modules.analyzor import AnalysisModule, AnalysisModuleError
-from modules.analyzor.failure_analysis import FailureAnalysis
+from plugins import AnalysisModule, AnalysisModuleError
+from plugins.failure_analysis import FailureAnalysis
 from .case import Case
 from .error import *
 from .task import Task
@@ -40,7 +40,8 @@ class Deployer(Case, Task):
             self.analysis.run()
             self.analysis.generate_report()
             self.analysis.create_stamp()
-            self._success = self.analysis.success
+            if not self._success:
+                self._success = self.analysis.success()
     
     def deploy(self):
         for task in self.iterate_all_tasks():
@@ -66,13 +67,13 @@ class Deployer(Case, Task):
     def build_analyzor_modules(self):
         res = []
         proj_dir = os.path.join(os.getcwd(), "syzmorph")
-        modules_dir = os.path.join(proj_dir, "modules/analyzor")
+        modules_dir = os.path.join(proj_dir, "plugins")
         module_file = [ cmd[:-3] for cmd in os.listdir(modules_dir)
                     if cmd.endswith('.py') and not cmd == '__init__.py' and not cmd == 'error.py']
         for each in module_file:
             cap_text = "TASK_" + each.upper()
             if self._capable(getattr(Task, cap_text)):
-                module = importlib.import_module("modules.analyzor.{}".format(each))
+                module = importlib.import_module("plugins.{}".format(each))
                 class_name = self._get_analyzor_class_name(each)
                 new_class = getattr(module, class_name)
                 A = new_class()

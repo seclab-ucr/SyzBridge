@@ -1,4 +1,4 @@
-from modules.analyzor import AnalysisModule, AnalysisModuleError
+from plugins import AnalysisModule, AnalysisModuleError
 
 class Task:
     TASK_ALL = 0
