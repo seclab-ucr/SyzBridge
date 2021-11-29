@@ -37,24 +37,30 @@ class Trace:
         parents = {}
         self.begin_node = []
         self.trace_text[0]
-        self.n_cpu = int(regx_get(r'cpus=(\d+)', self.trace_text[0], 0))
-        node = Node(self.trace_text[1])
+        start = 0
+        total_line = len(self.trace_text)
+
+        for i in range(start, total_line):
+            if regx_match(r'CPU (\d+) is empty', self.trace_text[i]):
+                continue
+            start = i
+            break
+        self.n_cpu = int(regx_get(r'cpus=(\d+)', self.trace_text[start], 0))
+        node = Node(self.trace_text[start+1])
         self.node.append(node)
         self.index2node[node] = 1
         parents[node.pid] = node
         self.begin_node.append(node)
-        percentage = 0
 
         if node is None:
             raise ValueError('Trace is not valid')
-        total_line = len(self.trace_text)
         #bar = Bar('Processing', max=total_line)
         widgets=[
             ' [Serializing trace report] ',
             progressbar.Bar(),
             ' (', progressbar.Percentage(),' | ', progressbar.ETA(), ') ',
         ]
-        for i in progressbar.progressbar(range(2, total_line), widgets=widgets):
+        for i in progressbar.progressbar(range(start+2, total_line), widgets=widgets):
             line = self.trace_text[i].strip()
 
             try:

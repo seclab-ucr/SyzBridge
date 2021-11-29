@@ -18,7 +18,6 @@ class FailureAnalysis(AnalysisModule):
         self._prepared = False
         self._move_to_success = False
 
-        self.calltrace = None
         self.vul_module = None
         self.cfg = None
         self.path_plugin = None
@@ -52,14 +51,30 @@ class FailureAnalysis(AnalysisModule):
 
     @check
     def run(self):
-        res = True
-
         if not self._prepared:
             self.logger.error("Module {} is not prepared".format(FailureAnalysis.NAME))
             return False
         self.report.append(FailureAnalysis.REPORT_START)
-        self.calltrace = extrace_call_trace(self.kasan_report)
-        for each_line in self.calltrace:
+
+        calltrace = extrace_call_trace(self.kasan_report)
+        self.report.append("Call trace:")
+        if not self.trace_check(calltrace):
+            return False
+        alloc_trace = extract_alloc_trace(self.kasan_report)
+        self.report.append("\nAlloc trace:")
+        if not self.trace_check(alloc_trace):
+            return False
+        free_trace = extract_free_trace(self.kasan_report)
+        self.report.append("\nFree trace:")
+        if not self.trace_check(free_trace):
+            return False
+        
+        self.report.append(FailureAnalysis.REPORT_END)
+        return True
+    
+    def trace_check(self, trace):
+        res = True
+        for each_line in trace:
             dbg_info = extract_debug_info(each_line)
             if dbg_info == None:
                 continue
@@ -73,7 +88,6 @@ class FailureAnalysis(AnalysisModule):
                 self.logger.info("Vendor {0} does not have {1} module enabled".format(self.cfg.vendor_name, self.vul_module))
                 self.report.append("Check {} ---> Fail".format(vul_src_file))
                 res = False
-        self.report.append(FailureAnalysis.REPORT_END)
         return res
     
     def generate_report(self):
@@ -187,4 +201,8 @@ class FailureAnalysis(AnalysisModule):
         handler.setFormatter(format)
         child_logger.addHandler(handler)
         return child_logger
+    
+    def _write_to(self, content, name):
+        file_path = "{}/{}".format(self.path_plugin, name)
+        super()._write_to(content, file_path)
 

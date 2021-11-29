@@ -120,6 +120,7 @@ class VMInstance(Network):
                 if not self.qemu_ready:
                     self.kill_proc_by_port(self.port)
                     self.case_logger.error('QEMU: Error occur at booting qemu')
+                    self.alternative_func_output.put([False])
                 return
         self.case_logger.info('Time out, kill qemu')
         if not self.qemu_ready:
@@ -168,7 +169,7 @@ class VMInstance(Network):
                         "kvm-intel.fasteoi=1", "kvm-intel.ept=1", "kvm-intel.flexpriority=1", \
                         "kvm-intel.vpid=1", "kvm-intel.emulate_invalid_guest_state=1", \
                         "kvm-intel.eptad=1", "kvm-intel.enable_shadow_vmcs=1", "kvm-intel.pml=1", \
-                        "kvm-intel.enable_apicv=1"]
+                        "kvm-intel.enable_apicv=1, panic_on_warn=0"]
         gdb_arg = ""
         self.port = port
         self.image = image

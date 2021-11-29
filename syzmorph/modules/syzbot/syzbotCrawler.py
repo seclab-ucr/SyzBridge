@@ -78,6 +78,7 @@ class Crawler:
         self.cases[hash]["report"] = detail[8]
         self.cases[hash]["vul_offset"] = detail[9]
         self.cases[hash]["obj_size"] = detail[10]
+        self.cases[hash]["kernel"] = detail[11]
 
     def gather_cases(self):
         high_risk_impacts = {}
@@ -151,12 +152,7 @@ class Crawler:
             if table.caption.text.find('Crash') != -1:
                 for case in table.tbody.contents:
                     if type(case) == element.Tag:
-                        """ We dont need to ignore other source anymore as long as they can reproduce
                         kernel = case.find('td', {"class": "kernel"})
-                        if kernel.text != "upstream":
-                            self.logger.debug("skip kernel: '{}'".format(kernel.text))
-                            continue
-                        """
                         count += 1
                         if count < index:
                             continue
@@ -200,7 +196,7 @@ class Crawler:
                             self.logger.info("Failed to retrieve case {}{}{}".format(syzbot_host_url, syzbot_bug_base_url, hash))
                             self.logger.debug(e)
                             continue
-                        return [commit, syzkaller, config, syz_repro, log, c_repro, time_str, manager_str, report, offset, size]
+                        return [commit, syzkaller, config, syz_repro, log, c_repro, time_str, manager_str, report, offset, size, kernel.text]
                 break
         return []
 

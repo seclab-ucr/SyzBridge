@@ -44,15 +44,27 @@ function get_linux() {
 function build_linux_folder {
   LINUX_FOLDER=$1
   LINUX0=$2
+  KERNEL=$3
   if [ $LINUX0 == "LINUX0" ]; then
-    git clone https://github.com/torvalds/linux.git $LINUX_FOLDER
+    if [ $KERNEL == "upstream" ]; then
+      git clone https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/ $LINUX_FOLDER
+    fi
+    if [ $KERNEL == "linux-next" ]; then
+      git clone https://git.kernel.org/pub/scm/linux/kernel/git/next/linux-next.git $LINUX_FOLDER
+    fi
+    if [ $KERNEL == "bpf-next"]; then
+      git clone https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git/ $LINUX_FOLDER
+    fi
+    if [ $KERNEL == "bpf" ]; then
+      git clone https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf.git/ $LINUX_FOLDER
+    fi
   else
     cp -rp $LINUX0 $LINUX_FOLDER
   fi
 }
 
-if [ $# -ne 9 ]; then
-  echo "Usage ./deploy_linux gcc_version case_path max_compiling_kernel linux_commit config_url image linux_repo linux_version index"
+if [ $# -ne 10 ]; then
+  echo "Usage ./deploy_linux gcc_version case_path max_compiling_kernel linux_commit config_url image linux_repo linux_version index kernel"
   exit 1
 fi
 
@@ -69,6 +81,7 @@ IMAGE=$6
 LINUX_REPO=$7
 LINUX_VERSION=$8
 INDEX=$9
+KERNEL=${10}
 
 cd $CASE_PATH || exit 1
 if [ ! -d "compiler" ]; then
@@ -94,13 +107,13 @@ fi
 cd ..
 
 echo "[+] Building kernel"
-OLD_INDEX=`ls -l linux | cut -d'-' -f 3`
+OLD_INDEX=`ls -l linux | rev | cut -d'-' -f 1`
 if [ "$OLD_INDEX" != "$INDEX" ]; then
   rm -rf "./linux" || echo "No linux repo"
-  LINUX0=$PROJECT_PATH/tools/linux-0
+  LINUX0=$PROJECT_PATH/tools/linux-$KERNEL-0
   ls $LINUX0 || LINUX0="LINUX0"
-  ls $PROJECT_PATH/tools/linux-$INDEX || build_linux_folder $PROJECT_PATH/tools/linux-$INDEX $LINUX0
-  ln -s $PROJECT_PATH/tools/linux-$INDEX ./linux
+  ls $PROJECT_PATH/tools/linux-$KERNEL-$INDEX || build_linux_folder $PROJECT_PATH/tools/linux-$KERNEL-$INDEX $LINUX0 $KERNEL
+  ln -s $PROJECT_PATH/tools/linux-$KERNEL-$INDEX ./linux
   if [ -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
       rm $CASE_PATH/.stamp/BUILD_KERNEL
   fi
@@ -108,16 +121,12 @@ fi
 
 if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
     cd linux
-    if [ -f "THIS_KERNEL_IS_BEING_USED" ]; then
-        echo "This kernel is using by other thread"
-        exit 1
-    fi
     if [ $COMMIT == "0" ]; then
       cd linux-$LINUX_VERSION || get_linux $LINUX_REPO $LINUX_VERSION
     else
       git stash || echo "it's ok"
       make clean > /dev/null || echo "it's ok"
-      git clean -fdx -e THIS_KERNEL_IS_BEING_USED > /dev/null || echo "it's ok"
+      git clean -fdx > /dev/null || echo "it's ok"
       git checkout -f $COMMIT || (git pull https://github.com/torvalds/linux.git master > /dev/null 2>&1 && git checkout -f $COMMIT)
     fi
     curl $CONFIG > .config
@@ -224,7 +233,6 @@ if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
     make -j$N_CORES CC=$COMPILER > make.log 2>&1 || copy_log_then_exit make.log
     rm $CASE_PATH/config || echo "It's ok"
     cp .config $CASE_PATH/config
-    touch THIS_KERNEL_IS_BEING_USED
     touch $CASE_PATH/.stamp/BUILD_KERNEL
 fi
 

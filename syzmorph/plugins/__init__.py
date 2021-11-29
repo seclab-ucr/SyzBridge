@@ -112,7 +112,7 @@ class AnalysisModule:
         dst = "{}/.stamp/{}".format(self.path_case, stamp)
         return os.path.exists(dst)
     
-    def _write_to(self, content, name):
-        with open("{}/{}".format(self.analyzor.path_plugin, name), "w") as f:
+    def _write_to(self, content, file):
+        with open("{}".format(file), "w") as f:
             f.write(content)
             f.truncate()

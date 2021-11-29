@@ -24,7 +24,7 @@ class TraceAnalysis(AnalysisModule):
         
     def prepare(self):
         if not self.manager.has_c_repro:
-            self.logger.info("Case does not have c reproducer")
+            self.logger.error("Case does not have c reproducer")
             return False
         return self.prepare_on_demand()
     
@@ -66,10 +66,10 @@ class TraceAnalysis(AnalysisModule):
         else:"""
         begin_nodes = self.serialize_trace(trace1)
         for each in begin_nodes:
-            each.dump_to_file(self.path_plugin + "/better_trace-cpu{}-ubuntu.text".format(each.cpu))
+            each.dump_to_file(self.path_plugin + "/better_trace-{}-{}-ubuntu.text".format(each.task, each.pid))
         begin_nodes = self.serialize_trace(trace2)
         for each in begin_nodes:
-            each.dump_to_file(self.path_plugin + "/better_trace-cpu{}-upstream.text".format(each.cpu))
+            each.dump_to_file(self.path_plugin + "/better_trace-{}-{}-upstream.text".format(each.task, each.pid))
         req = request_get(url=self.case["report"])
         use_trace, alloc_trace, free_trace = self._get_trace_from_kasan(req.text.split('\n'))
 
@@ -80,6 +80,9 @@ class TraceAnalysis(AnalysisModule):
         if not self.match_trace(free_trace, out1):
             return False
         return True
+    
+    def match_trace(self, kasan_trace, ftrace):
+        pass
     
     def _get_trace_from_kasan(self, report):
         use_trace = extrace_call_trace(report)
@@ -114,8 +117,8 @@ class TraceAnalysis(AnalysisModule):
         gcc_version = set_compiler_version(time_parser.parse(self.case["time"]), self.case["config"])
         script = "syzmorph/scripts/deploy-linux.sh"
         chmodX(script)
-        p = Popen([script, gcc_version, self.path_case, str(self.args.parallel_max), 
-                self.case["commit"], self.case["config"], image, self.lts['snapshot'], self.lts["version"], str(self.index)],
+        p = Popen([script, gcc_version, self.path_case, str(self.args.parallel_max), self.case["commit"], self.case["config"], 
+            image, self.lts['snapshot'], self.lts["version"], str(self.index), self.case["kernel"]],
             stderr=STDOUT,
             stdout=PIPE)
         with p.stdout:
@@ -159,7 +162,7 @@ class TraceAnalysis(AnalysisModule):
 
         qemu.upload(user="root", src=[trace_poc_path], dst="/root", wait=True)
         if qemu.command(cmds="chmod +x trace-poc.sh && ./trace-poc.sh\n", user="root", wait=True) != 0:
-            self.logger.error("Timeout running command \"chmod +x trace-poc.sh && ./trace-poc.sh\"")
+            self.logger.error("Something wrong when running command \"chmod +x trace-poc.sh && ./trace-poc.sh\"")
             qemu.alternative_func_output.put([False])
             return
         if qemu.command(cmds="trace-cmd report > trace.report", user="root", wait=True) != 0:
@@ -213,6 +216,7 @@ class TraceAnalysis(AnalysisModule):
 set -ex
 
 echo 140800 >  /sys/kernel/debug/tracing/buffer_size_kb
+chmod +x ./poc
 nohup {} > nohup.out 2>&1 &
 for i in {{1..60}}; do
     sleep 2
@@ -220,8 +224,8 @@ for i in {{1..60}}; do
     break
 done
 
-sleep 10
-killall poc
+sleep 3
+killall poc || true
 
 for i in {{1..20}}; do
     sleep 5
@@ -245,15 +249,15 @@ done""".format(cmd)
         qemu = self.repro.launch_qemu(self.case_hash, work_path=self.path_plugin, log_name="qemu-{}.log".format(self.repro.type_name))
         _, qemu_queue = qemu.run(alternative_func=self._run_trace_cmd, args=("trace-{}".format(self.repro.type_name), ))
         [done] = qemu_queue.get(block=True)
+        qemu.kill()
         if not done:
             return None
-        qemu.kill()
         return trace_path
     
     def _get_trace_functions(self, qemu):
-        common_setup_syscalls = ['mmap', 'waitpid', 'kill', 'signal', 'exit']
+        common_setup_syscalls = ['mmap', 'waitpid', 'kill', 'signal', 'exit', 'unshare', 'setrlimit', 'chdir', 'chmod', ]
         syscalls = []
-        enabled_syscalls = []
+        enabled_syscalls = ['process_one_work', 'do_kern_addr_fault']
         start = len(qemu.pipe_output)
         qemu.command(cmds="trace-cmd list -f | grep -E  \"^__x64_sys_\"", user="root", wait=True)
         for line in qemu.pipe_output[start:]:
@@ -263,13 +267,21 @@ done""".format(cmd)
         req = request_get(url=self.case['c_repro'])
         c_text = req.text
         for each in syscalls:
+            group = [each]
+            if each == '__x64_sys_recv':
+                group = ['__x64_sys_recv', '__x64_sys_recvfrom']
+            if each == '__x64_sys_send':
+                group = ['__x64_sys_send', '__x64_sys_sendto']
             call_name = each.split("__x64_sys_")[1]
-            if " " + call_name + "(" in c_text:
-                if call_name not in common_setup_syscalls and call_name not in enabled_syscalls:
-                    enabled_syscalls.append(each)
+            if regx_match(r'(\W|^){}\('.format(call_name), c_text):
+                if call_name not in common_setup_syscalls and each not in enabled_syscalls:
+                    enabled_syscalls.extend(group)
             if "__NR_"+call_name in c_text:
-                if call_name not in common_setup_syscalls and call_name not in enabled_syscalls:
-                    enabled_syscalls.append(each)
+                if call_name not in common_setup_syscalls and each not in enabled_syscalls:
+                    enabled_syscalls.extend(group)
+            if "sys_"+call_name in c_text:
+                if call_name not in common_setup_syscalls and each not in enabled_syscalls:
+                    enabled_syscalls.extend(group)
         return enabled_syscalls
     
     def _get_child_logger(self, logger):
@@ -282,4 +294,8 @@ done""".format(cmd)
         handler.setFormatter(format)
         child_logger.addHandler(handler)
         return child_logger
+    
+    def _write_to(self, content, name):
+        file_path = "{}/{}".format(self.path_plugin, name)
+        super()._write_to(content, file_path)
 

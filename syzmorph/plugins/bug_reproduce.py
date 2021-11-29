@@ -175,4 +175,8 @@ class BugReproduce(AnalysisModule):
         handler.setFormatter(format)
         child_logger.addHandler(handler)
         return child_logger
+    
+    def _write_to(self, content, name):
+        file_path = "{}/{}".format(self.path_plugin, name)
+        super()._write_to(content, file_path)
 

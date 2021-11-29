@@ -29,6 +29,8 @@ class RunCommand(Command):
         # Mandatory
         parser.add_argument('--proj', nargs='?', action='store',
                             help='project name')
+        parser.add_argument('--case', nargs='?', action='store',
+                            help='case hash (If only run one case of the project')
         parser.add_argument('--config', nargs='?', action='store',
                             help='config file. Will be overwritten by arguments if conflict.')
         # Task                    
@@ -153,6 +155,8 @@ class RunCommand(Command):
         self.proj_dir = os.path.join(os.getcwd(), "projects/{}".format(args.proj))
 
         self.cases = self.read_cases(args.proj)
+        if args.case != None:
+            self.cases = {args.case: self.cases[args.case]}
         self.build_work_dir()
 
         for key in self.cases:
