@@ -42,15 +42,22 @@ class Launcher:
             self.vmlinux = "{}/vmlinux".format(self.path_case)
             self.ssh_key = "{}/img/stretch.img.key".format(self.path_case)
             self.type_name = "upstream"
+        
+    def save_crash_log(self, log, name):
+        with open("{}/crash_log-{}".format(self.path_case, name), "w+") as f:
+            for each in log:
+                for line in each:
+                    f.write(line+"\n")
+                f.write("\n")
     
-    def reproduce(self, syz_commit, work_dir, func):
+    def reproduce(self, *args):
         self.kill_qemu = False
         res = []
         trigger = False
         ever_success = False
         
         for i in range(0, self.qemu_num):
-            x = threading.Thread(target=self._reproduce, args=(i, syz_commit, work_dir, func, ), name="trigger-{}".format(i))
+            x = threading.Thread(target=self._reproduce, args=(i, *args, ), name="trigger-{}".format(i))
             x.start()
             x.join()
             
@@ -71,22 +78,14 @@ class Launcher:
             self.logger.error(res[0])
             return [], trigger
         return res, trigger
-        
-    def save_crash_log(self, log, name):
-        with open("{}/crash_log-{}".format(self.path_case, name), "w+") as f:
-            for each in log:
-                for line in each:
-                    f.write(line+"\n")
-                f.write("\n")
     
-    def _reproduce(self, th_index, c_hash, work_dir, func, log_name=None, cpu="8", mem="8G"):
+    def _reproduce(self, th_index, c_hash, work_dir, func, root, log_name=None, cpu="8", mem="8G"):
         qemu = self.launch_qemu(c_hash, work_dir, log_suffix=str(th_index), log_name=log_name, cpu=cpu, mem=mem)
         
         poc_path = os.path.join(work_dir, "poc")
-        if os.path.exists(poc_path):
-            os.remove(poc_path)
-        shutil.copyfile(os.path.join(self.path_case, "poc"), poc_path)
-        self.start_reproducing(th_index, qemu, poc_path, func)
+        if not os.path.exists(poc_path):
+            self.case_logger.error("POC path not found: {}".format(poc_path))
+        self.start_reproducing(th_index, qemu, poc_path, func, root)
         return
     
     def launch_qemu(self, c_hash, work_path, log_suffix="", log_name=None, cpu="8", mem="8G"):
@@ -102,9 +101,9 @@ class Launcher:
         qemu.logger.info("QEMU-{} launched.\n".format(log_suffix))
         return qemu
     
-    def start_reproducing(self, th_index, qemu, poc_path, func):
+    def start_reproducing(self, th_index, qemu, poc_path, func, root):
         self.case_logger.info("Waiting qemu to launch")
-        qemu.run(alternative_func=func, args=(th_index, poc_path, self.queue,))
+        qemu.run(alternative_func=func, args=(th_index, poc_path, self.queue, root))
 
     def kill_proc_by_port(self, ssh_port):
         p = Popen("lsof -i :{} | awk '{{print $2}}'".format(ssh_port), shell=True, stdout=PIPE, stderr=PIPE)

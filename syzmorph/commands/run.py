@@ -42,6 +42,8 @@ class RunCommand(Command):
                             help='Run bug reproduce on target project')
         parser.add_argument('--trace-analysis', action='store_true',
                             help='Run trace analysis on target project')
+        parser.add_argument('--capability-check', action='store_true',
+                            help='Run capability check on target project')
 
         # Regular arguments
         parser.add_argument('--image', nargs=1, action='store',

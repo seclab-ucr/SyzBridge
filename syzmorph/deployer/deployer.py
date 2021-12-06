@@ -68,9 +68,9 @@ class Deployer(Case, Task):
         res = []
         proj_dir = os.path.join(os.getcwd(), "syzmorph")
         modules_dir = os.path.join(proj_dir, "plugins")
-        module_file = [ cmd[:-3] for cmd in os.listdir(modules_dir)
-                    if cmd.endswith('.py') and not cmd == '__init__.py' and not cmd == 'error.py']
-        for each in module_file:
+        module_folder = [ cmd for cmd in os.listdir(modules_dir)
+                    if not cmd.endswith('.py') and not cmd == "__pycache__" ]
+        for each in module_folder:
             cap_text = "TASK_" + each.upper()
             if self._capable(getattr(Task, cap_text)):
                 module = importlib.import_module("plugins.{}".format(each))

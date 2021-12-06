@@ -1,13 +1,13 @@
 import os
 import shutil
 
-from . import AnalysisModule
-from syzmorph.modules.vm import VMInstance
+from plugins import AnalysisModule
+from modules.vm import VMInstance
 from subprocess import Popen, PIPE, STDOUT, call
 from dateutil import parser as time_parser
 from infra.tool_box import *
 from infra.betterFtrace.trace import Trace, Node
-from .error import *
+from plugins.error import *
 
 class TraceAnalysis(AnalysisModule):
     NAME = "TraceAnalysis"
@@ -20,7 +20,7 @@ class TraceAnalysis(AnalysisModule):
         self.report = ''
         self._prepared = False
         self._move_to_success = False
-        self.path_plugin = None
+        self.path_case_plugin = None
         
     def prepare(self):
         if not self.manager.has_c_repro:
@@ -58,27 +58,27 @@ class TraceAnalysis(AnalysisModule):
         return ret
     
     def analyze_trace(self, trace1, trace2):
-        """if os.path.exists(os.path.join(self.path_plugin, "{}.json".format(trace1))):
+        """if os.path.exists(os.path.join(self.path_case_plugin, "{}.json".format(trace1))):
             begin_nodes = self.load_trace_from_json(trace1)
             if begin_nodes == None:
-                os.remove(os.path.join(self.path_plugin, "{}.json".format(trace1)))
+                os.remove(os.path.join(self.path_case_plugin, "{}.json".format(trace1)))
                 begin_nodes = self.serialize_trace(trace1)
         else:"""
         begin_nodes = self.serialize_trace(trace1)
         for each in begin_nodes:
-            each.dump_to_file(self.path_plugin + "/better_trace-{}-{}-ubuntu.text".format(each.task, each.pid))
+            each.dump_to_file(self.path_case_plugin + "/better_trace-{}-{}-ubuntu.text".format(each.task, each.pid))
         begin_nodes = self.serialize_trace(trace2)
         for each in begin_nodes:
-            each.dump_to_file(self.path_plugin + "/better_trace-{}-{}-upstream.text".format(each.task, each.pid))
+            each.dump_to_file(self.path_case_plugin + "/better_trace-{}-{}-upstream.text".format(each.task, each.pid))
         req = request_get(url=self.case["report"])
-        use_trace, alloc_trace, free_trace = self._get_trace_from_kasan(req.text.split('\n'))
+        """use_trace, alloc_trace, free_trace = self._get_trace_from_kasan(req.text.split('\n'))
 
         if not self.match_trace(use_trace, out1):
             return False
         if not self.match_trace(alloc_trace, out1):
             return False
         if not self.match_trace(free_trace, out1):
-            return False
+            return False"""
         return True
     
     def match_trace(self, kasan_trace, ftrace):
@@ -94,12 +94,12 @@ class TraceAnalysis(AnalysisModule):
         t = Trace(logger=self.logger, debug=self.debug)
         t.load_tracefile(trace)
         begin_nodes = t.serialize()
-        #t.dump_to_json(os.path.join(self.path_plugin, "{}.json".format(trace)))
+        #t.dump_to_json(os.path.join(self.path_case_plugin, "{}.json".format(trace)))
         return begin_nodes
     
     def load_trace_from_json(self, trace):
         nodes = []
-        with open(os.path.join(self.path_plugin, "{}.json".format(trace)), "r") as f:
+        with open(os.path.join(self.path_case_plugin, "{}.json".format(trace)), "r") as f:
             data = f.readlines()
             text = ''
             for line in data:
@@ -136,12 +136,12 @@ class TraceAnalysis(AnalysisModule):
     
     def _run_trace_cmd(self, qemu, trace_filename, syz_repro=False):
         if syz_repro:
-            syz_execprog = os.path.join(self.path_plugin, "syz-execprog")
-            syz_executor = os.path.join(self.path_plugin, "syz-executor")
-            testcase = os.path.join(self.path_plugin, "testcase")
+            syz_execprog = os.path.join(self.path_case_plugin, "syz-execprog")
+            syz_executor = os.path.join(self.path_case_plugin, "syz-executor")
+            testcase = os.path.join(self.path_case_plugin, "testcase")
             trigger_commands = self.prepare_syzkaller()
         else:
-            poc_path = os.path.join(self.path_plugin, "poc")
+            poc_path = os.path.join(self.path_case_plugin, "poc")
             if os.path.exists(poc_path):
                 os.remove(poc_path)
             shutil.copyfile(os.path.join(self.path_case, "poc"), poc_path)
@@ -169,11 +169,11 @@ class TraceAnalysis(AnalysisModule):
             self.logger.error("Timeout running command \"trace-cmd report > trace.report\"")
             qemu.alternative_func_output.put([False])
             return
-        if qemu.download(user="root", src=["/root/trace.report"], dst="{}/{}.report".format(self.path_plugin, trace_filename), wait=True) != 0:
+        if qemu.download(user="root", src=["/root/trace.report"], dst="{}/{}.report".format(self.path_case_plugin, trace_filename), wait=True) != 0:
             self.logger.error("Failed to download trace report from qemu")
             qemu.alternative_func_output.put([False])
             return
-        if qemu.download(user="root", src=["/root/trace.dat"], dst="{}/{}.dat".format(self.path_plugin, trace_filename), wait=True) != 0:
+        if qemu.download(user="root", src=["/root/trace.dat"], dst="{}/{}.dat".format(self.path_case_plugin, trace_filename), wait=True) != 0:
             self.logger.error("Failed to download trace data from qemu")
             qemu.alternative_func_output.put([False])
             return 
@@ -184,7 +184,7 @@ class TraceAnalysis(AnalysisModule):
         if regx_match(r'386', self.case["manager"]):
             i386 = True
         exitcode = self._prepare_syzkaller_bin(i386)
-        with open(os.path.join(self.path_plugin, "testcase"), "r") as f:
+        with open(os.path.join(self.path_case_plugin, "testcase"), "r") as f:
             text = f.readlines()
             syz_commands = make_syz_commands(text, exitcode, i386, repeat=False)
             return syz_commands
@@ -193,7 +193,7 @@ class TraceAnalysis(AnalysisModule):
     def _prepare_syzkaller_bin(self, i386):
         script = "syzmorph/scripts/deploy-syzkaller.sh"
         chmodX(script)
-        p = Popen([script, self.path_plugin, self.case["syz_repro"], self.case["syzkaller"], "0", str(i386)],
+        p = Popen([script, self.path_case_plugin, self.case["syz_repro"], self.case["syzkaller"], "0", str(i386)],
             stderr=STDOUT,
             stdout=PIPE)
         with p.stdout:
@@ -231,14 +231,14 @@ for i in {{1..20}}; do
     sleep 5
     ls trace.dat.cpu* || break
 done""".format(cmd)
-        script_path = os.path.join(self.path_plugin, "trace-poc.sh")
+        script_path = os.path.join(self.path_case_plugin, "trace-poc.sh")
         with open(script_path, "w") as f:
             f.write(trace_poc_text)
         return script_path
     
     def _get_trace(self, vmtype):
         self.repro.setup(vmtype)
-        trace_path = os.path.join(self.path_plugin, "trace-{}.report".format(self.repro.type_name))
+        trace_path = os.path.join(self.path_case_plugin, "trace-{}.report".format(self.repro.type_name))
         if os.path.exists(trace_path):
             return trace_path
         if vmtype == VMInstance.UPSTREAM:
@@ -246,7 +246,7 @@ done""".format(cmd)
                 self.logger.error("Failed to build upstream environment")
                 return None
 
-        qemu = self.repro.launch_qemu(self.case_hash, work_path=self.path_plugin, log_name="qemu-{}.log".format(self.repro.type_name))
+        qemu = self.repro.launch_qemu(self.case_hash, work_path=self.path_case_plugin, log_name="qemu-{}.log".format(self.repro.type_name))
         _, qemu_queue = qemu.run(alternative_func=self._run_trace_cmd, args=("trace-{}".format(self.repro.type_name), ))
         [done] = qemu_queue.get(block=True)
         qemu.kill()
@@ -289,13 +289,13 @@ done""".format(cmd)
         child_logger.propagate = True
         child_logger.setLevel(logger.level)
 
-        handler = logging.FileHandler("{}/log".format(self.path_plugin))
+        handler = logging.FileHandler("{}/log".format(self.path_case_plugin))
         format = logging.Formatter('%(message)s')
         handler.setFormatter(format)
         child_logger.addHandler(handler)
         return child_logger
     
     def _write_to(self, content, name):
-        file_path = "{}/{}".format(self.path_plugin, name)
+        file_path = "{}/{}".format(self.path_case_plugin, name)
         super()._write_to(content, file_path)
 

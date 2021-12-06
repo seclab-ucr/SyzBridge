@@ -23,13 +23,15 @@ function config_disable() {
   sed -i "s/$key=n/# $key is not set/g" .config
   sed -i "s/$key=m/# $key is not set/g" .config
   sed -i "s/$key=y/# $key is not set/g" .config
+  grep $key .config || echo "# $key is not set" >> .config
 }
 
 function config_enable() {
   key=$1
-  sed -i "s/$key=n/# $key is not set/g" .config
-  sed -i "s/$key=m/# $key is not set/g" .config
+  sed -i "s/$key=n/$key=y/g" .config
+  sed -i "s/$key=m/$key=y/g" .config
   sed -i "s/# $key is not set/$key=y/g" .config
+  grep $key .config || echo "$key=y" >> .config
 }
 
 function get_linux() {
@@ -63,8 +65,8 @@ function build_linux_folder {
   fi
 }
 
-if [ $# -ne 10 ]; then
-  echo "Usage ./deploy_linux gcc_version case_path max_compiling_kernel linux_commit config_url image linux_repo linux_version index kernel"
+if [ $# -lt 10 ]; then
+  echo "Usage ./deploy_linux gcc_version case_path max_compiling_kernel linux_commit config_url image linux_repo linux_version index kernel patch"
   exit 1
 fi
 
@@ -82,6 +84,7 @@ LINUX_REPO=$7
 LINUX_VERSION=$8
 INDEX=$9
 KERNEL=${10}
+PATCH=${11}
 
 cd $CASE_PATH || exit 1
 if [ ! -d "compiler" ]; then
@@ -228,9 +231,28 @@ if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
     config_enable $key
     done
 
-
+    PATCH_TCP_CONG=0
     make olddefconfig CC=$COMPILER
-    make -j$N_CORES CC=$COMPILER > make.log 2>&1 || copy_log_then_exit make.log
+    if [ $PATCH != "" ]; then
+      patch -p1 -i $PATCH || exit 2
+    fi
+    make -j$N_CORES CC=$COMPILER > make.log 2>&1 || PATCH_TCP_CONG=1
+    if [ $PATCH_TCP_CONG == 1 ]; then
+      echo "[+] Patching TCP congestion control"
+
+      CONFIGKEYSDISABLE="
+      CONFIG_TCP_CONG_CUBIC
+      CONFIG_TCP_CONG_DCTCP
+      CONFIG_TCP_CONG_BBR
+      "
+      for key in $CONFIGKEYSDISABLE;
+      do
+      config_disable $key
+      done
+
+      make olddefconfig CC=$COMPILER
+      make -j$N_CORES CC=$COMPILER > make.log 2>&1 || copy_log_then_exit make.log
+    fi
     rm $CASE_PATH/config || echo "It's ok"
     cp .config $CASE_PATH/config
     touch $CASE_PATH/.stamp/BUILD_KERNEL

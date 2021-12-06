@@ -7,6 +7,7 @@ class Task:
     TASK_FAILURE_ANALYSIS = 1 << 2
     TASK_LTS_ANALYSIS = 1 << 3
     TASK_TRACE_ANALYSIS = 1 << 4
+    TASK_CAPABILITY_CHECK = 1 << 5
 
     def __init__(self, args):
         self.args = args
@@ -24,7 +25,7 @@ class Task:
         return self.task_class[task]
     
     def iterate_all_tasks(self):
-        return (Task.TASK_LTS_ANALYSIS, Task.TASK_BUG_REPRODUCE, Task.TASK_FAILURE_ANALYSIS, Task.TASK_TRACE_ANALYSIS)
+        return (Task.TASK_LTS_ANALYSIS, Task.TASK_BUG_REPRODUCE, Task.TASK_FAILURE_ANALYSIS, Task.TASK_TRACE_ANALYSIS, Task.TASK_CAPABILITY_CHECK)
 
     def _get_tasks(self):
         task = Task.TASK_ALL
@@ -36,6 +37,8 @@ class Task:
             task |= Task.TASK_LTS_ANALYSIS
         if self.args.trace_analysis:
             task |= Task.TASK_TRACE_ANALYSIS
+        if self.args.capability_check:
+            task |= Task.TASK_CAPABILITY_CHECK
         return task
     
     def _capable(self, cap):

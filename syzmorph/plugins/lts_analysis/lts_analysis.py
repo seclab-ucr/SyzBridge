@@ -1,8 +1,8 @@
 import re, os
 
 from infra.tool_box import *
-from . import AnalysisModule
-from .error import *
+from plugins import AnalysisModule
+from plugins.error import *
 from subprocess import Popen, STDOUT, PIPE
 from dateutil import parser as time_parser
 from modules.vm import VM
@@ -19,7 +19,7 @@ class LtsAnalysis(AnalysisModule):
         self.case = None
         self.report = ""
         self._prepared = False
-        self.path_plugin = None
+        self.path_case_plugin = None
     
     def prepare(self):
         return self.prepare_on_demand()
@@ -28,7 +28,7 @@ class LtsAnalysis(AnalysisModule):
         self._prepared = True
         if self.lts == None:
             return False
-        self.logger = init_logger("{}/log".format(self.path_plugin), debug=self.debug, propagate=self.debug)
+        self.logger = init_logger("{}/log".format(self.path_case_plugin), debug=self.debug, propagate=self.debug)
         return True
     
     def success(self):
@@ -106,5 +106,5 @@ class LtsAnalysis(AnalysisModule):
         return ret, title
     
     def _write_to(self, content, name):
-        file_path = "{}/{}".format(self.path_plugin, name)
+        file_path = "{}/{}".format(self.path_case_plugin, name)
         super()._write_to(content, file_path)

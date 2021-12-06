@@ -28,6 +28,7 @@ class AnalysisModule:
         self.main_logger = manager.logger
         self.cfg = manager.cfg
         self.path_case = manager.path_case
+        self.path_package = manager.path_package
         self.lts = manager.lts
         self.index = manager.index
         self.debug = manager.debug
@@ -58,11 +59,11 @@ class AnalysisModule:
         return self.analyzor.run()
     
     @check
-    def prepare(self, **kargs):
+    def prepare(self, **kwargs):
         self.main_logger.debug("Preparing {}".format(self.analyzor.NAME))
-        self.analyzor.path_plugin = os.path.join(self.path_case, self.analyzor.NAME)
+        self.analyzor.path_case_plugin = os.path.join(self.path_case, self.analyzor.NAME)
         self._build_plugin_folder()
-        return self.analyzor.prepare(**kargs)
+        return self.analyzor.prepare(**kwargs)
 
     @check
     def generate_report(self):
@@ -91,14 +92,14 @@ class AnalysisModule:
         return self._create_stamp(stamp)
     
     def _build_plugin_folder(self):
-        if os.path.exists(self.analyzor.path_plugin):
+        if os.path.exists(self.analyzor.path_case_plugin):
             for i in range(1, 100):
-                if not os.path.exists( self.analyzor.path_plugin+"-{}".format(i)):
-                    shutil.move(self.analyzor.path_plugin, self.analyzor.path_plugin+"-{}".format(i))
+                if not os.path.exists( self.analyzor.path_case_plugin+"-{}".format(i)):
+                    shutil.move(self.analyzor.path_case_plugin, self.analyzor.path_case_plugin+"-{}".format(i))
                     break
                 if i == 99:
                     raise PluginFolderReachMaximumNumber
-        os.makedirs(self.analyzor.path_plugin, exist_ok=True)
+        os.makedirs(self.analyzor.path_case_plugin, exist_ok=True)
     
     def _log_subprocess_output(self, pipe):
         for line in iter(pipe.readline, b''):

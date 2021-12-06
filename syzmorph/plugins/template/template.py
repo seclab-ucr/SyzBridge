@@ -1,7 +1,7 @@
 import os, logging
 
-from syzmorph.infra.tool_box import init_logger
-from . import AnalysisModule
+from infra.tool_box import init_logger
+from plugins import AnalysisModule
 
 class Template(AnalysisModule):
     NAME = "Template"
@@ -13,7 +13,7 @@ class Template(AnalysisModule):
         super().__init__()
         self.report = ''
         self._prepared = False
-        self.path_plugin = ''
+        self.path_case_plugin = ''
         self._move_to_success = False
         self.logger = None
         
@@ -44,13 +44,13 @@ class Template(AnalysisModule):
         child_logger.propagate = True
         child_logger.setLevel(logger.level)
 
-        handler = logging.FileHandler("{}/log".format(self.path_plugin))
+        handler = logging.FileHandler("{}/log".format(self.path_case_plugin))
         format = logging.Formatter('%(message)s')
         handler.setFormatter(format)
         child_logger.addHandler(handler)
         return child_logger
     
     def _write_to(self, content, name):
-        file_path = "{}/{}".format(self.path_plugin, name)
+        file_path = "{}/{}".format(self.path_case_plugin, name)
         super()._write_to(content, file_path)
 

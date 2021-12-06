@@ -2,8 +2,8 @@ import os
 
 from infra.tool_box import *
 from infra.strings import source_file_regx
-from . import AnalysisModule
-from .error import *
+from plugins import AnalysisModule
+from plugins.error import *
 
 class FailureAnalysis(AnalysisModule):
     NAME = "FailureAnalysis"
@@ -20,7 +20,7 @@ class FailureAnalysis(AnalysisModule):
 
         self.vul_module = None
         self.cfg = None
-        self.path_plugin = None
+        self.path_case_plugin = None
         self.report = []
         self.config_cache['vendor_config_path'] = ''
     
@@ -196,13 +196,13 @@ class FailureAnalysis(AnalysisModule):
         child_logger.propagate = True
         child_logger.setLevel(logger.level)
 
-        handler = logging.FileHandler("{}/log".format(self.path_plugin))
+        handler = logging.FileHandler("{}/log".format(self.path_case_plugin))
         format = logging.Formatter('%(message)s')
         handler.setFormatter(format)
         child_logger.addHandler(handler)
         return child_logger
     
     def _write_to(self, content, name):
-        file_path = "{}/{}".format(self.path_plugin, name)
+        file_path = "{}/{}".format(self.path_case_plugin, name)
         super()._write_to(content, file_path)
 
