@@ -12,9 +12,8 @@ reboot_regx = r'reboot: machine restart'
 port_error_regx = r'Could not set up host forwarding rule'
 
 class VMInstance(Network):
-    LTS = 0
-    UBUNTU = 1
-    UPSTREAM = 2
+    DISTROS = 0
+    UPSTREAM = 1
 
     def __init__(self, hash_tag, work_path='/tmp/', log_name='vm.log', log_suffix="", logger=None, debug=False):
         self.work_path = work_path
@@ -30,7 +29,7 @@ class VMInstance(Network):
         self.hash_tag = hash_tag
         self.log_name = log_name
         self.qemu_fail = False
-        self.qemu_ready_bar = ""
+        #self.qemu_ready_bar = ""
         self.alternative_func = None
         self.alternative_func_args = None
         self.alternative_func_output = None
@@ -44,10 +43,8 @@ class VMInstance(Network):
         Network.__init__(self, self.case_logger, self.debug, self.debug)
 
     def setup(self, type, **kwargs):
-        if type == VMInstance.LTS:
-            self._setup_upstream(**kwargs)
-        if type == VMInstance.UBUNTU:
-            self._setup_ubuntu(**kwargs)
+        if type == VMInstance.DISTROS:
+            self._setup_distros(**kwargs)
         if type == VMInstance.UPSTREAM:
             self._setup_upstream(**kwargs)
         return
@@ -102,8 +99,8 @@ class VMInstance(Network):
         ret = self.scp("localhost", user, self.port, self.key, src, dst, False, wait)
         return ret
 
-    def command(self, cmds, user, wait: bool):
-        ret = self.ssh("localhost", user, self.port, self.key, cmds, wait)
+    def command(self, cmds, user, wait: bool, timeout=3*60):
+        ret = self.ssh("localhost", user, self.port, self.key, cmds, wait, timeout)
         return ret
 
     def monitor_execution(self):
@@ -142,8 +139,8 @@ class VMInstance(Network):
                     call("kill -9 {}".format(pid), shell=True)
                     break
     
-    def _setup_ubuntu(self, port, image, linux, key, mem="2G", cpu="2", gdb_port=None, mon_port=None, timeout=None):
-        self.qemu_ready_bar = r'(\w+ login:)|(Ubuntu \d+\.\d+\.\d+ LTS ubuntu20 ttyS0)'
+    def _setup_distros(self, port, image, linux, key, mem="2G", cpu="2", gdb_port=None, mon_port=None, timeout=None):
+        #self.qemu_ready_bar = r'(\w+ login:)|(Ubuntu \d+\.\d+\.\d+ LTS ubuntu20 ttyS0)'
         self.port = port
         self.image = image
         self.key = key
@@ -160,7 +157,7 @@ class VMInstance(Network):
         self.write_cmd_to_script(self.cmd_launch, "launch_ubuntu.sh")
     
     def _setup_upstream(self, port, image, linux, mem="2G", cpu="2", key=None, gdb_port=None, mon_port=None, opts=None, timeout=None, kasan_multi_shot=0):
-        self.qemu_ready_bar = r'Debian GNU\/Linux \d+ syzkaller ttyS\d+'
+        #self.qemu_ready_bar = r'Debian GNU\/Linux \d+ syzkaller ttyS\d+'
         cur_opts = ["root=/dev/sda", "console=ttyS0"]
         def_opts = ["earlyprintk=serial", "nmi_watchdog=panic", \
                         "ftrace_dump_on_oops=orig_cpu", "rodata=n", "vsyscall=native", "net.ifnames=0", \
@@ -203,6 +200,13 @@ class VMInstance(Network):
             self.logger.error("alternative_func failed: {}".format(e))
             raise AlternativeFunctionError
     
+    def _is_qemu_ready(self):
+        output = self.command("uname -r", "root", wait=True, timeout=1)
+        if output == []:
+            return False
+        else:
+            return True
+    
     def __log_qemu(self, pipe):
         run_alternative_func = False
         try:
@@ -216,8 +220,9 @@ class VMInstance(Network):
                     continue
                 if utilities.regx_match(reboot_regx, line) or utilities.regx_match(port_error_regx, line):
                     self.case_logger.error("Booting qemu-{} failed".format(self.log_name))
-                if utilities.regx_match(self.qemu_ready_bar, line):
+                if not self.qemu_ready and self._is_qemu_ready():
                     self.qemu_ready = True
+                    time.sleep(5)
                     if self.alternative_func != None and not run_alternative_func:
                         x = threading.Thread(target=self._prepare_alternative_func, name="{} qemu call back".format(self.hash_tag))
                         x.start()

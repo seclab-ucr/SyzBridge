@@ -1,16 +1,11 @@
-import os, json
-import logging
+import os
 
 from infra.error import *
 
-base_ssh_port = 36777
-
-logger = logging.getLogger(__name__)
-
-class Config:
-    def __init__(self):
-        self.keys_list = ["vendor_image", "vmlinux", "ssh_port", "ssh_key", "vendor_src", "vendor_name", "vendor_code_name", "vendor_version"]
-        self._ssh_port = base_ssh_port
+class Vendor():
+    def __init__(self, cfg, index=0):
+        self.keys_must_have = ["vendor_image", "ssh_port", "ssh_key", "vendor_name", "vendor_code_name", "vendor_version", "type"]
+        self._ssh_port = None
         self._vendor_image = None
         self._vmlinux = None
         self._ssh_key = None
@@ -18,27 +13,31 @@ class Config:
         self._vendor_name = None
         self._vendor_code_name = None
         self._vendor_version = None
+        self._type = None
+        if cfg["type"] == "distro":
+            for key in self.keys_must_have:
+                if key not in cfg:
+                    raise ParseConfigError(key)
+                setattr(self, key, cfg[key])
+        if cfg["type"] == "upstream":
+            for key in ["ssh_port", "ssh_key"]:
+                if key not in cfg:
+                    raise ParseConfigError(key)
+                setattr(self, key, cfg[key])
 
-    def load_from_file(self, config):
-        work_path = os.getcwd()
-        if not os.path.exists(config):
-            config_path = os.path.join(work_path, config)
-        else:
-            config_path = config
-        if os.path.exists(config_path):
-            with open(config_path, 'r') as f:
-                cfg = json.load(f)
-                f.close()
-                return self.load(cfg)
-        else:
-            raise TargetFileNotExist(config)
+    @property
+    def type(self):
+        return self._type
     
-    def load(self, cfg):
-        for key in cfg:
-            if key not in self.keys_list:
-                raise ParseConfigError(key)
-            setattr(self, key, cfg[key])
-        return cfg
+    @type.setter
+    def type(self, value):
+        if value == "distro":
+            self._type = 0
+            return
+        if value == "upstream":
+            self._type = 1
+            return
+        raise KernelTypeError(value)
 
     @property
     def vendor_image(self):

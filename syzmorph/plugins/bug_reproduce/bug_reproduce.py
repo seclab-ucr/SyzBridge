@@ -1,4 +1,5 @@
-import re, os, time, shutil
+import queue
+import re, os, time, shutil, threading
 
 from plugins import AnalysisModule
 from modules.vm import VMInstance
@@ -32,36 +33,61 @@ class BugReproduce(AnalysisModule):
     def check(func):
         def inner(self):
             ret = func(self)
-            if ret != None:
-                title = ret[0]
-                non_root = ret[1]
-                if non_root:
-                    str_privilege = " by normal user"
+            for key in ret:
+                if ret[key]["triggered"]:
+                    title = ret[key]["bug_title"]
+                    root = ret[key]["root"]
+                    if not root:
+                        str_privilege = " by normal user"
+                    else:
+                        str_privilege = " by root user"
+                    self.main_logger.info("{} triggers a Kasan bug: {} {}".format(key ,title, str_privilege))
+                    self._move_to_success = True
                 else:
-                    str_privilege = " by root user"
-                self.main_logger.info("Trigger a Kasan bug: {} {}".format(title, str_privilege))
-                self._move_to_success = True
-            else:
-                self.main_logger.info("Fail to trigger the bug")
+                    self.main_logger.info("Fail to trigger the bug")
             return ret
         return inner
 
     @check
     def run(self):
-        self.logger.info("start reproducing bugs on {}".format(self.cfg.vendor_name))
-        self.repro.setup(getattr(VMInstance, self.cfg.vendor_name.upper()))
-        if self.reproduce(root=False):
-            return [self.bug_title, True]
-        if self.reproduce(root=True):
-            return [self.bug_title, False]
-        return None
+        res = {}
+        output = queue.Queue()
+        for distro in self.cfg.get_distros():
+            self.logger.info("start reproducing bugs on {}".format(distro.vendor_name))
+            self.repro.setup(distro)
+            x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="reproduce_async-{}".format(distro.vendor_name))
+            x.start()
+            if self.debug:
+                x.join()
 
-    def reproduce(self, root: bool):
+        for _ in self.cfg.get_distros():
+            res_distro = output.get(block=True)
+            res[res_distro["distro_name"]] = res_distro
+        return res
+    
+    def reproduce_async(self, distro, q):
+        res = {}
+        res[distro.vendor_name] = {}
+        res[distro.vendor_name]["distro_name"] = distro.vendor_name
+        res[distro.vendor_name]["triggered"] = False
+        res[distro.vendor_name]["bug_title"] = ""
+        res[distro.vendor_name]["root"] = True
+        if self.reproduce(distro, root=False):
+            res[distro.vendor_name]["triggered"] = True
+            res[distro.vendor_name]["bug_title"] = self.bug_title
+            res[distro.vendor_name]["root"] = False
+        elif self.reproduce(distro, root=True):
+            res[distro.vendor_name]["triggered"] = True
+            res[distro.vendor_name]["bug_title"] = self.bug_title
+            res[distro.vendor_name]["root"] = True
+        q.put(res)
+
+    def reproduce(self, distro, root: bool):
         self.tune_poc(root)
         if root:
-            log_name = "qemu-{}-root".format(self.cfg.vendor_name)
+            log_name = "qemu-{}-root".format(distro.vendor_name)
         else:
-            log_name = "qemu-{}-normal".format(self.cfg.vendor_name)
+            log_name = "qemu-{}-normal".format(distro.vendor_name)
         report, triggered = self.repro.reproduce(self.case_hash, self.path_case_plugin, self.capture_kasan, root, log_name)
         self.rename_poc(root)
         if triggered:
@@ -142,6 +168,12 @@ void setup_sandbox() {
                 fdst.close()
             else:
                 self.logger.error("Cannot find real PoC function")
+        else:
+            src = os.path.join(self.path_case, "poc.c")
+            dst = os.path.join(self.path_case_plugin, "poc.c")
+            if os.path.exists(dst):
+                os.remove(dst)
+            shutil.copy(src, dst)
         self._compile_poc()
     
     def success(self):

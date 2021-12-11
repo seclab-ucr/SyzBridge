@@ -8,40 +8,16 @@ from subprocess import Popen, STDOUT, PIPE, call
 from infra.tool_box import chmodX, log_anything, regx_match
 from modules.vm import VMInstance, VM
 from modules.reproducer.error import CreateSnapshotError
+from .build import Build
 
-class Launcher:
-    def __init__(self, path_case, path_syzmorph, ssh_port, case_logger, path_linux=None, debug=False, qemu_num=3):
+class Launcher(Build):
+    def __init__(self, cfg, path_case, path_syzmorph, case_logger, path_linux=None, debug=False, qemu_num=3):
+        Build.__init__(self, cfg, path_case, path_syzmorph, path_linux)
         self.case_logger = case_logger
-        self.path_case = path_case
-        self.path_syzmorph = path_syzmorph
-        self.image_path = None
-        self.vmlinux = None
-        self.ssh_key = None
-        self.path_linux = path_linux
         self.qemu_num = qemu_num
-        self.ssh_port = ssh_port
-        self.type_name = ""
         self.debug = debug
         self.kill_qemu = False
         self.queue = queue.Queue()
-    
-    def setup(self, vmtype):
-        self.vmtype = vmtype
-        if vmtype == VMInstance.LTS:
-            self.image_path = "{}/img/stretch.img".format(self.path_case)
-            self.vmlinux = "{}/vmlinux".format(self.path_case)
-            self.ssh_key = "{}/img/stretch.img.key".format(self.path_case)
-            self.type_name = "lts"
-        if vmtype == VMInstance.UBUNTU:
-            self.image_path = "{}/ubuntu-20.04-snapshot.img".format(self.path_case)
-            self.vmlinux = "{}/vmlinux".format(self.path_case)
-            self.ssh_key = "{}/id_rsa".format(self.path_case)
-            self.type_name = "ubuntu"
-        if vmtype == VMInstance.UPSTREAM:
-            self.image_path = "{}/img/stretch.img".format(self.path_case)
-            self.vmlinux = "{}/vmlinux".format(self.path_case)
-            self.ssh_key = "{}/img/stretch.img.key".format(self.path_case)
-            self.type_name = "upstream"
         
     def save_crash_log(self, log, name):
         with open("{}/crash_log-{}".format(self.path_case, name), "w+") as f:
@@ -75,7 +51,7 @@ class Launcher:
                     res = crashes
                 break
         if len(res) == 1 and isinstance(res[0], str):
-            self.logger.error(res[0])
+            self.case_logger.error(res[0])
             return [], trigger
         return res, trigger
     
@@ -89,9 +65,6 @@ class Launcher:
         return
     
     def launch_qemu(self, c_hash, work_path, log_suffix="", log_name=None, cpu="8", mem="8G"):
-        if self.vmtype == VMInstance.UBUNTU:
-            if self.create_snapshot():
-                raise CreateSnapshotError
         if log_name is None:
             log_name = "qemu-{0}-{1}.log".format(c_hash, self.type_name)
         qemu = VM(linux=self.path_linux, vmtype=self.vmtype, hash_tag=c_hash, vmlinux=self.vmlinux, port=self.ssh_port, 
@@ -119,16 +92,4 @@ class Launcher:
                     pid = int(line)
                     call("kill -9 {}".format(pid), shell=True)
                     break
-    
-    def create_snapshot(self):
-        dst = "{}/ubuntu-20.04-snapshot.img".format(self.path_case)
-        src = "{}/tools/images/ubuntu-20.04.img".format(self.path_syzmorph)
-        if os.path.isfile(dst):
-            os.remove(dst)
-        cmd = ["qemu-img", "create", "-f", "qcow2", "-b", src, dst]
-        p = Popen(cmd, stderr=STDOUT, stdout=PIPE)
-        with p.stdout:
-            log_anything(p.stdout, self.case_logger, self.debug)
-        exitcode = p.wait()
-        return exitcode
         

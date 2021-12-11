@@ -1,7 +1,7 @@
 import json
 import logging
 
-from syzmorph.infra.config import Config
+from syzmorph.infra.config.config import Config
 
 logger = logging.getLogger(__name__)
 

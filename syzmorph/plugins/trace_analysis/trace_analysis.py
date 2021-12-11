@@ -42,11 +42,12 @@ class TraceAnalysis(AnalysisModule):
             return None
 
         for _ in range(0,3):
-            trace_vendor = self.get_vendor_trace()
-            if trace_vendor is None:
-                self.logger.error("Failed to get vendor trace, try again")
-                continue
-            break
+            for distro in self.cfg.get_distros():
+                trace_vendor = self.get_vendor_trace(distro)
+                if trace_vendor is None:
+                    self.logger.error("Failed to get vendor trace, try again")
+                    continue
+                break
         for _ in range(0,3):
             trace_upstream = self.get_upstream_trace()
             if trace_upstream is None:
@@ -127,12 +128,11 @@ class TraceAnalysis(AnalysisModule):
         self.logger.info("script/deploy.sh is done with exitcode {}".format(exitcode))
         return exitcode
 
-    def get_vendor_trace(self):
-        vmtype = getattr(VMInstance, self.cfg.vendor_name.upper())
-        return self._get_trace(vmtype)
+    def get_vendor_trace(self, distro):
+        return self._get_trace(distro)
 
     def get_upstream_trace(self):
-        return self._get_trace(VMInstance.UPSTREAM)
+        return self._get_trace(self.cfg.get_upstream())
     
     def _run_trace_cmd(self, qemu, trace_filename, syz_repro=False):
         if syz_repro:
@@ -258,9 +258,8 @@ done""".format(cmd)
         common_setup_syscalls = ['mmap', 'waitpid', 'kill', 'signal', 'exit', 'unshare', 'setrlimit', 'chdir', 'chmod', ]
         syscalls = []
         enabled_syscalls = ['process_one_work', 'do_kern_addr_fault']
-        start = len(qemu.pipe_output)
-        qemu.command(cmds="trace-cmd list -f | grep -E  \"^__x64_sys_\"", user="root", wait=True)
-        for line in qemu.pipe_output[start:]:
+        output = qemu.command(cmds="trace-cmd list -f | grep -E  \"^__x64_sys_\"", user="root", wait=True)
+        for line in output:
             if line.startswith("__x64_sys_"):
                 syscalls.append(line.strip())
         

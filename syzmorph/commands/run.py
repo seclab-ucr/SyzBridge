@@ -96,7 +96,7 @@ class RunCommand(Command):
         print("Thread {} exit->".format(index))
 
     def parse_config(self, config):
-        from syzmorph.infra.config import Config
+        from syzmorph.infra.config.config import Config
         
         cfg = Config()
         cfg.load_from_file(config)
@@ -120,12 +120,15 @@ class RunCommand(Command):
             task += "failure_analysis "
         print(task)
         if self.cfg != None:
-            print("[*] vendor image: {}".format(self.cfg.vendor_image))
-            print("[*] vmlinux: {}".format(self.cfg.vmlinux))
-            print("[*] ssh_port: {}".format(self.cfg.ssh_port))
-            print("[*] ssh_key: {}".format(self.cfg.ssh_key))
-            print("[*] vendor_src: {}".format(self.cfg.vendor_src))
-            print("[*] vendor_name: {}".format(self.cfg.vendor_name))
+            for vendor in self.cfg.__dict__:
+                t = getattr(self.cfg, vendor)
+                print("=========={}==========".format(t.vendor_name))
+                print("[*] vendor image: {}".format(t.vendor_image))
+                print("[*] vmlinux: {}".format(t.vmlinux))
+                print("[*] ssh_port: {}".format(t.ssh_port))
+                print("[*] ssh_key: {}".format(t.ssh_key))
+                print("[*] vendor_src: {}".format(t.vendor_src))
+                print("[*] vendor_name: {}".format(t.vendor_name))
     
     def build_work_dir(self):
         os.makedirs(os.path.join(self.proj_dir, "incomplete"), exist_ok=True)

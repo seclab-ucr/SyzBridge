@@ -10,5 +10,10 @@ class TargetFileNotExist(Exception):
 
 class TargetFormatNotMatch(Exception):
     def __init__(self, field, type_wrong, type_cor, *args: object) -> None:
-        message = "{} should be {}, but instead it is {}".format(field, type_cor, type_wrong)
+        message = "{} should be {}, instead it is {}".format(field, type_cor, type_wrong)
+        super().__init__(message)
+
+class KernelTypeError(Exception):
+    def __init__(self, type_wrong, *args: object) -> None:
+        message = "Kernel type must be either \"upstream\" or \"distro\", instead it is ".format(type_wrong)
         super().__init__(message)

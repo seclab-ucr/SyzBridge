@@ -23,22 +23,12 @@ class Case:
         self.case = case
         self.lts = None
         self.has_c_repro = True
-        if self.args.ssh_key != None:
-            self.cfg.ssh_key = self.args.ssh_key[0]
-        if self.args.ssh_port != None:
-            self.cfg.ssh_port = self.args.ssh_port + index * reserve_port
-        else:
-            self.cfg.ssh_port += index * reserve_port
-        if self.args.image != None:
-            self.cfg.image_path = self.args.image[0]
-        if self.args.vmlinux != None:
-            self.cfg.vmlinux_path = self.args.vmlinux[0]
         self._init_case(case_hash)
         #if self.lts != None:
         #    self.path_linux = os.path.join(self.path_case, "linux/linux-{}".format(self.lts["version"]))
         self.path_linux = os.path.join(self.path_case, "linux")
-        self.repro = Reproducer(path_linux=self.path_linux, path_case=self.path_case, path_syzmorph=self.path_syzmorph, 
-            ssh_port=self.cfg.ssh_port, case_logger=self.case_logger, debug= self.debug, qemu_num=3)
+        self.repro = Reproducer(cfg=self.cfg, path_linux=self.path_linux, path_case=self.path_case, path_syzmorph=self.path_syzmorph, 
+            case_logger=self.case_logger, debug= self.debug, qemu_num=3)
     
     def save_to_others(self):
         dirname = os.path.dirname(self.path_ori)
@@ -80,15 +70,15 @@ class Case:
         script = os.path.join(self.path_package, "scripts/init-case.sh")
         chmodX(script)
         self.case_logger.info("run: scripts/init-case.sh")
-        p = Popen([script, self.path_case, self.cfg.vendor_image, str(self.cfg.vmlinux), self.cfg.ssh_key, c_prog],
+        p = Popen([script, self.path_case, c_prog],
                 stdout=PIPE,
                 stderr=STDOUT)
         with p.stdout:
             log_anything(p.stdout, self.case_logger, self.debug)
         exitcode = p.wait()
         self.case_logger.info("scripts/init-case.sh was done with exitcode {}".format(exitcode))
-        self.lts = self._determine_lts()
-    
+        #self.lts = self._determine_lts()
+    """
     def _determine_lts(self):
         vendor_name = self.cfg.vendor_name.lower()
         code_name = self.cfg.vendor_code_name.lower()
@@ -111,6 +101,7 @@ class Case:
                     return each
             else:
                 return each
+    """
 
     def _get_case_path(self):
         path_case = None

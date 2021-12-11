@@ -86,7 +86,7 @@ class CapabilityCheck(AnalysisModule):
         return True
     
     def build_kernel(self):
-        self.repro.setup(VMInstance.UPSTREAM)
+        self.repro.setup(self.cfg.get_upstream())
         exitcode = self.build_env_upstream()
         if exitcode == 2:
             self.logger.error("Patch has been rejected")

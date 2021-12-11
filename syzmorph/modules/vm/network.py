@@ -1,4 +1,4 @@
-import threading, queue
+import threading, queue, time
 
 from infra.tool_box import init_logger, set_timer
 from subprocess import Popen, PIPE, STDOUT
@@ -20,14 +20,14 @@ class Network:
             return exitcode
         return None
     
-    def ssh(self, ip, user, port, key, command, wait):
+    def ssh(self, ip, user, port, key, command, wait, timeout):
         ret_queue = queue.Queue()
-        x = threading.Thread(target=self._ssh, args=(ip, user, port, key, command, ret_queue), name="ssh logger")
+        x = threading.Thread(target=self._ssh, args=(ip, user, port, key, command, ret_queue, timeout), name="ssh logger")
         x.start()
         if wait:
             x.join()
-            exitcode = ret_queue.get(block=False)
-            return exitcode
+            pipe_output = ret_queue.get(block=False)
+            return pipe_output
         return None
 
     def _scp(self, ip, user, port, key, src, dst, upload, ret_queue):
@@ -56,24 +56,26 @@ class Network:
         ret_queue.put(exitcode, block=False)
         return exitcode
     
-    def _ssh(self, ip, user, port, key, command, ret_queue, timeout=None):
+    def _ssh(self, ip, user, port, key, command, ret_queue, timeout=3*60):
         cmd = ["ssh", "-F", "/dev/null", "-o", "UserKnownHostsFile=/dev/null", 
         "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=no", 
         "-i", key, 
         "-p", str(port), "{}@{}".format(user, ip), command]
+        pipe_output = []
 
         self.logger.debug(" ".join(cmd))
         p = Popen(cmd,
         stdout=PIPE,
         stderr=STDOUT)
         if timeout != None:
-            x = threading.Thread(target=set_timer, args=(3*60, p, ), name="ssh timer")
+            x = threading.Thread(target=set_timer, args=(timeout, p, ), name="ssh timer")
             x.start()
+        start = len(self.pipe_output)
         with p.stdout:
             if self.logger != None:
                 self.log_anything(p.stdout, self.logger, self.debug)
         exitcode = p.wait()
-        ret_queue.put(exitcode, block=False)
+        ret_queue.put(self.pipe_output[start:], block=False)
         return exitcode
     
     def log_anything(self, pipe, logger, debug):

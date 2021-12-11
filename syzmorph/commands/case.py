@@ -1,7 +1,9 @@
-import os, json
+import os, json, shutil
 
 from commands import Command
-from subprocess import call
+from subprocess import Popen, PIPE, STDOUT, call
+from dateutil import parser as time_parser
+from infra.tool_box import *
 
 from infra.tool_box import regx_get
 from infra.strings import case_hash_syzbot_regx
@@ -15,12 +17,15 @@ class CaseCommand(Command):
     def add_arguments(self, parser):
         super().add_arguments(parser)
         parser.add_argument('--proj', nargs='?', action='store', help='project name')
+        parser.add_argument('--hash', nargs='?', action='store', help='hash of a case')
         parser.add_argument('--all', action='store_true', help='Get all case info')
         parser.add_argument('--completed', action='store_true', help='Get completed case info') 
         parser.add_argument('--incomplete', action='store_true', help='Get incomplete case info')
         parser.add_argument('--succeed', action='store_true', help='Get succeed case info')
         parser.add_argument('--error', action='store_true', help='Get error case info')
         parser.add_argument('--case-title', action='store_true', help='Get case title')
+
+        parser.add_argument('--prepare4debug', nargs='?', action='store', help='prepare a folder for case debug')
 
     def custom_subparser(self, parser, cmd):
         return parser.add_parser(cmd, help='Get cases information')
@@ -29,6 +34,8 @@ class CaseCommand(Command):
         self.args = args
         self.proj_dir = os.path.join(os.getcwd(), "projects/{}".format(args.proj))
         self.cases = self.read_cases(args.proj)
+        if args.hash != None:
+            self.cases = {args.hash: self.cases[args.hash]}
         if args.all:
             self.print_case_info()
         if args.completed:
@@ -43,6 +50,34 @@ class CaseCommand(Command):
         if args.error:
             show = self.read_case_from_folder('error')
             self.print_case_info(show)
+        if args.prepare4debug != None:
+            if args.hash == None:
+                print('Please specify a case hash for debug')
+                return
+            self.prepare_case_for_debug(args.hash, args.prepare4debug)
+    
+    def prepare_case_for_debug(self, hash_val, folder):
+        case_debug_path = folder
+        if not os.path.isdir(case_debug_path):
+            print("Cannot find directory {}".format(case_debug_path))
+            return
+        case = self.cases[hash_val]
+        self.path_debug = os.path.join(case_debug_path, hash_val[:7])
+        try:
+            os.mkdir(self.path_debug)
+        except Exception as e:
+            print("Cannot create directory {}".format(self.path_debug))
+            print(e)
+            return
+        linux_repo = os.path.join(self.proj_dir, 'tools', 'linux-{}-0'.format(case['kernel']))
+        if not os.path.exists(linux_repo):
+            print("Cannot find linux repo {}. Run analysis on this case will automatically create a linux repo.".format(linux_repo))
+            return
+        shutil.copytree(linux_repo, os.path.join(self.path_debug, 'linux'))
+        os.mkdir(os.path.join(self.path_debug, 'exp'))
+        call(['curl', case['c_repro'], '>' , os.path.join(self.path_debug, 'exp', 'poc.c')])
+        call(['curl', case['config'], '>' , os.path.join(self.path_debug, 'linux', '.config')])
+        call(['make', '-j`nproc`'])
 
     def read_case_from_folder(self, folder):
         res = []

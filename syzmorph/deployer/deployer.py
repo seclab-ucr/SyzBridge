@@ -55,15 +55,6 @@ class Deployer(Case, Task):
             folder = self.save_to_others()
             self.logger.info("Copy to {}".format(folder))
     
-    def failure_analysis(self):
-        rep = request_get(self.case['report'])
-        self.use_module(FailureAnalysis(rep.text))
-        if self.analysis.run():
-            self.logger.info("[Failure analysis] All modules passed")
-        else:
-            self.logger.info("[Failure analysis] At least one module failed to find in {}".format(self.cfg.vendor_name))
-        self.analysis.generate_report()
-    
     def build_analyzor_modules(self):
         res = []
         proj_dir = os.path.join(os.getcwd(), "syzmorph")
