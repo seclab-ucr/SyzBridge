@@ -6,7 +6,7 @@ from modules.vm import VMInstance
 from subprocess import Popen, PIPE, STDOUT, call
 from dateutil import parser as time_parser
 from infra.tool_box import *
-from infra.betterFtrace.trace import Trace, Node
+from infra.ftraceparser.trace import Trace, Node
 from plugins.error import *
 
 class TraceAnalysis(AnalysisModule):
@@ -14,6 +14,7 @@ class TraceAnalysis(AnalysisModule):
     REPORT_START = "======================TraceAnalysis Report======================"
     REPORT_END =   "==================================================================="
     REPORT_NAME = "Report_TraceAnalysis"
+    DEPENDENCY_PLUGINS = []
 
     def __init__(self):
         super().__init__()
@@ -30,7 +31,6 @@ class TraceAnalysis(AnalysisModule):
     
     def prepare_on_demand(self):
         self._prepared = True
-        self.logger = self._get_child_logger(self.case_logger)
         return True
     
     def success(self):
@@ -42,21 +42,26 @@ class TraceAnalysis(AnalysisModule):
             return None
 
         for _ in range(0,3):
-            for distro in self.cfg.get_distros():
-                trace_vendor = self.get_vendor_trace(distro)
-                if trace_vendor is None:
-                    self.logger.error("Failed to get vendor trace, try again")
-                    continue
+            self.logger.error("Starting retrieving trace from upstream")
+            cfg = self.cfg.get_upstream()
+            if cfg == None:
                 break
-        for _ in range(0,3):
-            trace_upstream = self.get_upstream_trace()
+            trace_upstream = self._get_trace(cfg)
             if trace_upstream is None:
                 self.logger.error("Failed to get upstream trace, try again")
                 continue
             break
+        for distro in self.cfg.get_distros():
+            for _ in range(0,3):
+                self.logger.error("Starting retrieving trace from {}".format(distro.distro_name))
+                trace_vendor = self._get_trace(distro)
+                if trace_vendor is None:
+                    self.logger.error("Failed to get vendor trace, try again")
+                    continue
+                break
 
-        ret = self.analyze_trace(trace_vendor, trace_upstream)
-        return ret
+        #ret = self.analyze_trace(trace_vendor, trace_upstream)
+        return None
     
     def analyze_trace(self, trace1, trace2):
         """if os.path.exists(os.path.join(self.path_case_plugin, "{}.json".format(trace1))):
@@ -119,7 +124,7 @@ class TraceAnalysis(AnalysisModule):
         script = "syzmorph/scripts/deploy-linux.sh"
         chmodX(script)
         p = Popen([script, gcc_version, self.path_case, str(self.args.parallel_max), self.case["commit"], self.case["config"], 
-            image, self.lts['snapshot'], self.lts["version"], str(self.index), self.case["kernel"]],
+            image, "", "", str(self.index), self.case["kernel"], ""],
             stderr=STDOUT,
             stdout=PIPE)
         with p.stdout:
@@ -127,12 +132,6 @@ class TraceAnalysis(AnalysisModule):
         exitcode = p.wait()
         self.logger.info("script/deploy.sh is done with exitcode {}".format(exitcode))
         return exitcode
-
-    def get_vendor_trace(self, distro):
-        return self._get_trace(distro)
-
-    def get_upstream_trace(self):
-        return self._get_trace(self.cfg.get_upstream())
     
     def _run_trace_cmd(self, qemu, trace_filename, syz_repro=False):
         if syz_repro:
@@ -161,14 +160,8 @@ class TraceAnalysis(AnalysisModule):
             qemu.upload(user="root", src=[poc_path], dst="/root", wait=True)
 
         qemu.upload(user="root", src=[trace_poc_path], dst="/root", wait=True)
-        if qemu.command(cmds="chmod +x trace-poc.sh && ./trace-poc.sh\n", user="root", wait=True) != 0:
-            self.logger.error("Something wrong when running command \"chmod +x trace-poc.sh && ./trace-poc.sh\"")
-            qemu.alternative_func_output.put([False])
-            return
-        if qemu.command(cmds="trace-cmd report > trace.report", user="root", wait=True) != 0:
-            self.logger.error("Timeout running command \"trace-cmd report > trace.report\"")
-            qemu.alternative_func_output.put([False])
-            return
+        qemu.command(cmds="chmod +x trace-poc.sh && ./trace-poc.sh\n", user="root", wait=True)
+        qemu.command(cmds="trace-cmd report > trace.report", user="root", wait=True)
         if qemu.download(user="root", src=["/root/trace.report"], dst="{}/{}.report".format(self.path_case_plugin, trace_filename), wait=True) != 0:
             self.logger.error("Failed to download trace report from qemu")
             qemu.alternative_func_output.put([False])
@@ -227,7 +220,7 @@ done
 sleep 3
 killall poc || true
 
-for i in {{1..20}}; do
+for i in {{1..30}}; do
     sleep 5
     ls trace.dat.cpu* || break
 done""".format(cmd)
@@ -236,18 +229,18 @@ done""".format(cmd)
             f.write(trace_poc_text)
         return script_path
     
-    def _get_trace(self, vmtype):
-        self.repro.setup(vmtype)
-        trace_path = os.path.join(self.path_case_plugin, "trace-{}.report".format(self.repro.type_name))
+    def _get_trace(self, cfg):
+        self.logger.info("Generating trace for {}".format(cfg.repro.type_name))
+        trace_path = os.path.join(self.path_case_plugin, "trace-{}.report".format(cfg.repro.type_name))
         if os.path.exists(trace_path):
             return trace_path
-        if vmtype == VMInstance.UPSTREAM:
+        if cfg.type == VMInstance.UPSTREAM:
             if self.build_env_upstream() != 0:
                 self.logger.error("Failed to build upstream environment")
                 return None
 
-        qemu = self.repro.launch_qemu(self.case_hash, work_path=self.path_case_plugin, log_name="qemu-{}.log".format(self.repro.type_name))
-        _, qemu_queue = qemu.run(alternative_func=self._run_trace_cmd, args=("trace-{}".format(self.repro.type_name), ))
+        qemu = cfg.repro.launch_qemu(self.case_hash, work_path=self.path_case_plugin, log_name="qemu-{}.log".format(cfg.repro.type_name))
+        _, qemu_queue = qemu.run(alternative_func=self._run_trace_cmd, args=("trace-{}".format(cfg.repro.type_name), ))
         [done] = qemu_queue.get(block=True)
         qemu.kill()
         if not done:
@@ -282,17 +275,6 @@ done""".format(cmd)
                 if call_name not in common_setup_syscalls and each not in enabled_syscalls:
                     enabled_syscalls.extend(group)
         return enabled_syscalls
-    
-    def _get_child_logger(self, logger):
-        child_logger = logger.getChild(self.NAME)
-        child_logger.propagate = True
-        child_logger.setLevel(logger.level)
-
-        handler = logging.FileHandler("{}/log".format(self.path_case_plugin))
-        format = logging.Formatter('%(message)s')
-        handler.setFormatter(format)
-        child_logger.addHandler(handler)
-        return child_logger
     
     def _write_to(self, content, name):
         file_path = "{}/{}".format(self.path_case_plugin, name)

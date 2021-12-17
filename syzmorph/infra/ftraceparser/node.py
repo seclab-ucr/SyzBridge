@@ -1,9 +1,10 @@
 import json
-from ..tool_box import regx_getall
+from .tool_box import regx_getall
 from .error import NodeScopeError, NodeTextError
 
 class Node:
-    def __init__(self, line):
+    def __init__(self, line, myid=-1):
+        self.id = myid
         self.children = []
         self.parent = None
         self.depth = 0
@@ -15,8 +16,12 @@ class Node:
         self.prefix = '|'
         self.scope_begin_node = None
         self.scope_end_node = None
+        self.prev_sibling = None
         self.next_sibling = None
+        self.prev_node = None
         self.next_node = None
+        self.prev_node_by_time = None
+        self.next_node_by_time = None
         self.function_name = None
 
         self.index = 0
@@ -30,7 +35,7 @@ class Node:
         self.parse(line)
 
     def parse(self, line):
-        ftrace_line_regx = r'(<\.\.\.>|[a-zA-Z0-9\-\_\.]+)-(\d+)( )+\[(\d+)\]( )+(\d+\.\d+): (funcgraph_entry|funcgraph_exit):.+(\|( )+)(([A-Za-z0-9_.]+\(\))(;|)|})'
+        ftrace_line_regx = r'(<[a-zA-Z0-9\-\_\.]+>|[a-zA-Z0-9\-\_\.]+)-(\d+)( )+\[(\d+)\]( )+(\d+\.\d+): (funcgraph_entry|funcgraph_exit):.+(\|( )+)(([A-Za-z0-9_.]+\(\))(;| {)|})'
 
         self.line = line
         try:
@@ -70,6 +75,7 @@ class Node:
         if not isinstance(node, Node):
             raise TypeError('child must be of type Node')
         
+        node.prev_node = self
         self.next_node = node
         node.index = self.index + 1
         if node.is_function:
@@ -97,7 +103,10 @@ class Node:
         if not isinstance(node, Node):
             raise TypeError('child must be of type Node')
         
+        node.prev_sibling = self
         self.next_sibling = node
+        if self.is_leaf and not self.is_function:
+            self.scope_begin_node.next_sibling = node
         if self.parent != None:
             self.parent.add_child(node)
 
@@ -127,10 +136,19 @@ class Node:
             node.prefix = node.scope_begin_node.prefix
     
     @property
+    def header(self):
+        header = ''
+        header += self.task + ' '*(15-len(self.task)) + '|'
+        header += ' ' + str(self.pid) + ' '*(10-len(str(self.pid))) + ' |'
+        header += ' [' + str(self.cpu) + ']' + ' '*(4-len(str(self.cpu))) + ' |'
+        header += ' '*(11-len(self.time_stamp)) + self.time_stamp + ':'
+        header += self.event + ':'
+        return header
+
+    @property
     def text(self):
-        header = "{} | {} | [{}] | {}: {}:".format(self.task, self.pid, self.cpu, self.time_stamp, self.event)
-        align = 70 - len(header)
-        return "{}{}{}{}".format(header, align*' ', self.prefix, self.info)
+        align = 80 - len(self.header)
+        return "{}{}{}{}".format(self.header, align*' ', self.prefix, self.info)
     
     def dump(self):
         node = self

@@ -15,7 +15,7 @@ class Crawler:
     def __init__(self,
                  url="https://syzkaller.appspot.com/upstream/fixed",
                  keyword=[''], max_retrieve=10, filter_by_reported=-1, log_path = "",
-                 filter_by_closed=-1, include_high_risk=True, debug=False):
+                 filter_by_closed=-1, filter_by_c_prog=-1, include_high_risk=True, debug=False):
         self.url = url
         if type(keyword) == list:
             self.keyword = keyword
@@ -28,6 +28,7 @@ class Crawler:
         self.logger = init_logger(log_path + "/syzbot.log", debug = debug, propagate=True)
         self.filter_by_reported = filter_by_reported
         self.filter_by_closed = filter_by_closed
+        self.filter_by_c_prog = filter_by_c_prog
 
     def run(self):
         cases_hash, high_risk_impacts = self.gather_cases()
@@ -153,6 +154,8 @@ class Crawler:
                 for case in table.tbody.contents:
                     if type(case) == element.Tag:
                         kernel = case.find('td', {"class": "kernel"})
+                        if (kernel.text != "upstream"):
+                            continue
                         count += 1
                         if count < index:
                             continue
@@ -192,6 +195,8 @@ class Crawler:
                             except:
                                 c_repro = None
                                 self.logger.debug("No c prog found")
+                                if self.filter_by_c_prog:
+                                    continue
                         except Exception as e:
                             self.logger.info("Failed to retrieve case {}{}{}".format(syzbot_host_url, syzbot_bug_base_url, hash))
                             self.logger.debug(e)

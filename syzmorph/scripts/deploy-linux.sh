@@ -65,7 +65,7 @@ function build_linux_folder {
   fi
 }
 
-if [ $# -lt 10 ]; then
+if [ $# -lt 11 ]; then
   echo "Usage ./deploy_linux gcc_version case_path max_compiling_kernel linux_commit config_url image linux_repo linux_version index kernel patch"
   exit 1
 fi
@@ -233,7 +233,8 @@ if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
 
     PATCH_TCP_CONG=0
     make olddefconfig CC=$COMPILER
-    if [ $PATCH != "" ]; then
+    echo $PATCH 
+    if [ "$PATCH" != "" ]; then
       patch -p1 -i $PATCH || exit 2
     fi
     make -j$N_CORES CC=$COMPILER > make.log 2>&1 || PATCH_TCP_CONG=1

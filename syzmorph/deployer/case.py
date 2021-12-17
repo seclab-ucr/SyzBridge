@@ -23,18 +23,18 @@ class Case:
         self.case = case
         self.lts = None
         self.has_c_repro = True
+        self.path_linux = os.path.join(self.path_case, "linux")
         self._init_case(case_hash)
         #if self.lts != None:
         #    self.path_linux = os.path.join(self.path_case, "linux/linux-{}".format(self.lts["version"]))
-        self.path_linux = os.path.join(self.path_case, "linux")
-        self.repro = Reproducer(cfg=self.cfg, path_linux=self.path_linux, path_case=self.path_case, path_syzmorph=self.path_syzmorph, 
-            case_logger=self.case_logger, debug= self.debug, qemu_num=3)
     
-    def save_to_others(self):
+    def save_to_others(self, error):
         dirname = os.path.dirname(self.path_ori)
         folder = os.path.basename(dirname)
         if folder == 'incomplete':
             folder = 'completed'
+        if error:
+            folder = 'error'
         self._save_to(folder)
         return folder
     
@@ -77,27 +77,30 @@ class Case:
             log_anything(p.stdout, self.case_logger, self.debug)
         exitcode = p.wait()
         self.case_logger.info("scripts/init-case.sh was done with exitcode {}".format(exitcode))
+
+        for cfg in self.cfg.get_all():
+            cfg.repro = Reproducer(cfg=cfg, manager=self, qemu_num=3)
         #self.lts = self._determine_lts()
     """
     def _determine_lts(self):
-        vendor_name = self.cfg.vendor_name.lower()
-        code_name = self.cfg.vendor_code_name.lower()
+        distro_name = self.cfg.distro_name.lower()
+        code_name = self.cfg.distro_code_name.lower()
         codename2LTS_path = os.path.join(self.path_package, "resources/codename2LTS.json")
         data = self._read_json(codename2LTS_path)
-        if vendor_name not in data:
-            self.case_logger.error("Cannot find vendor {}, try add it manually in resources/codename2LTS.json".format(vendor_name))
+        if distro_name not in data:
+            self.case_logger.error("Cannot find vendor {}, try add it manually in resources/codename2LTS.json".format(distro_name))
             return None
-        if code_name not in data[vendor_name]:
+        if code_name not in data[distro_name]:
             self.case_logger.error("Cannot find code name {}, try add it manually in resources/codename2LTS.json".format(code_name))
             return None
 
-        if self.cfg.vendor_version == None and len(data[vendor_name][code_name]) > 1:
-            self.case_logger.error("Multiple vendor version found in resources/codename2LTS.json, specify a version in config using \"vendor_version\"")
+        if self.cfg.distro_version == None and len(data[distro_name][code_name]) > 1:
+            self.case_logger.error("Multiple vendor version found in resources/codename2LTS.json, specify a version in config using \"distro_version\"")
             return None
 
-        for each in data[vendor_name][code_name]:
-            if self.cfg.vendor_version != None:
-                if each['version'] == self.cfg.vendor_version:
+        for each in data[distro_name][code_name]:
+            if self.cfg.distro_version != None:
+                if each['version'] == self.cfg.distro_version:
                     return each
             else:
                 return each

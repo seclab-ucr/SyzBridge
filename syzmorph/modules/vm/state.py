@@ -21,6 +21,7 @@ class VMState:
         self.mon = None
         self.debug = debug
         self.addr_info = {}
+        self.func_info = {}
         VMState.KERNEL_BASE = 0x7fffffffffffffff
         if arch == 'i386':
             self.addr_bytes = 4
@@ -30,14 +31,16 @@ class VMState:
         self.kasan_addr = [0,[]]
         VMState.INITIAL = 1
 
-    def gdb_connect(self, port):
+    def gdb_attach_vmlinux(self):
         if self.__check_initialization():
             return
         if self.debug:
             print("Loading kernel, this process may take a while")
         self.kernel = Kernel(self.vmlinux, self.addr_bytes, self._proj_path, self.log_suffix, self.debug)
         self.gdb = self.kernel.gdbhelper
-        self.waitfor_pwndbg()
+        self.waitfor_pwndbg(timeout=60)
+
+    def gdb_connect(self, port):
         self.gdb.connect(port)
         self.waitfor_pwndbg()
         if not self.gdb.is_pwndbg():
@@ -220,6 +223,18 @@ class VMState:
             file = self.addr_info[addr]['dbg'][0]
             line = self.addr_info[addr]['dbg'][1]
         return file, line
+    
+    def get_func_addr(self, func):
+        if self.__check_initialization():
+            return
+        if func not in self.func_info or 'addr' not in self.func_info[func]:
+            addr = self.gdb.get_func_addr(func)
+            if func not in self.func_info:
+                self.func_info[func] = {}
+            self.func_info[func]['addr'] = addr
+        else:
+            addr = self.func_info[func]['addr']
+        return addr
 
     def waitfor_pwndbg(self, timeout=5):
         self.gdb.waitfor("pwndbg>", timeout)

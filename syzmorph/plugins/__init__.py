@@ -22,7 +22,6 @@ class AnalysisModule:
         self.manager = manager
         self.case = manager.case
         self.args = manager.args
-        self.repro = manager.repro
         self.case_hash = manager.case_hash
         self.case_logger = manager.case_logger
         self.main_logger = manager.logger
@@ -32,11 +31,22 @@ class AnalysisModule:
         self.lts = manager.lts
         self.index = manager.index
         self.debug = manager.debug
+        if self.NAME == AnalysisModule.NAME:
+            return
+        self.path_case_plugin = os.path.join(self.path_case, self.NAME)
+        self._build_plugin_folder()
+        self.logger = self._get_child_logger(self.case_logger)
 
     def install_analyzor(self, analyzor):
         if not isinstance(analyzor, AnalysisModule):
             raise AnalysisModuleError("install_analyzor() requires class AnalysisModule")
         self.analyzor = analyzor
+    
+    @property
+    def name(self):
+        if self.analyzor == None:
+            return "NULL"
+        return self.analyzor.NAME
     
     @property
     def analyzor(self):
@@ -61,8 +71,8 @@ class AnalysisModule:
     @check
     def prepare(self, **kwargs):
         self.main_logger.debug("Preparing {}".format(self.analyzor.NAME))
-        self.analyzor.path_case_plugin = os.path.join(self.path_case, self.analyzor.NAME)
-        self._build_plugin_folder()
+        if not self._check_dependencies_finished():
+            return False
         return self.analyzor.prepare(**kwargs)
 
     @check
@@ -91,15 +101,23 @@ class AnalysisModule:
         self.main_logger.info("Finish {}".format(self.analyzor.NAME))
         return self._create_stamp(stamp)
     
+    def _check_dependencies_finished(self):
+        dependencies = self.analyzor.DEPENDENCY_PLUGINS
+        for plugin in dependencies:
+            if not self._check_stamp("FINISH_" + plugin.upper()):
+                self.analyzor.logger.error("{} is not finished before {}, terminate {}".format(plugin, self.analyzor.NAME, self.analyzor.NAME))
+                return False
+        return True
+    
     def _build_plugin_folder(self):
-        if os.path.exists(self.analyzor.path_case_plugin):
+        if os.path.exists(self.path_case_plugin):
             for i in range(1, 100):
-                if not os.path.exists( self.analyzor.path_case_plugin+"-{}".format(i)):
-                    shutil.move(self.analyzor.path_case_plugin, self.analyzor.path_case_plugin+"-{}".format(i))
+                if not os.path.exists( self.path_case_plugin+"-{}".format(i)):
+                    shutil.move(self.path_case_plugin, self.path_case_plugin+"-{}".format(i))
                     break
                 if i == 99:
                     raise PluginFolderReachMaximumNumber
-        os.makedirs(self.analyzor.path_case_plugin, exist_ok=True)
+        os.makedirs(self.path_case_plugin, exist_ok=True)
     
     def _log_subprocess_output(self, pipe):
         for line in iter(pipe.readline, b''):
@@ -117,3 +135,14 @@ class AnalysisModule:
         with open("{}".format(file), "w") as f:
             f.write(content)
             f.truncate()
+
+    def _get_child_logger(self, logger):
+        child_logger = logger.getChild(self.NAME)
+        child_logger.propagate = True
+        child_logger.setLevel(logger.level)
+
+        handler = logging.FileHandler("{}/log".format(self.path_case_plugin))
+        format = logging.Formatter('[{}] %(asctime)s %(message)s'.format(self.NAME))
+        handler.setFormatter(format)
+        child_logger.addHandler(handler)
+        return child_logger

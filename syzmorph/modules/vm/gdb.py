@@ -194,6 +194,18 @@ class GDBHelper:
                 ret.append(dbg_line)
         return ret
     
+    def get_func_addr(self, func):
+        ret = 0
+        func_addr_regx = '(0x[a-f0-9]+)'
+        cmd = 'p {}'.format(func)
+        raw = self.sendline(cmd)
+        for line in raw.split('\n'):
+            line = line.strip('\n')
+            if utilities.regx_match(func_addr_regx, line):
+                addr = utilities.regx_get(func_addr_regx, line, 0)
+                return int(addr, 16)
+        return ret
+    
     def refresh(self):
         self._sendline('echo')
 

@@ -33,6 +33,8 @@ class SyzbotCommand(Command):
         parser.add_argument('--filter-by-closed', nargs='?',
                             default='-1',
                             help='filter bugs by the days they were closed\n')
+        parser.add_argument('--filter-by-c-prog', action='store_true',
+                            help='filter bugs do not have a c reproducer\n')
     
     def custom_subparser(self, parser, cmd):
         return parser.add_parser(cmd, help='Get a case by hash or a file contains multiple hashs.')
@@ -55,7 +57,7 @@ class SyzbotCommand(Command):
 
         crawler = Crawler(url=self.args.url, keyword=self.args.key, max_retrieve=int(self.args.max_retrieval), 
             filter_by_reported=int(self.args.filter_by_reported), filter_by_closed=int(self.args.filter_by_closed), 
-            debug=self.args.debug, log_path = self.proj_dir)
+            filter_by_c_prog=int(self.args.filter_by_c_prog), debug=self.args.debug, log_path = self.proj_dir)
         
         if self.args.get != None:
             if len(self.args.get) == 40:

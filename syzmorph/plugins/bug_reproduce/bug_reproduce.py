@@ -12,12 +12,14 @@ class BugReproduce(AnalysisModule):
     REPORT_START = "======================BugReproduce Report======================"
     REPORT_END =   "==================================================================="
     REPORT_NAME = "Report_BugReproduce"
+    DEPENDENCY_PLUGINS = []
 
     def __init__(self):
         super().__init__()
         self.report = ''
         self.path_case_plugin = None
         self.bug_title = ''
+        self.distro_lock = threading.Lock()
         
     def prepare(self):
         if not self.manager.has_c_repro:
@@ -27,12 +29,12 @@ class BugReproduce(AnalysisModule):
     
     def prepare_on_demand(self):
         self._prepared = True
-        self.logger = self._get_child_logger(self.case_logger)
         return True
     
     def check(func):
         def inner(self):
             ret = func(self)
+            fail_name = ""
             for key in ret:
                 if ret[key]["triggered"]:
                     title = ret[key]["bug_title"]
@@ -44,7 +46,9 @@ class BugReproduce(AnalysisModule):
                     self.main_logger.info("{} triggers a Kasan bug: {} {}".format(key ,title, str_privilege))
                     self._move_to_success = True
                 else:
-                    self.main_logger.info("Fail to trigger the bug")
+                    fail_name += key + " "
+            if fail_name != "":
+                self.main_logger.info("Fail to trigger the bug")
             return ret
         return inner
 
@@ -53,43 +57,42 @@ class BugReproduce(AnalysisModule):
         res = {}
         output = queue.Queue()
         for distro in self.cfg.get_distros():
-            self.logger.info("start reproducing bugs on {}".format(distro.vendor_name))
-            self.repro.setup(distro)
-            x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="reproduce_async-{}".format(distro.vendor_name))
+            self.logger.info("start reproducing bugs on {}".format(distro.distro_name))
+            x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="reproduce_async-{}".format(distro.distro_name))
             x.start()
             if self.debug:
                 x.join()
 
         for _ in self.cfg.get_distros():
-            res_distro = output.get(block=True)
-            res[res_distro["distro_name"]] = res_distro
+            [distro_name, m] = output.get(block=True)
+            res[distro_name] = m
         return res
     
     def reproduce_async(self, distro, q):
         res = {}
-        res[distro.vendor_name] = {}
-        res[distro.vendor_name]["distro_name"] = distro.vendor_name
-        res[distro.vendor_name]["triggered"] = False
-        res[distro.vendor_name]["bug_title"] = ""
-        res[distro.vendor_name]["root"] = True
+        res["distro_name"] = distro.distro_name
+        res["triggered"] = False
+        res["bug_title"] = ""
+        res["root"] = True
         if self.reproduce(distro, root=False):
-            res[distro.vendor_name]["triggered"] = True
-            res[distro.vendor_name]["bug_title"] = self.bug_title
-            res[distro.vendor_name]["root"] = False
+            res["triggered"] = True
+            res["bug_title"] = self.bug_title
+            res["root"] = False
         elif self.reproduce(distro, root=True):
-            res[distro.vendor_name]["triggered"] = True
-            res[distro.vendor_name]["bug_title"] = self.bug_title
-            res[distro.vendor_name]["root"] = True
-        q.put(res)
+            res["triggered"] = True
+            res["bug_title"] = self.bug_title
+            res["root"] = True
+        q.put([distro.distro_name, res])
 
     def reproduce(self, distro, root: bool):
+        self.distro_lock.acquire()
         self.tune_poc(root)
+        self.distro_lock.release()
         if root:
-            log_name = "qemu-{}-root".format(distro.vendor_name)
+            log_name = "qemu-{}-root".format(distro.distro_name)
         else:
-            log_name = "qemu-{}-normal".format(distro.vendor_name)
-        report, triggered = self.repro.reproduce(self.case_hash, self.path_case_plugin, self.capture_kasan, root, log_name)
-        self.rename_poc(root)
+            log_name = "qemu-{}-normal".format(distro.distro_name)
+        report, triggered = distro.repro.reproduce(func=self.capture_kasan, root=root, work_dir=self.path_case_plugin, vm_tag=distro.distro_name, c_hash=self.case_hash, log_name=log_name)
         if triggered:
             is_kasan_bug, title = self._KasanChecker(report)
             if is_kasan_bug:
@@ -104,45 +107,10 @@ class BugReproduce(AnalysisModule):
             shutil.move(os.path.join(self.path_case_plugin, "poc.c"), os.path.join(self.path_case_plugin, "poc_normal.c"))
 
     def tune_poc(self, root: bool):
-        sandbox_code = """
-#include <sched.h>
-
-void setup_sandbox() {
-    int real_uid = getuid();
-    int real_gid = getgid();
-
-    if (unshare(CLONE_NEWUSER) != 0) {
-        perror("[-] unshare(CLONE_NEWUSER)");
-        exit(EXIT_FAILURE);
-    }
-
-    if (!write_file("/proc/self/setgroups", "deny")) {
-        perror("[-] write_file(/proc/self/set_groups)");
-        exit(EXIT_FAILURE);
-    }
-    if (!write_file("/proc/self/uid_map", "0 %d 1\\n", real_uid)){
-        perror("[-] write_file(/proc/self/uid_map)");
-        exit(EXIT_FAILURE);
-    }
-    if (!write_file("/proc/self/gid_map", "0 %d 1\\n", real_gid)) {
-        perror("[-] write_file(/proc/self/gid_map)");
-        exit(EXIT_FAILURE);
-    }
-
-    if (unshare(CLONE_NEWNS) != 0) {
-        perror("unshare(CLONE_NEWNS)");
-        exit(EXIT_FAILURE);
-    }
-
-    if (unshare(CLONE_NEWNET) != 0) {
-        perror("[-] unshare(CLONE_NEWNET)");
-        exit(EXIT_FAILURE);
-    }
-}"""
         if not root:
             data = []
             src = os.path.join(self.path_case, "poc.c")
-            dst = os.path.join(self.path_case_plugin, "poc.c")
+            dst = os.path.join(self.path_case_plugin, "poc_normal.c")
             poc_func = ""
             fsrc = open(src, "r")
             fdst = open(dst, "w")
@@ -157,7 +125,7 @@ void setup_sandbox() {
                 if regx_match(poc_func, line):
                     start_line = i
                     data = code[:start_line]
-                    data.append(sandbox_code)
+                    data.append("#include \"sandbox.h\"")
                     data.append("\n")
                     data.extend(code[start_line:start_line+2])
                     data.append("setup_sandbox();\n")
@@ -166,15 +134,19 @@ void setup_sandbox() {
             if data != []:
                 fdst.writelines(data)
                 fdst.close()
+                src = os.path.join(self.path_package, "plugins/bug_reproduce/sandbox.h")
+                dst = os.path.join(self.path_case_plugin, "sandbox.h")
+                shutil.copyfile(src, dst)
             else:
                 self.logger.error("Cannot find real PoC function")
         else:
             src = os.path.join(self.path_case, "poc.c")
-            dst = os.path.join(self.path_case_plugin, "poc.c")
+            dst = os.path.join(self.path_case_plugin, "poc_root.c")
             if os.path.exists(dst):
                 os.remove(dst)
             shutil.copy(src, dst)
-        self._compile_poc()
+        self._compile_poc(root)
+        return
     
     def success(self):
         return self._move_to_success
@@ -238,8 +210,12 @@ void setup_sandbox() {
                     qemu.instance.kill()
         queue.put([res, trgger_hunted_bug, qemu.qemu_fail], block=False)
     
-    def _compile_poc(self):
-        call(["gcc", "-pthread", "-static", "-o", "poc", "poc.c"], cwd=self.path_case_plugin)
+    def _compile_poc(self, root: bool):
+        if root:
+            poc_file = "poc_root.c"
+        else:
+            poc_file = "poc_normal.c"
+        call(["gcc", "-pthread", "-static", "-o", "poc", poc_file], cwd=self.path_case_plugin)
     
     def _run_poc(self, qemu, poc_path, root):
         if root:
@@ -297,17 +273,6 @@ void setup_sandbox() {
                             flag_kasan_read = True
                             break
         return ret, title
-    
-    def _get_child_logger(self, logger):
-        child_logger = logger.getChild(self.NAME)
-        child_logger.propagate = True
-        child_logger.setLevel(logger.level)
-
-        handler = logging.FileHandler("{}/log".format(self.path_case_plugin))
-        format = logging.Formatter('%(message)s')
-        handler.setFormatter(format)
-        child_logger.addHandler(handler)
-        return child_logger
     
     def _write_to(self, content, name):
         file_path = "{}/{}".format(self.path_case_plugin, name)

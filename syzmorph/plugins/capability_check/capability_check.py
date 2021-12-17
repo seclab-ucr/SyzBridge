@@ -12,6 +12,7 @@ class CapabilityCheck(AnalysisModule):
     REPORT_START = "======================CapabilityCheck Report======================"
     REPORT_END =   "==================================================================="
     REPORT_NAME = "Report_CapabilityCheck"
+    DEPENDENCY_PLUGINS = []
 
     def __init__(self):
         super().__init__()
@@ -19,14 +20,12 @@ class CapabilityCheck(AnalysisModule):
         self._prepared = False
         self.path_case_plugin = ''
         self._move_to_success = False
-        self.logger = None
         
     def prepare(self):
         return self.prepare_on_demand()
     
     def prepare_on_demand(self):
         self._prepared = True
-        self.logger = self._get_child_logger(self.case_logger)
         return True
     
     def success(self):
@@ -42,8 +41,9 @@ class CapabilityCheck(AnalysisModule):
         return None
     
     def get_capability_check_report(self):
-        qemu = self.repro.launch_qemu(self.case_hash, work_path=self.path_case_plugin\
-            , log_name="qemu-{}.log".format(self.repro.type_name))
+        upstream = self.cfg.get_upstream()
+        qemu = upstream.repro.launch_qemu(self.case_hash, work_path=self.path_case_plugin\
+            , log_name="qemu-{}.log".format(upstream.repro.type_name))
         _, qemu_queue = qemu.run(alternative_func=self._run_poc, args=())
         for line in qemu.output:
             pass
@@ -86,7 +86,6 @@ class CapabilityCheck(AnalysisModule):
         return True
     
     def build_kernel(self):
-        self.repro.setup(self.cfg.get_upstream())
         exitcode = self.build_env_upstream()
         if exitcode == 2:
             self.logger.error("Patch has been rejected")
@@ -122,17 +121,6 @@ class CapabilityCheck(AnalysisModule):
         poc_path = os.path.join(self.path_case_plugin, "poc")
         qemu.upload(user="root", src=[poc_path], dst="/root", wait=True)
         qemu.command(cmds="chmod +x ./poc && ./poc", user="root", wait=False)
-    
-    def _get_child_logger(self, logger):
-        child_logger = logger.getChild(self.NAME)
-        child_logger.propagate = True
-        child_logger.setLevel(logger.level)
-
-        handler = logging.FileHandler("{}/log".format(self.path_case_plugin))
-        format = logging.Formatter('%(message)s')
-        handler.setFormatter(format)
-        child_logger.addHandler(handler)
-        return child_logger
     
     def _write_to(self, content, name):
         file_path = "{}/{}".format(self.path_case_plugin, name)

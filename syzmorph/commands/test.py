@@ -13,7 +13,7 @@ class TestCommand(Command):
         super().add_arguments(parser)
         parser.add_argument('--all',  action='store_true', help='test all modules')
         parser.add_argument('--config',  action='store_true', help='test config module')
-        parser.add_argument('--failure-analysis',  action='store_true', help='test failure_analysis module')
+        parser.add_argument('--modules-analysis',  action='store_true', help='test modules_analysis module')
         parser.add_argument('--lts-analysis', action='store_true', help='test lts_analysis module')
         parser.add_argument('--bug-reproduce', action='store_true', help='test bug_reproduce module')
         parser.add_argument('--trace-analysis', action='store_true', help='test trace_analysis module')

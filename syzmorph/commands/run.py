@@ -34,8 +34,8 @@ class RunCommand(Command):
         parser.add_argument('--config', nargs='?', action='store',
                             help='config file. Will be overwritten by arguments if conflict.')
         # Task                    
-        parser.add_argument('--failure-analysis', action='store_true',
-                            help='Run failure analysis on target project')
+        parser.add_argument('--modules-analysis', action='store_true',
+                            help='Run Modules analysis on target project')
         parser.add_argument('--lts-analysis', action='store_true',
                             help='Run LTS analysis on target project')
         parser.add_argument('--bug-reproduce', action='store_true',
@@ -115,20 +115,16 @@ class RunCommand(Command):
 
     def print_args_info(self):
         print("[*] proj: {}".format(self.args.proj))
-        task = "[*] task: "
-        if self.args.failure_analysis:
-            task += "failure_analysis "
-        print(task)
         if self.cfg != None:
             for vendor in self.cfg.__dict__:
                 t = getattr(self.cfg, vendor)
-                print("=========={}==========".format(t.vendor_name))
-                print("[*] vendor image: {}".format(t.vendor_image))
+                print("=========={}==========".format(t.distro_name))
+                print("[*] vendor image: {}".format(t.distro_image))
                 print("[*] vmlinux: {}".format(t.vmlinux))
                 print("[*] ssh_port: {}".format(t.ssh_port))
                 print("[*] ssh_key: {}".format(t.ssh_key))
-                print("[*] vendor_src: {}".format(t.vendor_src))
-                print("[*] vendor_name: {}".format(t.vendor_name))
+                print("[*] distro_src: {}".format(t.distro_src))
+                print("[*] distro_name: {}".format(t.distro_name))
     
     def build_work_dir(self):
         os.makedirs(os.path.join(self.proj_dir, "incomplete"), exist_ok=True)

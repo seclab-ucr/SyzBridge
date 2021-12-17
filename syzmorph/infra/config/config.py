@@ -36,6 +36,13 @@ class Config:
             i += 1
         return cfg
 
+    def get_all(self):
+        res = []
+        for name in self.__dict__:
+            cfg = getattr(self, name)
+            res.append(cfg)
+        return res
+
     def get_distros(self):
         res = []
         for name in self.__dict__:
@@ -45,9 +52,8 @@ class Config:
         return res
     
     def get_upstream(self):
-        res = []
         for name in self.__dict__:
             distro = getattr(self, name)
             if distro.type == VMInstance.UPSTREAM:
-                res.append(distro)
-        return res
+                return distro
+        return None

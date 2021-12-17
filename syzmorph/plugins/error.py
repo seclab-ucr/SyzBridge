@@ -9,7 +9,7 @@ class AnalysisModuleError(Exception):
 
 class CannotFindKernelConfig(Exception):
     def __init__(self, *args: object) -> None:
-        message = "Can not find \"debian/build/build-generic/.config\""
+        message = "Can not find \".config\""
         super().__init__(message)
 
 class PluginFolderReachMaximumNumber(Exception):

@@ -449,8 +449,6 @@ def set_timer(timeout, p):
     while (count < timeout):
         count += 1
         sleep(1)
-        if p.poll() != None:
-            return
     if p.poll() is None:
         p.kill()
     return

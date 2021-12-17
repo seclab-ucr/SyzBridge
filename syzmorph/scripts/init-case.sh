@@ -5,13 +5,13 @@ set -ex
 
 echo "running init-case.sh"
 
-if [ $# -ne 5 ]; then
+if [ $# -ne 2 ]; then
   echo "Usage ./init-case.sh CASE_PATH C_PROG"
   exit 1
 fi
 
 CASE_PATH=$1
-C_PROG=$5
+C_PROG=$2
 
 cd $CASE_PATH
 
