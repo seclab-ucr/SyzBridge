@@ -5,12 +5,12 @@ import progressbar
 from .tool_box import *
 from .strings import *
 from .node import Node
-from .error import NodeTextError
+from .error import *
 from console import fg, bg, fx
 
 
 class Trace:
-    def __init__(self, logger=None, debug=False):
+    def __init__(self, logger=None, debug=False, as_servicve=False):
         self.trace_text = None
         self.n_cpu = 0
         self.n_task = 0
@@ -22,6 +22,7 @@ class Trace:
         self.filter = {}
         self.logger = logger
         self.debug = debug
+        self.as_servicve = as_servicve
         self.remove_filter_all()
         if self.logger == None:
            self.logger = init_logger(__name__, debug=self.debug, propagate=self.debug, handler_type=STREAM_HANDLER)
@@ -52,7 +53,10 @@ class Trace:
                 continue
             start = i
             break
-        self.n_cpu = int(regx_get(r'cpus=(\d+)', self.trace_text[start], 0))
+        try:
+            self.n_cpu = int(regx_get(r'cpus=(\d+)', self.trace_text[start], 0))
+        except TypeError:
+            raise TraceParseError('CPU number is not found')
         last_node = Node(self.trace_text[start+1], node_id)
         self.node.append(last_node)
         self.index2node[node_id] = last_node
@@ -68,7 +72,12 @@ class Trace:
             progressbar.Bar(),
             ' (', progressbar.Percentage(),' | ', progressbar.ETA(), ') ',
         ]
-        for i in progressbar.progressbar(range(start+2, total_line), widgets=widgets):
+
+        if self.as_servicve:
+            it = range(start+2, total_line)
+        else:
+            it = progressbar.progressbar(range(start+2, total_line), widgets=widgets)
+        for i in it:
             line = self.trace_text[i].strip()
 
             try:

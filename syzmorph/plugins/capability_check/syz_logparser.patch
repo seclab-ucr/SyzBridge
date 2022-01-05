@@ -1,0 +1,132 @@
+diff --git a/Makefile b/Makefile
+index 69049d6b2..ceec6d5ea 100644
+--- a/Makefile
++++ b/Makefile
+@@ -108,7 +108,7 @@ endif
+ 
+ all: host target
+ host: manager runtest repro mutate prog2c db upgrade
+-target: fuzzer execprog stress executor
++target: fuzzer execprog stress executor logparser
+ 
+ executor: descriptions
+ ifneq ("$(BUILDOS)", "$(NATIVEBUILDOS)")
+@@ -204,6 +204,8 @@ kconf:
+ bisect: descriptions
+ 	GOOS=$(HOSTOS) GOARCH=$(HOSTARCH) $(HOSTGO) build $(GOHOSTFLAGS) -o ./bin/syz-bisect github.com/google/syzkaller/tools/syz-bisect
+ 
++logparser:
++	GOOS=$(HOSTOS) GOARCH=$(HOSTARCH) $(HOSTGO) build $(GOHOSTFLAGS) -o ./bin/syz-logparser github.com/google/syzkaller/tools/syz-logparser
+ # `extract` extracts const files from various kernel sources, and may only
+ # re-generate parts of files.
+ extract: bin/syz-extract
+diff --git a/pkg/report/linux.go b/pkg/report/linux.go
+index 3bcf7b60b..79ad707c1 100644
+--- a/pkg/report/linux.go
++++ b/pkg/report/linux.go
+@@ -1362,6 +1362,10 @@ var linuxOopses = append([]*oops{
+ 	{
+ 		[]byte("INFO:"),
+ 		[]oopsFormat{
++			{
++				title: compile("INFO: Capability found"),
++				fmt:   "capability found in %[1]v",
++			},
+ 			{
+ 				title:  compile("INFO: possible circular locking dependency detected"),
+ 				report: compile("INFO: possible circular locking dependency detected \\](?:.*\\n)+?.*is trying to acquire lock(?:.*\\n)+?.*at: {{PC}} +{{FUNC}}"),
+diff --git a/tools/syz-logparser/syz-logparser.go b/tools/syz-logparser/syz-logparser.go
+new file mode 100644
+index 000000000..b613297e5
+--- /dev/null
++++ b/tools/syz-logparser/syz-logparser.go
+@@ -0,0 +1,89 @@
++package main
++
++import (
++	"bufio"
++	"flag"
++	"fmt"
++	"os"
++
++	"github.com/google/syzkaller/pkg/mgrconfig"
++	"github.com/google/syzkaller/pkg/report"
++)
++
++func main() {
++	var (
++		flagInput  = flag.String("i", "", "input: path of a raw bug report")
++		flagOutput = flag.String("o", "", "output: path of a decent bug report")
++		flagUsage  = flag.Bool("u", false, "Get the usage")
++		flagConfig = flag.String("cfg", "", "Path of syzkaller config")
++	)
++	flag.Parse()
++	if *flagInput == "" || *flagConfig == "" || *flagOutput == "" || *flagUsage {
++		fmt.Printf("Usage:  syz-logparser -cfg path2cfg -i path2log -o path2write\n")
++		return
++	}
++
++	cfg, err := mgrconfig.LoadFile(*flagConfig)
++	if err != nil {
++		fmt.Println(err)
++		return
++	}
++	output := loadLog(*flagInput)
++	if len(output) == 0 {
++		fmt.Printf("No bug report found in the given path\n")
++		return
++	}
++	rep, err := report.NewReporter(cfg)
++	if err != nil {
++		fmt.Println(err)
++		return
++	}
++	report := rep.Parse(output)
++	if err := rep.Symbolize(report); err != nil {
++		fmt.Println(err)
++		return
++	}
++
++	if !writeLog(*flagOutput, report.Report) {
++		fmt.Println("Fail to write to the given path")
++		return
++	}
++}
++
++func loadLog(path string) []byte {
++	var output []byte
++
++	logFile, err := os.Open(path)
++	if err != nil {
++		fmt.Println(err)
++		return output
++	}
++	r := bufio.NewReader(logFile)
++	for {
++		ln, _, err := r.ReadLine()
++		if ln == nil {
++			break
++		}
++		if err != nil {
++			fmt.Println(err)
++			break
++		}
++		ln = append(ln, '\n')
++		output = append(output, ln...)
++	}
++	logFile.Close()
++	return output
++}
++
++func writeLog(path string, output []byte) bool {
++	logFile, err := os.Create(path)
++	if err != nil {
++		fmt.Println(err)
++		return false
++	}
++	w := bufio.NewWriter(logFile)
++	w.Write(output)
++	w.Flush()
++	logFile.Close()
++	return true
++}

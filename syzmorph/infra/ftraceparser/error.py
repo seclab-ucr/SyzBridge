@@ -7,3 +7,8 @@ class NodeTextError(Exception):
     def __init__(self, line, *args: object) -> None:
         message = "NodeTextError: node %s has invalid format" % (line)
         super().__init__(message)
+
+class TraceParseError(Exception):
+    def __init__(self, line, *args: object) -> None:
+        message = "TraceParseError: %s" % (line)
+        super().__init__(message)

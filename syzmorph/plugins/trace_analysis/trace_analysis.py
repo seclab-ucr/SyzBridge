@@ -164,13 +164,13 @@ class TraceAnalysis(AnalysisModule):
         qemu.command(cmds="trace-cmd report > trace.report", user="root", wait=True)
         if qemu.download(user="root", src=["/root/trace.report"], dst="{}/{}.report".format(self.path_case_plugin, trace_filename), wait=True) != 0:
             self.logger.error("Failed to download trace report from qemu")
-            qemu.alternative_func_output.put([False])
+            qemu.alternative_func_output.put(False)
             return
         if qemu.download(user="root", src=["/root/trace.dat"], dst="{}/{}.dat".format(self.path_case_plugin, trace_filename), wait=True) != 0:
             self.logger.error("Failed to download trace data from qemu")
-            qemu.alternative_func_output.put([False])
+            qemu.alternative_func_output.put(False)
             return 
-        qemu.alternative_func_output.put([True])
+        qemu.alternative_func_output.put(True)
     
     def prepare_syzkaller(self):
         i386 = None
@@ -241,7 +241,7 @@ done""".format(cmd)
 
         qemu = cfg.repro.launch_qemu(self.case_hash, work_path=self.path_case_plugin, log_name="qemu-{}.log".format(cfg.repro.type_name))
         _, qemu_queue = qemu.run(alternative_func=self._run_trace_cmd, args=("trace-{}".format(cfg.repro.type_name), ))
-        [done] = qemu_queue.get(block=True)
+        done = qemu_queue.get(block=True)
         qemu.kill()
         if not done:
             return None

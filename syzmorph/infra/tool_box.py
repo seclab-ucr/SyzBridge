@@ -42,6 +42,14 @@ def regx_kasan_line(line):
         return m.groups()
     return None
 
+def parse_one_trace(line):
+    m = re.findall(trace_regx, line)[0]
+    if len(m) < 6:
+        return None, None
+    func = m[0]
+    src_file = m[3]
+    return func, src_file
+
 def is_kasan_func(source_path):
     if source_path == None:
         return False
@@ -163,7 +171,7 @@ def extract_free_trace(report):
                 break
         return res[:-2]
 
-def extrace_call_trace(report):
+def extrace_call_trace(report, start_with='Call Trace'):
     regs_regx = r'[A-Z0-9]+:( )+[a-z0-9]+'
     implicit_call_regx = r'\[.+\]  \?.*'
     fs_regx = r'FS-Cache:'
@@ -174,6 +182,9 @@ def extrace_call_trace(report):
     record_flag = 0
     for line in report:
         line = line.strip('\n')
+        if regx_match(start_with, line):
+            record_flag = 1
+            res = []
         if record_flag and is_trace(line):
             """not regx_match(implicit_call_regx, line) and \
             not regx_match(regs_regx, line) and \
@@ -194,9 +205,6 @@ def extrace_call_trace(report):
             """
             if is_kasan_func(extract_debug_info(line)):
                 res = []
-        if regx_match(r'Call Trace', line):
-            record_flag = 1
-            res = []
         if record_flag == 1 and regx_match_list(call_trace_end, line):
             record_flag ^= 1
             break

@@ -1,6 +1,8 @@
 import os
 import queue
+import multiprocessing
 import threading
+from time import sleep
 
 from infra.strings import *
 from subprocess import Popen, PIPE, call
@@ -14,7 +16,7 @@ class Launcher(Build):
         self.qemu_num = qemu_num
         self.debug = manager.debug
         self.kill_qemu = False
-        self.queue = queue.Queue()
+        self.queue = multiprocessing.Manager().Queue()
         
     def save_crash_log(self, log, name):
         with open("{}/crash_log-{}".format(self.path_case, name), "w+") as f:
@@ -30,15 +32,16 @@ class Launcher(Build):
         ever_success = False
         
         for i in range(0, self.qemu_num):
-            vm_tag += str(i)
-            args = {'th_index':i, 'func':func, 'root':root, 'work_dir':work_dir, 'vm_tag':vm_tag, **kwargs}
-            x = threading.Thread(target=self._reproduce, kwargs=args, name="trigger-{}".format(i))
+            args = {'th_index':i, 'func':func, 'root':root, 'work_dir':work_dir, 'vm_tag':vm_tag + str(i), **kwargs}
+            x = multiprocessing.Process(target=self._reproduce, kwargs=args, name="trigger-{}".format(i))
             x.start()
             x.join()
             
             [crashes, high_risk, qemu_fail] = self.queue.get(block=True)
             if not ever_success:
                 ever_success = qemu_fail
+            if qemu_fail and self.qemu_num < 5:
+                self.qemu_num += 1
             if not trigger and high_risk:
                 trigger = high_risk
                 res = crashes
@@ -53,12 +56,22 @@ class Launcher(Build):
         return res, trigger
     
     def _reproduce(self, th_index, func, root, work_dir, vm_tag, **kwargs):
+        self.prepare()
         qemu = self.launch_qemu(tag=vm_tag, log_suffix=str(th_index), work_path=work_dir, **kwargs)
         
         poc_path = os.path.join(work_dir, "poc")
         if not os.path.exists(poc_path):
             self.case_logger.error("POC path not found: {}".format(poc_path))
-        self.run_qemu(qemu, func, th_index, poc_path, self.queue, root)
+        self.run_qemu(qemu, func, th_index, poc_path, root)
+        res = qemu.alternative_func_output.get(block=True)
+        if len(res) == 1 and qemu.qemu_fail:
+            self.case_logger.error("Error occur when reproducing {}".format(vm_tag))
+            self.queue.put([[], False, True])
+        else:
+            self.queue.put(res)
+        
+        # sleep 5 seconds to wait qemu to exit
+        sleep(5)
         return
     
     def launch_qemu(self, tag, c_hash=0, work_path='/tmp/', log_suffix="", log_name=None, cpu="8", mem="8G"):

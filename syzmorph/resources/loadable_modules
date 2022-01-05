@@ -614,3 +614,21 @@ snd_hrtimer
 snd_seq_dummy
 snd_hda_codec_hdmi
 snd_oxfw
+
+# "tty-ldisc-%d"
+n_hdlc
+n_gsm
+mkiss
+6pack
+slcan
+ppp_async
+ppp_synctty
+slip
+serport
+pps_ldisc
+hci_uart
+n_tracerouter
+n_tracesink
+caif_serial
+ser_gigaset
+nci_uart

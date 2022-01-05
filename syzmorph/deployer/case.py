@@ -23,7 +23,7 @@ class Case:
         self.case = case
         self.lts = None
         self.has_c_repro = True
-        self.path_linux = os.path.join(self.path_case, "linux")
+        self.path_linux = ""
         self._init_case(case_hash)
         #if self.lts != None:
         #    self.path_linux = os.path.join(self.path_case, "linux/linux-{}".format(self.lts["version"]))
@@ -55,6 +55,8 @@ class Case:
                 self.path_case = dst
         else:
             os.makedirs(self.path_case, exist_ok=True)
+        
+        self.path_linux = os.path.join(self.path_case, "linux")
         
         self.case_logger = init_logger(self.path_case+"/log", 
             cus_format='%(asctime)s %(message)s',

@@ -80,6 +80,7 @@ class VMInstance(Network):
         return p, self.alternative_func_output
 
     def kill_vm(self):
+        self.logger.info('Kill VM pid: {}'.format(self.instance.pid))
         self.instance.kill()
     
     def write_cmd_to_script(self, cmd, name, build_append=False):
@@ -109,12 +110,13 @@ class VMInstance(Network):
         return ret
 
     def monitor_execution(self):
+        qemu_failed = False
         count = 0
         run_alternative_func = False
         while (count <self.timeout/10):
             if self.kill_qemu:
                 self.case_logger.info('Signal kill qemu received.')
-                self.instance.kill()
+                self.kill_vm()
                 return
             count += 1
             time.sleep(10)
@@ -123,10 +125,12 @@ class VMInstance(Network):
                 if not self.qemu_ready:
                     self.kill_proc_by_port(self.port)
                     self.case_logger.error('QEMU: Error occur at booting qemu')
-                    self.alternative_func_output.put([False])
+                    self.qemu_fail = True
+                    self.alternative_func_output.put([self.qemu_fail])
                 return
             if not self.qemu_ready and self._is_qemu_ready():
                 self.qemu_ready = True
+                count = 0
                 time.sleep(10)
                 if self.alternative_func != None and not run_alternative_func:
                     x = threading.Thread(target=self._prepare_alternative_func, name="{} qemu call back".format(self.tag))
@@ -135,7 +139,8 @@ class VMInstance(Network):
         self.case_logger.info('Time out, kill qemu')
         if not self.qemu_ready:
             self.qemu_fail = True
-        self.instance.kill()
+            self.alternative_func_output.put([self.qemu_fail])
+        self.kill_vm()
     
     def kill_proc_by_port(self, ssh_port):
         p = Popen("lsof -i :{} | awk '{{print $2}}'".format(ssh_port), shell=True, stdout=PIPE, stderr=PIPE)

@@ -27,6 +27,7 @@ class AnalysisModule:
         self.main_logger = manager.logger
         self.cfg = manager.cfg
         self.path_case = manager.path_case
+        self.path_project = manager.path_project
         self.path_package = manager.path_package
         self.lts = manager.lts
         self.index = manager.index
@@ -130,6 +131,17 @@ class AnalysisModule:
     def _check_stamp(self, stamp):
         dst = "{}/.stamp/{}".format(self.path_case, stamp)
         return os.path.exists(dst)
+
+    def _remove_stamp(self, stamp):
+        dst = "{}/.stamp/{}".format(self.path_case, stamp)
+        if os.path.exists(dst):
+            os.remove(dst)
+    
+    def _init_module(self, module):
+        if not isinstance(module, AnalysisModule):
+            raise AnalysisModuleError("_init_module() requires class AnalysisModule")
+        module.setup(self.manager)
+        return module
     
     def _write_to(self, content, file):
         with open("{}".format(file), "w") as f:

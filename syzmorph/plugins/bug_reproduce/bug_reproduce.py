@@ -16,7 +16,7 @@ class BugReproduce(AnalysisModule):
 
     def __init__(self):
         super().__init__()
-        self.report = ''
+        self.report = []
         self.path_case_plugin = None
         self.bug_title = ''
         self.distro_lock = threading.Lock()
@@ -44,11 +44,13 @@ class BugReproduce(AnalysisModule):
                     else:
                         str_privilege = " by root user"
                     self.main_logger.info("{} triggers a Kasan bug: {} {}".format(key ,title, str_privilege))
+                    self.report.append("{} triggers a Kasan bug: {} {}".format(key ,title, str_privilege))
                     self._move_to_success = True
                 else:
                     fail_name += key + " "
             if fail_name != "":
-                self.main_logger.info("Fail to trigger the bug")
+                self.main_logger.info("{} fail to trigger the bug".format(fail_name))
+                self.report.append("{} fail to trigger the bug".format(fail_name))
             return ret
         return inner
 
@@ -152,9 +154,11 @@ class BugReproduce(AnalysisModule):
         return self._move_to_success
     
     def generate_report(self):
-        pass
+        final_report = "\n".join(self.report)
+        self.logger.info(final_report)
+        self._write_to(final_report, self.REPORT_NAME)
     
-    def capture_kasan(self, qemu, th_index, poc_path, queue, root):
+    def capture_kasan(self, qemu, th_index, poc_path, root):
         qemu_close = False
         out_begin = 0
         record_flag = 0
@@ -208,7 +212,7 @@ class BugReproduce(AnalysisModule):
                 self.logger.error("Exception occur when reporducing crash: {}".format(e))
                 if qemu.instance.poll() == None:
                     qemu.instance.kill()
-        queue.put([res, trgger_hunted_bug, qemu.qemu_fail], block=False)
+        qemu.alternative_func_output.put([res, trgger_hunted_bug, qemu.qemu_fail], block=False)
     
     def _compile_poc(self, root: bool):
         if root:
@@ -257,19 +261,19 @@ class BugReproduce(AnalysisModule):
                     if regx_match(double_free_regx, line) and not flag_double_free:
                             ret = True
                             self.logger.info("Double free")
-                            self._write_to(self.case_hash, "LTSDoubleFree")
+                            self._write_to(self.path_project, "VendorDoubleFree")
                             flag_double_free = True
                             break
                     if regx_match(kasan_write_addr_regx, line) and not flag_kasan_write:
                             ret = True
                             self.logger.info("KASAN MemWrite")
-                            self._write_to(self.case_hash, "LTSMemWrite")
+                            self._write_to(self.path_project, "VendorMemWrite")
                             flag_kasan_write = True
                             break
                     if regx_match(kasan_read_addr_regx, line) and not flag_kasan_read:
                             ret = True
                             self.logger.info("KASAN MemRead")
-                            self._write_to(self.case_hash, "LTSMemRead")
+                            self._write_to(self.path_project, "VendorMemRead")
                             flag_kasan_read = True
                             break
         return ret, title

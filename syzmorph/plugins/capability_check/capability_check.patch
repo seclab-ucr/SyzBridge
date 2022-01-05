@@ -73,7 +73,7 @@ index 000000000000..908cc4008b08
 +    return print_stack_debug != 0;
 +}
 diff --git a/kernel/capability.c b/kernel/capability.c
-index 46a361dde042..b6ca28e89631 100644
+index de7eac903a2a..36013fa7ef85 100644
 --- a/kernel/capability.c
 +++ b/kernel/capability.c
 @@ -20,6 +20,7 @@
@@ -84,7 +84,7 @@ index 46a361dde042..b6ca28e89631 100644
  /*
   * Leveraged for setting/resetting capabilities
   */
-@@ -373,6 +374,35 @@ static bool ns_capable_common(struct user_namespace *ns,
+@@ -373,6 +374,37 @@ static bool ns_capable_common(struct user_namespace *ns,
  	}
  
  	capable = security_capable(current_cred(), ns, cap, opts);
@@ -114,8 +114,10 @@ index 46a361dde042..b6ca28e89631 100644
 +			break;
 +		}
 +
-+		if (monitor_debug())
++		if (monitor_debug()) {
++			printk(KERN_EMERG "INFO: Capability found");
 +			dump_stack();
++		}
 +	}
  	if (capable == 0) {
  		current->flags |= PF_SUPERPRIV;

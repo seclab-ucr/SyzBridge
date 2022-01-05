@@ -9,6 +9,8 @@ from plugins.trace_analysis import TraceAnalysis
 from infra.ftraceparser.trace import Trace
 from modules.vm import VM, VMInstance
 
+class TraceAnalysisError(Exception):
+    pass
 class ModulesAnalysis(AnalysisModule):
     NAME = "ModulesAnalysis"
     REPORT_START = "======================Modules Analysis Report======================"
@@ -68,13 +70,18 @@ class ModulesAnalysis(AnalysisModule):
         self.logger.info("[Modules analysis] Checking modules in KASAN report")
         res = self.check_kasan_report()
         self.logger.info("[Modules analysis] Checking modules in ftrace")
-        self.check_ftrace()
+        try:
+            self.check_ftrace()
+        except TraceAnalysisError as e:
+            self.logger.error("[Modules analysis] {}".format(e))
                 
         self.report.append(ModulesAnalysis.REPORT_END)
         return res
     
     def check_ftrace(self):
         trace = self._open_trace()
+        if trace == None:
+            raise TraceAnalysisError("Failed to open trace file: file do not exist")
         vm = self._prepare_gdb()
         check_map = {}
         all_distros = self.cfg.get_distros()
@@ -112,15 +119,19 @@ class ModulesAnalysis(AnalysisModule):
                         check_map[distro.distro_name][src_file] = True
                         ret = self.module_check(distro, src_file)
                         if ret == 0:
+                            self.report.append(begin_node.text)
                             self.logger.info("Vendor {0} does not have {1} module enabled".format(distro.distro_name, self.vul_module))
                             self.report.append("Module {} from {} is not enabled in {}".format(self.vul_module, src_file, distro.distro_name))
                         if ret == 2:
+                            self.report.append(begin_node.text)
                             user = 'root'
                             if self.check_module_privilege(self.vul_module):
                                 user = 'normal user'
                             self.report.append("[{}] Module {} from {} need to be loaded in {} ".format(user, self.vul_module, src_file, distro.distro_name))
                         if ret == 3:
+                            self.report.append(begin_node.text)
                             self.report.append("Module {} from {} need root to be loaded".format(self.vul_module, src_file))
+                        self.report.append("------------------------------------------------------------------\n")
             begin_node = begin_node.next_node
         return True
 
@@ -186,7 +197,7 @@ class ModulesAnalysis(AnalysisModule):
                     self.report.append("Check {} ---> Pass".format(vul_src_file))
                 else:
                     self.logger.info("Vendor {0} does not have {1} module ({2}) enabled".format(self._cur_distro.distro_name, self.vul_module, vul_src_file))
-                    self.report.append("Check {} ---> Fail on".format(vul_src_file))
+                    self.report.append("Check {} ---> Fail on {}".format(vul_src_file, self._cur_distro.distro_name))
                     res[distro.distro_name] = False
         return
     
@@ -302,9 +313,16 @@ class ModulesAnalysis(AnalysisModule):
         
     def _open_trace(self):
         trace_file = os.path.join(self.path_case, TraceAnalysis.NAME, "trace-upstream.report")
-        trace = Trace(logger=self.logger, debug=self.debug)
+        if not os.path.exists(trace_file):
+            return None
+        trace = Trace(logger=self.logger, debug=self.debug, as_servicve=True)
         trace.load_tracefile(trace_file)
-        trace.serialize()
+        try:
+            trace.serialize()
+        except Exception as e:
+            self.logger.error("Failed to serialize trace file: {}".format(trace_file))
+            self.logger.error(e)
+            return None
         return trace
     
     def _find_config_in_vendor(self, dirname):
