@@ -17,6 +17,7 @@ class TestCommand(Command):
         parser.add_argument('--lts-analysis', action='store_true', help='test lts_analysis module')
         parser.add_argument('--bug-reproduce', action='store_true', help='test bug_reproduce module')
         parser.add_argument('--trace-analysis', action='store_true', help='test trace_analysis module')
+        parser.add_argument('--google-sheets', action='store_true', help='test Google sheets module')
 
     def custom_subparser(self, parser, cmd):
         return parser.add_parser(cmd, help='Modular test (Debug only)')
@@ -33,6 +34,8 @@ class TestCommand(Command):
                 self.test_target('bug_reproduce')
             if args.trace_analysis:
                 self.test_target('trace_analysis')
+            if args.google_sheets:
+                self.test_target('google_sheets')
     
     def test_target(self, name):
         try:

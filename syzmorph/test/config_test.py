@@ -7,30 +7,39 @@ logger = logging.getLogger(__name__)
 
 config_normal = """
 {
-    "distro_image":"/home/xzou017/projects/BugReproducing/tools/images/ubuntu-20.04.img",
-    "ssh_key":"/home/xzou017/projects/BugReproducing/tools/images/id_rsa",
-    "ssh_port":3778,
-    "distro_src":"/home/xzou017/projects/ubuntu-focal/ubuntu-focal",
-    "distro_name":"Ubuntu"
+    "Ubuntu":{
+        "distro_image":"/home/xzou017/projects/BugReproducing/tools/images/ubuntu-20.04.img",
+        "ssh_key":"/home/xzou017/projects/BugReproducing/tools/images/id_rsa",
+        "ssh_port":3778,
+        "distro_src":"/home/xzou017/projects/ubuntu-focal/ubuntu-focal",
+        "distro_name":"Ubuntu",
+        "distro_code_name": "focal",
+        "distro_version": "5.4.140",
+        "type": "distro"
+    }
 }
 """
 
 config_unrecognized_key = """
 {
-    "distro_image":"/home/xzou017/projects/BugReproducing/tools/images/ubuntu-20.04.img",
-    "ssh_key":"/home/xzou017/projects/BugReproducing/tools/images/id_rsa",
-    "ssh_port":3778,
-    "distro_src":"/home/xzou017/projects/ubuntu-focal/ubuntu-focal",
-    "distro_name":"Ubuntu",
-    "wrongkey":"xxx"
+    "Ubuntu":{
+        "distro_image":"/home/xzou017/projects/BugReproducing/tools/images/ubuntu-20.04.img",
+        "ssh_key":"/home/xzou017/projects/BugReproducing/tools/images/id_rsa",
+        "ssh_port":3778,
+        "distro_src":"/home/xzou017/projects/ubuntu-focal/ubuntu-focal",
+        "distro_name":"Ubuntu",
+        "wrongkey":"xxx"
+    }
 }
 """
 
 config_wrong_type = """
 {
-    "distro_image":1234,
-    "ssh_key":"/home/xzou017/projects/BugReproducing/tools/images/id_rsa",
-    "ssh_port":3778,
+    "Ubuntu":{
+        "distro_image":1234,
+        "ssh_key":"/home/xzou017/projects/BugReproducing/tools/images/id_rsa",
+        "ssh_port":3778,
+    }
 }
 """
 

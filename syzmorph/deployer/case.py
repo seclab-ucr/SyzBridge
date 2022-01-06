@@ -80,7 +80,7 @@ class Case:
         exitcode = p.wait()
         self.case_logger.info("scripts/init-case.sh was done with exitcode {}".format(exitcode))
 
-        for cfg in self.cfg.get_all():
+        for cfg in self.cfg.get_all_kernels():
             cfg.repro = Reproducer(cfg=cfg, manager=self, qemu_num=3)
         #self.lts = self._determine_lts()
     """

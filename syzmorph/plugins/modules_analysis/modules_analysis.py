@@ -131,7 +131,6 @@ class ModulesAnalysis(AnalysisModule):
                         if ret == 3:
                             self.report.append(begin_node.text)
                             self.report.append("Module {} from {} need root to be loaded".format(self.vul_module, src_file))
-                        self.report.append("------------------------------------------------------------------\n")
             begin_node = begin_node.next_node
         return True
 

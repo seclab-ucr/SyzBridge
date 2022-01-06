@@ -19,7 +19,7 @@ class SyzbotCommand(Command):
                             default="https://syzkaller.appspot.com/upstream",
                             help='Indicate an URL for automatically crawling and running.\n'
                                 '(default value is \'https://syzkaller.appspot.com/upstream\')')
-        parser.add_argument('--key', action='append',
+        parser.add_argument('--key', action='append', default=[],
                             help='The keywords for detecting cases.\n'
                                 '(By default, it retrieve all cases)\n'
                                 'This argument could be multiple values')

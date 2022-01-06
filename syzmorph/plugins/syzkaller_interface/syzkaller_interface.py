@@ -89,9 +89,9 @@ class SyzkallerInterface(AnalysisModule):
         my_env = os.environ.copy()
         my_env["PATH"] = os.path.join(self.path_package, "tools/goroot/bin") + my_env["PATH"]
         if component == None:
-            p = Popen(["make", "TARGETARCH={}".format(arch), "TARGETVMARCH=amd64"], cwd=self.syzkaller_path, env=my_env, stdin=PIPE, stdout=PIPE)
+            p = Popen(["make", "TARGETARCH={}".format(arch), "TARGETVMARCH=amd64"], cwd=self.syzkaller_path, env=my_env, stdin=PIPE, stdout=PIPE, stderr=PIPE)
         else:
-            p = Popen(["make", "TARGETARCH={}".format(arch), "TARGETVMARCH=amd64", component], cwd=self.syzkaller_path, env=my_env, stdin=PIPE, stdout=PIPE)
+            p = Popen(["make", "TARGETARCH={}".format(arch), "TARGETVMARCH=amd64", component], cwd=self.syzkaller_path, env=my_env, stdin=PIPE, stdout=PIPE, stderr=PIPE)
         with p.stdout:
             log_anything(p.stdout, self.case_logger, self.debug)
         exitcode = p.wait()

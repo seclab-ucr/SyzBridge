@@ -1,17 +1,28 @@
 import os, json
 import logging
+import importlib
 
 from infra.error import *
 from syzmorph.modules.vm.instance import VMInstance
 from .vendor import Vendor
+from infra.tool_box import *
 
 base_ssh_port = 36777
 
 logger = logging.getLogger(__name__)
 
-class Config:
+class Kernel():
     def __init__(self):
         pass
+
+class Plugin():
+    def __init__(self):
+        pass
+
+class Config:
+    def __init__(self):
+        self.kernel = Kernel()
+        self.plugin = Plugin()
 
     def load_from_file(self, config):
         work_path = os.getcwd()
@@ -29,31 +40,71 @@ class Config:
     
     def load(self, cfg):
         i = 0
-        for vendor in cfg:
-            vend_cfg = cfg[vendor]
+        kernel_cfg = cfg['kernel']
+        for vendor in kernel_cfg:
+            vend_cfg = kernel_cfg[vendor]
             _cfg = Vendor(vend_cfg, i)
-            setattr(self, vendor, _cfg)
+            setattr(self.kernel, vendor, _cfg)
             i += 1
+
+        proj_dir = os.path.join(os.getcwd(), "syzmorph")
+        modules_dir = os.path.join(proj_dir, "plugins")
+        module_folder = [ cmd for cmd in os.listdir(modules_dir)
+                    if not cmd.endswith('.py') and not cmd == "__pycache__" ]
+        for module_name in module_folder:
+            try:
+                module = importlib.import_module("plugins.{}".format(module_name))
+                class_name = convert_folder_name_to_plugin_name(module_name)
+                setattr(self.plugin, class_name, module)
+            except Exception as e:
+                print("Fail to load plugin {}: {}".format(module_name, e))
+                continue
+        plugin_cfg = cfg['plugin']
+        for plugin in plugin_cfg:
+            module = getattr(self.plugin, plugin)
+            for key in plugin_cfg[plugin]:
+                setattr(module, key, plugin_cfg[plugin][key])
         return cfg
 
-    def get_all(self):
+    def get_all_kernels(self):
         res = []
-        for name in self.__dict__:
-            cfg = getattr(self, name)
+        for name in self.kernel.__dict__:
+            cfg = getattr(self.kernel, name)
             res.append(cfg)
         return res
 
     def get_distros(self):
         res = []
-        for name in self.__dict__:
-            distro = getattr(self, name)
+        for name in self.kernel.__dict__:
+            distro = getattr(self.kernel, name)
             if distro.type == VMInstance.DISTROS:
                 res.append(distro)
         return res
     
     def get_upstream(self):
-        for name in self.__dict__:
-            distro = getattr(self, name)
+        for name in self.kernel.__dict__:
+            distro = getattr(self.kernel, name)
             if distro.type == VMInstance.UPSTREAM:
                 return distro
         return None
+    
+    def get_plugin(self, name):
+        try:
+            plugin = getattr(self.plugin, name)
+        except:
+            return None
+        return plugin
+    
+    def is_plugin_enabled(self, name):
+        try:
+            plugin = getattr(self.plugin, name)
+        except:
+            False
+        return plugin.ENABLE
+    
+    def is_plugin_service(self, name):
+        try:
+            plugin = getattr(self.plugin, name)
+        except:
+            False
+        return plugin.AS_SERVICE

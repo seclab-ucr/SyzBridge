@@ -26,16 +26,18 @@ index 4e6cc0a7d69c..f7697475f364 100644
  
 diff --git a/include/linux/monitor_helper.h b/include/linux/monitor_helper.h
 new file mode 100644
-index 000000000000..908cc4008b08
+index 000000000000..c6004546c1ae
 --- /dev/null
 +++ b/include/linux/monitor_helper.h
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,54 @@
 +#pragma once
 +#include <linux/errno.h>
 +#include <linux/uaccess.h>
 +#include <linux/types.h>
 +#include <linux/sched.h>
 +#include <linux/list.h>
++
++static DEFINE_MUTEX(cap_mutex);
 +
 +extern int print_stack_debug;
 +
@@ -45,6 +47,16 @@ index 000000000000..908cc4008b08
 +};
 +
 +extern struct list_head pid_list;
++
++static void cap_lock(void)
++{
++	mutex_lock(&cap_mutex);
++}
++
++static void cap_unlock(void)
++{
++	mutex_unlock(&cap_mutex);
++}
 +
 +static void append_capable_pid(unsigned long arg) {
 +    struct monitor_pid_struct *mon_pid;
@@ -73,7 +85,7 @@ index 000000000000..908cc4008b08
 +    return print_stack_debug != 0;
 +}
 diff --git a/kernel/capability.c b/kernel/capability.c
-index de7eac903a2a..36013fa7ef85 100644
+index 1444f3954d75..b2f29c365275 100644
 --- a/kernel/capability.c
 +++ b/kernel/capability.c
 @@ -20,6 +20,7 @@
@@ -84,11 +96,12 @@ index de7eac903a2a..36013fa7ef85 100644
  /*
   * Leveraged for setting/resetting capabilities
   */
-@@ -373,6 +374,37 @@ static bool ns_capable_common(struct user_namespace *ns,
+@@ -373,6 +374,39 @@ static bool ns_capable_common(struct user_namespace *ns,
  	}
  
  	capable = security_capable(current_cred(), ns, cap, opts);
 +	int pid = current->pid;
++	cap_lock();
 +	if (under_monitor(pid)) 
 +	{
 +		switch (cap)
@@ -119,6 +132,7 @@ index de7eac903a2a..36013fa7ef85 100644
 +			dump_stack();
 +		}
 +	}
++	cap_unlock();
  	if (capable == 0) {
  		current->flags |= PF_SUPERPRIV;
  		return true;

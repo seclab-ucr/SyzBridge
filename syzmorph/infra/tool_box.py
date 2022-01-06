@@ -205,7 +205,7 @@ def extrace_call_trace(report, start_with='Call Trace'):
             """
             if is_kasan_func(extract_debug_info(line)):
                 res = []
-        if record_flag == 1 and regx_match_list(call_trace_end, line):
+        if record_flag == 1 and regx_match_list(call_trace_end, line) and '?' not in line:
             record_flag ^= 1
             break
     return res
@@ -462,6 +462,13 @@ def set_timer(timeout, p):
     if p.poll() is None:
         p.kill()
     return
+
+def convert_folder_name_to_plugin_name(file):
+    res = ''
+    texts = file.split('_')
+    for each in texts:
+        res += each[0].upper() + each[1:]
+    return res
 
 if __name__ == '__main__':
     pass

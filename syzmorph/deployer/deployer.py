@@ -1,6 +1,6 @@
 import importlib, os
 
-from infra.tool_box import STREAM_HANDLER, init_logger, request_get
+from infra.tool_box import STREAM_HANDLER, init_logger, convert_folder_name_to_plugin_name
 from infra.strings import *
 from plugins import AnalysisModule, AnalysisModuleError
 from plugins.modules_analysis import ModulesAnalysis
@@ -48,16 +48,18 @@ class Deployer(Case, Task):
     def deploy(self):
         error = False
         for task in self.iterate_enabled_tasks():
-            if self._capable(task):
+            if self.capable(task) and not self.is_service(task):
                 if self.do_task(task) == 1:
                     error = True
 
         if self._success:
             self.save_to_succeed()
             self.logger.info("Copy to succeed")
+            return True
         else:
             folder = self.save_to_others(error)
             self.logger.info("Copy to {}".format(folder))
+            return False
     
     def build_analyzor_modules(self):
         res = []
@@ -66,9 +68,11 @@ class Deployer(Case, Task):
         module_folder = [ cmd for cmd in os.listdir(modules_dir)
                     if not cmd.endswith('.py') and not cmd == "__pycache__" ]
         for each in module_folder:
+            if not self.cfg.is_plugin_enabled(convert_folder_name_to_plugin_name(each)):
+                continue
             cap_text = "TASK_" + each.upper()
             task_id = getattr(Task, cap_text)
-            if self._capable(task_id):
+            if self.capable(task_id):
                 A = self._get_plugin_by_name(each)
                 self._build_dependency_module(task_id, A)
                 self.build_task_class(task_id, A)
@@ -80,8 +84,8 @@ class Deployer(Case, Task):
         else:
             return
         for dependency in module.DEPENDENCY_PLUGINS:
-            depend_cap_text = self._get_dependency_name(dependency)
-            plugin_name = depend_cap_text[depend_cap_text.find("_")+1:].lower()
+            depend_cap_text = self.module_name_to_task(dependency)
+            plugin_name = self.task_to_module_name(depend_cap_text)
             A = self._get_plugin_by_name(plugin_name)
             dst_node.add(getattr(Task, depend_cap_text))
             self._build_dependency_module(getattr(Task, depend_cap_text), A)
@@ -89,29 +93,11 @@ class Deployer(Case, Task):
         self.ts[task_id] = dst_node
 
     def _get_plugin_by_name(self, name):
-        module = importlib.import_module("plugins.{}".format(name))
-        class_name = self._get_analyzor_class_name(name)
+        class_name = convert_folder_name_to_plugin_name(name)
+        module = getattr(self.cfg.plugin, class_name)
         new_class = getattr(module, class_name)
         A = new_class()
         return A
-    
-    def _get_dependency_name(self, dependency):
-        cap_text = "TASK"
-        start = 0
-        for i in range(len(dependency)):
-            c = dependency[i]
-            if c.isupper():
-                cap_text += dependency[start:i].upper() + "_"
-                start = i
-        cap_text += dependency[start:].upper()
-        return cap_text
-    
-    def _get_analyzor_class_name(self, file):
-        res = ''
-        texts = file.split('_')
-        for each in texts:
-            res += each[0].upper() + each[1:]
-        return res
     
     def _write_to(self, hash_val, name):
         with open("{}/{}".format(self.path_project, name), "a+") as f:

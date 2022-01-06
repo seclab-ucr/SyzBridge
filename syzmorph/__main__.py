@@ -1,9 +1,9 @@
 import argparse
-import os
+import os, sys
 import importlib
 
 commands_list = {}
-
+sys.path.append(os.getcwd())
 def create_parser():
     parser = argparse.ArgumentParser()
     subparser = parser.add_subparsers(dest='cmd', help='sub-command help')

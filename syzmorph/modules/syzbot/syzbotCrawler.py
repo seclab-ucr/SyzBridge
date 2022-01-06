@@ -14,7 +14,7 @@ num_of_elements = 8
 class Crawler:
     def __init__(self,
                  url="https://syzkaller.appspot.com/upstream/fixed",
-                 keyword=[''], max_retrieve=10, filter_by_reported=-1, log_path = "",
+                 keyword=[], max_retrieve=99999, filter_by_reported=-1, log_path = ".",
                  filter_by_closed=-1, filter_by_c_prog=-1, include_high_risk=True, debug=False):
         self.url = url
         if type(keyword) == list:
@@ -47,6 +47,7 @@ class Crawler:
         if self.retreive_case(hash) == -1:
             return
         self.cases[hash]['title'] = self.get_title_of_case(hash)
+        return self.cases[hash]
     
     def get_title_of_case(self, hash=None, text=None):
         if hash==None and text==None:
@@ -80,6 +81,7 @@ class Crawler:
         self.cases[hash]["vul_offset"] = detail[9]
         self.cases[hash]["obj_size"] = detail[10]
         self.cases[hash]["kernel"] = detail[11]
+        self.cases[hash]["hash"] = hash
 
     def gather_cases(self):
         high_risk_impacts = {}
@@ -96,6 +98,11 @@ class Crawler:
                     title = case.find('td', {"class": "title"})
                     if title == None:
                         continue
+                    if self.keyword == []:
+                        crash = self.retrieve_crash(case, title)
+                        self.logger.debug("[{}] Fetch {}".format(count, crash['Hash']))
+                        res.append(crash)
+                        count += 1
                     for keyword in self.keyword:
                         keyword = keyword.lower()
                         low_case_title = title.text.lower()
@@ -107,38 +114,43 @@ class Crawler:
                             except:
                                 continue
                             high_risk_impacts[patch_url] = True
-                        if keyword in low_case_title or keyword=='':
-                            crash = {}
-                            commit_list = case.find('td', {"class": "commit_list"})
-                            crash['Title'] = title.text
-                            stats = case.find_all('td', {"class": "stat"})
-                            crash['Repro'] = stats[0].text
-                            crash['Bisected'] = stats[1].text
-                            crash['Count'] = stats[2].text
-                            crash['Last'] = stats[3].text
-                            try:
-                                crash['Reported'] = stats[4].text
-                                if self.filter_by_reported > -1 and int(crash['Reported'][:-1]) > self.filter_by_reported:
-                                    continue
-                                patch_url = commit_list.contents[1].contents[1].attrs['href']
-                                crash['Patch'] = patch_url
-                                crash['Closed'] = stats[4].text
-                                if self.filter_by_closed > -1 and int(crash['Closed'][:-1]) > self.filter_by_closed:
-                                    continue
-                            except:
-                                # patch only works on fixed cases
-                                pass
-                            self.logger.debug("[{}] Find a suitable case: {}".format(count, title.text))
-                            href = title.next.attrs['href']
-                            hash = href[8:]
-                            self.logger.debug("[{}] Fetch {}".format(count, hash))
-                            crash['Hash'] = hash
+                        if keyword in low_case_title:
+                            crash = self.retrieve_crash(case, title)
+                            if crash == None:
+                                continue
+                            self.logger.debug("[{}] Fetch {}".format(count, crash['Hash']))
                             res.append(crash)
                             count += 1
                             break
                     if count == self.max_retrieve:
                         break
         return res, high_risk_impacts
+    
+    def retrieve_crash(self, case, title):
+        crash = {}
+        commit_list = case.find('td', {"class": "commit_list"})
+        crash['Title'] = title.text
+        stats = case.find_all('td', {"class": "stat"})
+        crash['Repro'] = stats[0].text
+        crash['Bisected'] = stats[1].text
+        crash['Count'] = stats[2].text
+        crash['Last'] = stats[3].text
+        try:
+            crash['Reported'] = stats[4].text
+            if self.filter_by_reported > -1 and int(crash['Reported'][:-1]) > self.filter_by_reported:
+                return None
+            patch_url = commit_list.contents[1].contents[1].attrs['href']
+            crash['Patch'] = patch_url
+            crash['Closed'] = stats[4].text
+            if self.filter_by_closed > -1 and int(crash['Closed'][:-1]) > self.filter_by_closed:
+                return None
+        except:
+            # patch only works on fixed cases
+            pass
+        href = title.next.attrs['href']
+        hash = href[8:]
+        crash['Hash'] = hash
+        return crash
 
     def request_detail(self, hash, index=1):
         self.logger.debug("\nDetail: {}{}{}".format(syzbot_host_url, syzbot_bug_base_url, hash))

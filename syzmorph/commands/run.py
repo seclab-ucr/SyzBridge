@@ -1,12 +1,11 @@
 import multiprocessing, threading
-import os, stat, sys
+import os, importlib
 import json, gc, logging
 
 from commands import Command
 from infra.error import *
 from deployer.deployer import Deployer
 
-sys.path.append(os.getcwd())
 from queue import Empty
 from subprocess import call
 
@@ -33,8 +32,9 @@ class RunCommand(Command):
                             help='case hash (If only run one case of the project')
         parser.add_argument('--config', nargs='?', action='store',
                             help='config file. Will be overwritten by arguments if conflict.')
-        # Task                    
-        parser.add_argument('--modules-analysis', action='store_true',
+        # Task
+        self.add_arguments_for_plugins(parser)
+        """parser.add_argument('--modules-analysis', action='store_true',
                             help='Run Modules analysis on target project')
         parser.add_argument('--lts-analysis', action='store_true',
                             help='Run LTS analysis on target project')
@@ -44,6 +44,8 @@ class RunCommand(Command):
                             help='Run trace analysis on target project')
         parser.add_argument('--capability-check', action='store_true',
                             help='Run capability check on target project')
+        parser.add_argument('--google-sheets', action='store_true',
+                            help='Record results to Google Sheets')"""
 
         # Regular arguments
         parser.add_argument('--image', nargs=1, action='store',
@@ -59,6 +61,25 @@ class RunCommand(Command):
         parser.add_argument('--ssh-key', nargs=1, action='store',
                             help='The private key for ssh connection')
     
+    def add_arguments_for_plugins(self, parser):
+        proj_dir = os.path.join(os.getcwd(), "syzmorph")
+        modules_dir = os.path.join(proj_dir, "plugins")
+        module_folder = [ cmd for cmd in os.listdir(modules_dir)
+                    if not cmd.endswith('.py') and not cmd == "__pycache__" ]
+        for module_name in module_folder:
+            try:
+                module = importlib.import_module("plugins.{}".format(module_name))
+                enable = module.ENABLE
+                if not enable:
+                    continue
+                help_msg = module.DESCRIPTION
+                t = module_name.split('_')
+                cmd_msg = '--' + '-'.join(t)
+                parser.add_argument(cmd_msg, action='store_true', help=help_msg)
+            except Exception as e:
+                print("Fail to load plugin {}: {}".format(module_name, e))
+                continue
+
     def custom_subparser(self, parser, cmd):
         return parser.add_parser(cmd, help='Run bug reproduce process or bug analysis')
 
@@ -116,8 +137,8 @@ class RunCommand(Command):
     def print_args_info(self):
         print("[*] proj: {}".format(self.args.proj))
         if self.cfg != None:
-            for vendor in self.cfg.__dict__:
-                t = getattr(self.cfg, vendor)
+            for vendor in self.cfg.kernel.__dict__:
+                t = getattr(self.cfg.kernel, vendor)
                 print("=========={}==========".format(t.distro_name))
                 print("[*] vendor image: {}".format(t.distro_image))
                 print("[*] vmlinux: {}".format(t.vmlinux))
