@@ -31,17 +31,17 @@ class Launcher(Build):
         trigger = False
         ever_success = False
         
-        for i in range(0, self.qemu_num):
+        i = 0
+        while i < self.qemu_num:
             args = {'th_index':i, 'func':func, 'root':root, 'work_dir':work_dir, 'vm_tag':vm_tag + str(i), **kwargs}
             x = multiprocessing.Process(target=self._reproduce, kwargs=args, name="trigger-{}".format(i))
             x.start()
             x.join()
             
             [crashes, high_risk, qemu_fail] = self.queue.get(block=True)
-            if not ever_success:
-                ever_success = qemu_fail
-            if qemu_fail and self.qemu_num < 5:
-                self.qemu_num += 1
+            if qemu_fail:
+                continue
+            i += 1
             if not trigger and high_risk:
                 trigger = high_risk
                 res = crashes

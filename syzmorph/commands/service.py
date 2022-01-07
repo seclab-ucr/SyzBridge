@@ -24,6 +24,7 @@ class ServiceCommand(Command):
         self.lock = threading.Lock()
         self.manager = multiprocessing.Manager()
         self.queue = self.manager.Queue()
+        self.skiped = False
 
     def add_arguments(self, parser):
         super().add_arguments(parser)
@@ -59,6 +60,8 @@ class ServiceCommand(Command):
                             help='The private key for ssh connection')
         parser.add_argument('--filter-by-c-prog', action='store_true',
                             help='filter bugs do not have a c reproducer\n')
+        parser.add_argument('--skip-today', action='store_true',
+                            help='Skip crawling cases today\n')
     
     def add_arguments_for_plugins(self, parser):
         proj_dir = os.path.join(os.getcwd(), "syzmorph")
@@ -137,16 +140,19 @@ class ServiceCommand(Command):
         print("Created a new project {}".format(name))
     
     def get_daily_cases(self):
-        crawler = Crawler(url=self.args.url, keyword=self.args.key,  
-            filter_by_c_prog=int(self.args.filter_by_c_prog), debug=self.args.debug, log_path = self.proj_dir)
-
         self.cases = self.read_cases(self.args.proj)
-        crawler.run()
         bk_cases = self.cases.copy()
-        for hash_val in crawler.cases:
-            if hash_val in self.cases and self.finished_case(hash_val):
-                del crawler.cases[hash_val]
-        self.cases = crawler.cases
+        if not self.args.skip_today or self.skiped:
+            crawler = Crawler(url=self.args.url, keyword=self.args.key,  
+                filter_by_c_prog=int(self.args.filter_by_c_prog), debug=self.args.debug, log_path = self.proj_dir)
+
+            crawler.run()
+            for hash_val in crawler.cases:
+                if hash_val in self.cases and self.finished_case(hash_val):
+                    del crawler.cases[hash_val]
+            self.cases = crawler.cases
+        if self.args.skip_today:
+            self.skiped = True
         print("[+] {} new cases in syzbot today.".format(len(self.cases)))
         bk_cases.update(self.cases)
         self.save_cases(bk_cases, self.proj_dir)
