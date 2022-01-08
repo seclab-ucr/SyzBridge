@@ -10,7 +10,7 @@ class GoogleSheets(AnalysisModule):
     REPORT_START = "======================GoogleSheets Report======================"
     REPORT_END =   "==================================================================="
     REPORT_NAME = "Report_GoogleSheets"
-    DEPENDENCY_PLUGINS = ["BugReproduce", "CapabilityCheck", "ModulesAnalysis"]
+    DEPENDENCY_PLUGINS = ["BugReproduce", "CapabilityCheck", "ModulesAnalysis", "Syzscope"]
 
     def __init__(self):
         super().__init__()
@@ -57,6 +57,7 @@ class GoogleSheets(AnalysisModule):
         self._write_reproducable(wks)
         self._write_module_analysis(wks)
         self._write_capability_check(wks)
+        self._write_syzscope(wks)
         if self.manager.module_capable("SlackBot") and \
                 (self.data['reproduce-by-normal'] != "" or self.data['reproduce-by-root'] != ""):
             bot = self._init_module(SlackBot())
@@ -74,6 +75,7 @@ class GoogleSheets(AnalysisModule):
             wks.update_value('F1', 'failed')
             wks.update_value('G1', 'module_analysis')
             wks.update_value('H1', 'capability_check')
+            wks.update_value('I1', 'syzscope')
     
     def generate_report(self):
         final_report = "\n".join(self.report)
@@ -149,6 +151,18 @@ class GoogleSheets(AnalysisModule):
                 wks.update_value('H2', t)
                 self.data['capability-check'] = t
     
+    def _write_syzscope(self, wks: pygsheets.Worksheet):
+        self.data['syzscope'] = ""
+        path_report = os.path.join(self.path_case, "Syzscope", "Report_Syzscope")
+        if os.path.exists(path_report):
+            with open(path_report, "r") as f:
+                report = f.readlines()
+                t = ''
+                for line in report:
+                    t += line
+                wks.update_value('I2', t)
+                self.data['syzscope'] = t
+
     def _write_to(self, content, name):
         file_path = "{}/{}".format(self.path_case_plugin, name)
         super()._write_to(content, file_path)

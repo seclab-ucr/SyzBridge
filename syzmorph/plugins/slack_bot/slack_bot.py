@@ -4,73 +4,6 @@ from slack.errors import *
 from infra.tool_box import init_logger
 from plugins import AnalysisModule
 
-block_template = """[
-        {{
-            "type": "header",
-            "text": {{
-                "type": "plain_text",
-                "text": {1}
-            }}
-        }},
-        {{
-            "type": "section",
-            "text": {{
-                    "type": "mrkdwn",
-                    "text": "*Bug Title:*\n{2}"
-            }}
-        }},
-        {{
-            "type": "section",
-            "text": {{
-                    "type": "mrkdwn",
-                    "text": "*Bug Dashboard:*\n<{3}|{3}>"
-            }}
-        }},
-        {{
-            "type": "divider"
-        }},
-        {{
-            "type": "section",
-            "fields": [
-                {{
-                    "type": "mrkdwn",
-                    "text": "*Reproduced by normal user:*\n{4}"
-                }},
-                {{
-                    "type": "mrkdwn",
-                    "text": "*Reproduced by root user:*\n{5}"
-                }},
-            ],
-        }},
-        {{
-            "type": "section",
-            "text": {{
-                "type": "mrkdwn",
-                "text": "*Failed on:*\n{6}"
-            }}
-        }},
-        {{
-            "type": "divider"
-        }},
-        {{
-            "type": "section",
-            "text": {{
-                "type": "mrkdwn",
-                "text": "*Moudles Analysis:*\n{7}"
-            }}
-        }},
-        {{
-            "type": "divider"
-        }},
-        {{
-            "type": "section",
-            "text": {{
-                "type": "mrkdwn",
-                "text": "*Capability Check:*\n{8}"
-            }}
-        }}
-    ]
-"""
 
 class SlackBot(AnalysisModule):
     NAME = "SlackBot"
@@ -163,6 +96,11 @@ class SlackBot(AnalysisModule):
         capability_check_section['type'] = 'section'
         capability_check_section['text'] = {'type': 'mrkdwn', 'text': '*Capability Check:*\n{}'.format(data['capability-check'])}
         block.append(capability_check_section)
+
+        syzscope_section = {}
+        syzscope_section['type'] = 'section'
+        syzscope_section['text'] = {'type': 'mrkdwn', 'text': '*SyzScope:*\n{}'.format(data['syzscope'])}
+        block.append(syzscope_section)
         
         return block
     

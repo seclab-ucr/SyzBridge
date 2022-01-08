@@ -164,6 +164,7 @@ class VMInstance(Network):
         self.key = key
         self.timeout = timeout
         self.cmd_launch = ["qemu-system-x86_64", "-m", mem, "-smp", cpu]
+        #self.cmd_launch = ["/data2/xzou017/projects/qemu/qemu-6.1.0/build/qemu-system-x86_64", "-m", mem, "-smp", cpu]
         if gdb_port != None:
             self.cmd_launch.extend(["-gdb", "tcp::{}".format(gdb_port)])
         if mon_port != None:
@@ -171,7 +172,7 @@ class VMInstance(Network):
         if self.port != None:
             self.cmd_launch.extend(["-net", "nic,model=e1000", "-net", "user,host=10.0.2.10,hostfwd=tcp::{}-:22".format(self.port)])
         self.cmd_launch.extend(["-display", "none", "-serial", "stdio", "-no-reboot", "-enable-kvm", "-cpu", "host,migratable=off",  
-                    "-drive", "file={}".format(self.image)])
+                    "-drive", "file={},format=qcow2,cache=writeback,l2-cache-size=6553600,cache-clean-interval=900".format(self.image)])
         self.write_cmd_to_script(self.cmd_launch, "launch_{}.sh".format(self.cfg.distro_name))
     
     def _setup_upstream(self, port, image, linux, mem="2G", cpu="2", key=None, gdb_port=None, mon_port=None, opts=None, timeout=None, kasan_multi_shot=0):

@@ -5,3 +5,6 @@ class AngrRefuseToLoadKernel(Exception):
 
 class AlternativeFunctionError(Exception):
     pass
+
+class KasanReportEntryNotFound(Exception):
+    pass

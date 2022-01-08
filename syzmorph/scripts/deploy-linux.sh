@@ -66,7 +66,7 @@ function build_linux_folder {
 }
 
 if [ $# -lt 11 ]; then
-  echo "Usage ./deploy_linux gcc_version case_path max_compiling_kernel linux_commit config_url image linux_repo linux_version index kernel patch"
+  echo "Usage ./deploy-linux.sh gcc_version case_path max_compiling_kernel linux_commit config_url image linux_repo linux_version index kernel patch"
   exit 1
 fi
 

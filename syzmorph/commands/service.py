@@ -62,6 +62,8 @@ class ServiceCommand(Command):
                             help='filter bugs do not have a c reproducer\n')
         parser.add_argument('--skip-today', action='store_true',
                             help='Skip crawling cases today\n')
+        parser.add_argument('--linux', nargs=1, action='store',
+                            help='Linux repo index specified')
     
     def add_arguments_for_plugins(self, parser):
         proj_dir = os.path.join(os.getcwd(), "syzmorph")
@@ -227,7 +229,11 @@ class ServiceCommand(Command):
             self.total = len(l)
             self.rest = self.manager.Value('i', self.total)
             for i in range(0,min(parallel_max,self.total)):
-                x = threading.Thread(target=self.prepare_cases, args=(i,), name="lord-{}".format(i))
+                if self.args.linux != None:
+                    index = int(self.args.linux)
+                else:
+                    index = i
+                x = threading.Thread(target=self.prepare_cases, args=(index,), name="lord-{}".format(i))
                 x.start()
             print("[+] Finished today's cases, put into sleep")
             next_start_time = start_time + timedelta(days=1)

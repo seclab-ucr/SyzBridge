@@ -10,11 +10,14 @@ class Build():
         self.image_path = None
         self.vmlinux = None
         self.ssh_key = None
-        self.ssh_port = None
         self.type_name = ""
         self.path_case = manager.path_case
         self.path_syzmorph = manager.path_syzmorph
         self.path_linux = manager.path_linux
+        self.index = manager.index
+        self._ssh_port = None
+        self._mon_port = None
+        self._gdb_port = None
         self.prepare()
         self.setup()
     
@@ -55,3 +58,27 @@ class Build():
         if os.path.islink(dst):
             os.remove(dst)
         os.symlink(src, dst)
+    
+    @property
+    def ssh_port(self):
+        return self._ssh_port
+    
+    @ssh_port.setter
+    def ssh_port(self, port):
+        self._ssh_port = port + self.index
+    
+    @property
+    def mon_port(self):
+        return self._mon_port
+    
+    @mon_port.setter
+    def mon_port(self, port):
+        self._mon_port = port + self.index
+    
+    @property
+    def gdb_port(self):
+        return self._gdb_port
+    
+    @gdb_port.setter
+    def gdb_port(self, port):
+        self._gdb_port = port + self.index

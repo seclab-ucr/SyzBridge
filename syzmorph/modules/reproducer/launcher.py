@@ -74,13 +74,16 @@ class Launcher(Build):
         sleep(5)
         return
     
-    def launch_qemu(self, tag, c_hash=0, work_path='/tmp/', log_suffix="", log_name=None, cpu="8", mem="8G"):
+    def launch_qemu(self, c_hash=0, log_suffix="", log_name=None, timeout=10*60, gdb_port=None, mon_port=None, **kwargs):
         if log_name is None:
             log_name = "qemu-{0}-{1}.log".format(c_hash, self.type_name)
-        qemu = VM(linux=self.path_linux, tag=tag, cfg=self.cfg, hash_tag=c_hash, vmlinux=self.vmlinux, port=self.ssh_port, 
-            image=self.image_path, work_path=work_path, cpu=cpu, mem=mem,
-            log_name=log_name, log_suffix=log_suffix,
-            key=self.ssh_key, timeout=10*60, debug=self.debug)
+        if gdb_port != None:
+            self.gdb_port = gdb_port
+        if mon_port != None:
+            self.mon_port = mon_port
+        qemu = VM(linux=self.path_linux, cfg=self.cfg, hash_tag=c_hash, vmlinux=self.vmlinux, port=self.ssh_port, 
+            image=self.image_path, log_name=log_name, log_suffix=log_suffix, mon_port=self.mon_port, gdb_port=self.gdb_port,
+            key=self.ssh_key, timeout=timeout, debug=self.debug, **kwargs)
         qemu.logger.info("QEMU-{} launched.\n".format(log_suffix))
         return qemu
     

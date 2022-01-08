@@ -106,9 +106,9 @@ def extract_vul_obj_offset_and_size(report):
     bug_mem_addr = extract_bug_mem_addr(report)
     if bug_mem_addr == None:
         #print("Failed to locate the memory address that trigger UAF/OOB")
-        return offset, size
+        return offset, size, rel_type
     if bug_type == KASAN_NONE:
-        return offset, size
+        return offset, size, rel_type
     if bug_type == KASAN_UAF or bug_type == KASAN_OOB:
         for line in bug_desc:
             if offset == None:
@@ -129,7 +129,7 @@ def extract_vul_obj_offset_and_size(report):
                 break
         if offset == None:
             if len(bug_desc) == 0:
-                return offset, size
+                return offset, size, rel_type
             line = bug_desc[0]
             addr_begin = regx_get(r'The buggy address belongs to the object at \w+', line, 0)
             if addr_begin != None:
@@ -137,7 +137,7 @@ def extract_vul_obj_offset_and_size(report):
                 offset = bug_mem_addr - addr_begin
         if size == None:
             size = offset
-    return offset, size
+    return offset, size, rel_type
 
 def extract_alloc_trace(report):
         res = []
@@ -469,6 +469,9 @@ def convert_folder_name_to_plugin_name(file):
     for each in texts:
         res += each[0].upper() + each[1:]
     return res
+
+def kasan_mem_to_shadow(addr):
+    return (addr >> 3) + 0xdffffc0000000000
 
 if __name__ == '__main__':
     pass

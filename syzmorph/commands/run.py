@@ -34,18 +34,6 @@ class RunCommand(Command):
                             help='config file. Will be overwritten by arguments if conflict.')
         # Task
         self.add_arguments_for_plugins(parser)
-        """parser.add_argument('--modules-analysis', action='store_true',
-                            help='Run Modules analysis on target project')
-        parser.add_argument('--lts-analysis', action='store_true',
-                            help='Run LTS analysis on target project')
-        parser.add_argument('--bug-reproduce', action='store_true',
-                            help='Run bug reproduce on target project')
-        parser.add_argument('--trace-analysis', action='store_true',
-                            help='Run trace analysis on target project')
-        parser.add_argument('--capability-check', action='store_true',
-                            help='Run capability check on target project')
-        parser.add_argument('--google-sheets', action='store_true',
-                            help='Record results to Google Sheets')"""
 
         # Regular arguments
         parser.add_argument('--image', nargs=1, action='store',
@@ -60,6 +48,8 @@ class RunCommand(Command):
                             '(default port is 36777)')
         parser.add_argument('--ssh-key', nargs=1, action='store',
                             help='The private key for ssh connection')
+        parser.add_argument('--linux', nargs='?', action='store',
+                            help='Linux repo index specified')
     
     def add_arguments_for_plugins(self, parser):
         proj_dir = os.path.join(os.getcwd(), "syzmorph")
@@ -189,5 +179,9 @@ class RunCommand(Command):
         self.total = len(l)
         self.rest = self.manager.Value('i', self.total)
         for i in range(0,min(parallel_max,self.total)):
-            x = threading.Thread(target=self.prepare_cases, args=(i,), name="lord-{}".format(i))
+            if self.args.linux != None:
+                index = int(self.args.linux)
+            else:
+                index = i
+            x = threading.Thread(target=self.prepare_cases, args=(index,), name="lord-{}".format(i))
             x.start()

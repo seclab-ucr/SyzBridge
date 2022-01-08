@@ -32,3 +32,4 @@ if __name__ == '__main__':
         commands_list[args.cmd].run(args)
     else:
         parser.print_help()
+    exit(0)
