@@ -44,9 +44,9 @@ class SyzkallerInterface(AnalysisModule):
     def prepare(self):
         return self.prepare_on_demand()
     
-    def prepare_on_demand(self):
-        if self.pull_syzkaller() != 0:
-            return False
+    def prepare_on_demand(self, plugin_path=None):
+        if plugin_path is not None:
+            self.path_case_plugin = plugin_path
         self._prepared = True
         return True
     
@@ -74,12 +74,12 @@ class SyzkallerInterface(AnalysisModule):
     def pull_syzkaller(self, commit=""):
         script_path = os.path.join(self.path_package, "plugins/syzkaller_interface/pull_syzkaller.sh")
         chmodX(script_path)
-        p = Popen([script_path, self.path_case_plugin, commit], stdin=PIPE, stdout=PIPE)
+        p = Popen([script_path, self.path_case_plugin, commit], stdin=PIPE, stdout=PIPE, stderr=PIPE)
         with p.stdout:
-            log_anything(p.stdout, self.case_logger, self.debug)
+            log_anything(p.stdout, self.logger, self.debug)
         exitcode = p.wait()
         if exitcode != 0:
-            self.case_logger.info("Fail to generate a decent report from bug log")
+            self.logger.info("Fail to generate a decent report from bug log")
         else:
             self.syzkaller_path = os.path.join(self.path_case_plugin, "gopath/src/github.com/google/syzkaller")
         return exitcode
@@ -93,15 +93,17 @@ class SyzkallerInterface(AnalysisModule):
         else:
             p = Popen(["make", "TARGETARCH={}".format(arch), "TARGETVMARCH=amd64", component], cwd=self.syzkaller_path, env=my_env, stdin=PIPE, stdout=PIPE, stderr=PIPE)
         with p.stdout:
-            log_anything(p.stdout, self.case_logger, self.debug)
+            log_anything(p.stdout, self.logger, self.debug)
         exitcode = p.wait()
+        if not os.path.exists(os.path.join(self.syzkaller_path, "workdir")):
+            os.makedirs(os.path.join(self.syzkaller_path, "workdir"))
         return exitcode
 
     @check_syzkaller
     def patch_syzkaller(self, patch):
         p = Popen(["patch", "-p1", "-i", patch], cwd=self.syzkaller_path, stdin=PIPE, stdout=PIPE)
         with p.stdout:
-            log_anything(p.stdout, self.case_logger, self.debug)
+            log_anything(p.stdout, self.logger, self.debug)
         exitcode = p.wait()
         return exitcode
 
@@ -130,7 +132,7 @@ class SyzkallerInterface(AnalysisModule):
                 break
         syz_logparser = os.path.join(self.path_case_plugin, "gopath/src/github.com/google/syzkaller/bin/syz-logparser")
         if not os.path.isfile(syz_logparser):
-            self.case_logger.info("Cannot find syz-logparser on current case")
+            self.logger.info("Cannot find syz-logparser on current case")
             return
         cmd = [syz_logparser, "-i", input_log, "-o", output_log, "-cfg", cfg_path]
         p = Popen(cmd, stdin=PIPE, stdout=PIPE)
@@ -138,7 +140,7 @@ class SyzkallerInterface(AnalysisModule):
             log_anything(p.stdout, logging.INFO, self.debug)
         exitcode = p.wait()
         if exitcode != 0:
-            self.case_logger.info("Fail to generate a decent report from bug log")
+            self.logger.info("Fail to generate a decent report from bug log")
         return 
     
     def success(self):

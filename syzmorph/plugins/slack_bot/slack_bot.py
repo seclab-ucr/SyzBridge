@@ -101,6 +101,11 @@ class SlackBot(AnalysisModule):
         syzscope_section['type'] = 'section'
         syzscope_section['text'] = {'type': 'mrkdwn', 'text': '*SyzScope:*\n{}'.format(data['syzscope'])}
         block.append(syzscope_section)
+
+        fuzzing_section = {}
+        fuzzing_section['type'] = 'section'
+        fuzzing_section['text'] = {'type': 'mrkdwn', 'text': '*Fuzzing:*\n{}'.format(data['fuzzing'])}
+        block.append(fuzzing_section)
         
         return block
     

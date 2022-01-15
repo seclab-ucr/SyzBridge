@@ -18,6 +18,7 @@ class CapabilityCheck(AnalysisModule):
 
     def __init__(self):
         super().__init__()
+        self.syz = None
         self.report = []
         self._prepared = False
         self.path_case_plugin = ''
@@ -40,6 +41,8 @@ class CapabilityCheck(AnalysisModule):
         if not self.tune_poc(debug=True):
             return None
         reports = self.get_capability_check_report()
+        if reports == None:
+            return None
         return self.parse_report(reports)
     
     def get_capability_check_report(self):
@@ -152,6 +155,7 @@ class CapabilityCheck(AnalysisModule):
         return exitcode
     
     def generate_report(self):
+        self._cleanup()
         final_report = "\n".join(self.report)
         self.logger.info(final_report)
         self._write_to(final_report, self.REPORT_NAME)
@@ -180,7 +184,9 @@ killall poc || true
         res = []
         out1 = []
         n = 0
-        syz = self._init_module(SyzkallerInterface())
+        if self.syz == None:
+            self.syz = self._init_module(SyzkallerInterface())
+            self.syz.prepare_on_demand(self.path_case_plugin)
         for i in range(0, len(output)):
             line = output[i]
             if not regx_match(self._regx_cap, line):
@@ -189,12 +195,12 @@ killall poc || true
             out1 = output[i:]
             call_trace = extrace_call_trace(out1, start_with=self.LOG_HEADER)
             self._write_to("\n".join(call_trace), "call_trace.log-{}".format(n))
-            if not self._build_syz_logparser(syz):
+            if not self._build_syz_logparser(self.syz):
                 return None
-            syz.pull_cfg_for_cur_case()
+            self.syz.pull_cfg_for_cur_case()
             src = os.path.join(self.path_case_plugin, "call_trace.log-{}".format(n))
             dst = os.path.join(self.path_case_plugin, "call_trace.report-{}".format(n))
-            syz.generate_decent_report(src, dst)
+            self.syz.generate_decent_report(src, dst)
             f = open(dst, "r")
             txt = f.readlines()
             f.close()
@@ -245,4 +251,8 @@ killall poc || true
     def _write_to(self, content, name):
         file_path = "{}/{}".format(self.path_case_plugin, name)
         super()._write_to(content, file_path)
+    
+    def _cleanup(self):
+        if self.syz != None:
+            self.syz.delete_syzkaller()
 

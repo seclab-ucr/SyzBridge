@@ -58,6 +58,7 @@ class GoogleSheets(AnalysisModule):
         self._write_module_analysis(wks)
         self._write_capability_check(wks)
         self._write_syzscope(wks)
+        self._write_fuzzing(wks)
         if self.manager.module_capable("SlackBot") and \
                 (self.data['reproduce-by-normal'] != "" or self.data['reproduce-by-root'] != ""):
             bot = self._init_module(SlackBot())
@@ -76,6 +77,7 @@ class GoogleSheets(AnalysisModule):
             wks.update_value('G1', 'module_analysis')
             wks.update_value('H1', 'capability_check')
             wks.update_value('I1', 'syzscope')
+            wks.update_value('J1', 'fuzzing')
     
     def generate_report(self):
         final_report = "\n".join(self.report)
@@ -157,11 +159,19 @@ class GoogleSheets(AnalysisModule):
         if os.path.exists(path_report):
             with open(path_report, "r") as f:
                 report = f.readlines()
-                t = ''
-                for line in report:
-                    t += line
+                t = ''.join(report)
                 wks.update_value('I2', t)
                 self.data['syzscope'] = t
+    
+    def _write_fuzzing(self, wks: pygsheets.Worksheet):
+        self.data['fuzzing'] = ""
+        path_report = os.path.join(self.path_case, "Fuzzing", "Report_Fuzzing")
+        if os.path.exists(path_report):
+            with open(path_report, "r") as f:
+                report = f.readlines()
+                t = ''.join(report)
+                wks.update_value('J2', t)
+                self.data['fuzzing'] = t
 
     def _write_to(self, content, name):
         file_path = "{}/{}".format(self.path_case_plugin, name)

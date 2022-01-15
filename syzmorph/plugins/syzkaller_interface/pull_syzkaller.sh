@@ -61,7 +61,7 @@ if [ ! -d "$GOPATH/src/github.com/google/syzkaller" ]; then
     make clean
     git stash --all || set_git_config
     if [ "$SYZ_COMMIT" != "" ]; then
-        git checkout -f $SYZ_COMMIT
+        git checkout -f $SYZ_COMMIT || (git pull https://github.com/google/syzkaller.git master > /dev/null 2>&1 && git checkout -f $SYZ_COMMIT)
     fi
 fi
 

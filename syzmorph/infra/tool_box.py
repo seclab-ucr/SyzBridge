@@ -14,6 +14,11 @@ KASAN_NONE=0
 KASAN_OOB=1
 KASAN_UAF=2
 
+NONCRITICAL = 0
+AbMemRead = 1
+AbMemWrite = 2
+InvFree = 4
+
 def regx_match(regx, line):
     m = re.search(regx, line)
     if m != None and len(m.group()) != 0:
@@ -468,6 +473,13 @@ def convert_folder_name_to_plugin_name(file):
     texts = file.split('_')
     for each in texts:
         res += each[0].upper() + each[1:]
+    return res
+
+def unique(seq):
+    res = []
+    for each in seq:
+        if each not in res:
+            res.append(each)
     return res
 
 def kasan_mem_to_shadow(addr):

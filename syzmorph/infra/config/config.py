@@ -99,12 +99,12 @@ class Config:
         try:
             plugin = getattr(self.plugin, name)
         except:
-            False
+            return False
         return plugin.ENABLE
     
     def is_plugin_service(self, name):
         try:
             plugin = getattr(self.plugin, name)
         except:
-            False
+            return False
         return plugin.AS_SERVICE
