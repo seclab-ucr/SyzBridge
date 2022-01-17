@@ -217,7 +217,7 @@ class VMInstance(Network):
             self.alternative_func(self, *self.alternative_func_args)
         except Exception as e:
             self.logger.error("alternative_func failed: {}".format(e))
-            raise AlternativeFunctionError
+            raise AlternativeFunctionError("alternative_func failed: {}".format(e))
     
     def _is_qemu_ready(self):
         output = self.command("uname -r", "root", wait=True, timeout=1)

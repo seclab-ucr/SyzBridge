@@ -1016,6 +1016,37 @@ index 000000000..26b7d2ae5
 +	}
 +	return false
 +}
+diff --git a/prog/resources.go b/prog/resources.go
+index 95480a8a0..fa0d33770 100644
+--- a/prog/resources.go
++++ b/prog/resources.go
+@@ -175,12 +175,12 @@ func (target *Target) transitivelyEnabled(enabled map[*Syscall]bool) (map[*Sysca
+ 			if supported[c] {
+ 				continue
+ 			}
++			supported[c] = true
+ 			for _, res := range c.inputResources {
+ 				if !canCreate[res.Name] {
+ 					continue nextCall
+ 				}
+ 			}
+-			supported[c] = true
+ 			for _, res := range c.outputResources {
+ 				for _, kind := range res.Kind {
+ 					canCreate[kind] = true
+@@ -213,9 +213,9 @@ func (target *Target) TransitivelyEnabledCalls(enabled map[*Syscall]bool) (map[*
+ 				}
+ 				ctors[res.Name] = names
+ 			}
+-			disabled[c] = fmt.Sprintf("no syscalls can create resource %v,"+
+-				" enable some syscalls that can create it %v",
+-				res.Name, ctors[res.Name])
++			/*disabled[c] = fmt.Sprintf("no syscalls can create resource %v,"+
++			" enable some syscalls that can create it %v",
++			res.Name, ctors[res.Name])*/
+ 			break
+ 		}
+ 	}
 diff --git a/prog/validation.go b/prog/validation.go
 index f10126c93..ef91212bd 100644
 --- a/prog/validation.go

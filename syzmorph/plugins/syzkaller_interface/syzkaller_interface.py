@@ -1,4 +1,4 @@
-import os, logging
+import os, logging, shutil
 
 from infra.tool_box import chmodX, init_logger, log_anything
 from plugins import AnalysisModule
@@ -71,6 +71,19 @@ class SyzkallerInterface(AnalysisModule):
             return True
         return False
     
+    def get_binary(self, binary_name):
+        syzkaller_path = os.path.join(self.path_case_plugin, "gopath/src/github.com/google/syzkaller")
+        bin_path = os.path.join(syzkaller_path, "bin")
+        if self._check_binary(bin_path, binary_name):
+            return os.path.join(bin_path, binary_name)
+        bin_amd64_path = os.path.join(bin_path, 'linux_amd64')
+        if self._check_binary(bin_amd64_path, binary_name):
+            return os.path.join(bin_amd64_path, binary_name)
+        bin_i386_path = os.path.join(bin_path, 'linux_i386')
+        if self._check_binary(bin_i386_path, binary_name):
+            return os.path.join(bin_i386_path, binary_name)
+        return None
+    
     def pull_syzkaller(self, commit=""):
         script_path = os.path.join(self.path_package, "plugins/syzkaller_interface/pull_syzkaller.sh")
         chmodX(script_path)
@@ -109,7 +122,7 @@ class SyzkallerInterface(AnalysisModule):
 
     def delete_syzkaller(self):
         if os.path.exists(self.syzkaller_path):
-            os.removedirs(self.syzkaller_path)
+            shutil.rmtree(self.syzkaller_path, ignore_errors=True)
     
     def pull_cfg_for_cur_case(self):
         self.buil_workdir()
@@ -142,6 +155,20 @@ class SyzkallerInterface(AnalysisModule):
         if exitcode != 0:
             self.logger.info("Fail to generate a decent report from bug log")
         return 
+    
+    def support_enable_feature(self):
+        p = Popen(["git rev-list HEAD | grep $(git rev-parse dfd609eca1871f01757d6b04b19fc273c87c14e5)"], 
+            shell=True, stdout=PIPE, stderr=PIPE, cwd=self.syzkaller_path)
+        with p.stdout:
+            for line in iter(p.stdout.readline, b''):
+                try:
+                    line = line.decode("utf-8").strip('\n').strip('\r')
+                except:
+                    self.logger.info('bytes array \'{}\' cannot be converted to utf-8'.format(line))
+                    continue
+                if line == "dfd609eca1871f01757d6b04b19fc273c87c14e5":
+                    return True
+        return False
     
     def success(self):
         return self._move_to_success

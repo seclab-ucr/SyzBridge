@@ -37,7 +37,7 @@ class Fuzzing(AnalysisModule):
     REPORT_START = "======================Fuzzing Report======================"
     REPORT_END =   "==================================================================="
     REPORT_NAME = "Report_Fuzzing"
-    DEPENDENCY_PLUGINS = []
+    DEPENDENCY_PLUGINS = ['BugReproduce']
 
     def __init__(self):
         super().__init__()
@@ -53,6 +53,7 @@ class Fuzzing(AnalysisModule):
         self._prepared = False
         self.path_case_plugin = ''
         self._move_to_success = False
+        self._syzlang_func_regx = r'^(\w+(\$\w+)?)\('
         
     def prepare(self):
         try:
@@ -70,7 +71,7 @@ class Fuzzing(AnalysisModule):
         if regx_match(r'386', self.case["manager"]):
             self.arch = "386"
         self.path_image = self.cfg.kernel.Ubuntu.distro_image
-        self.port = self.cfg.kernel.Ubuntu.ssh_port
+        self.port = self.cfg.kernel.Ubuntu.repro.ssh_port
         self.path_kernel = path_kernel
         self.time_limit = time_limit
         self.ssh_key = self.cfg.kernel.Ubuntu.ssh_key
@@ -81,6 +82,9 @@ class Fuzzing(AnalysisModule):
         return self._move_to_success
 
     def run(self):
+        if self._ubuntu_reproducible():
+            self.logger.error("Skipped because of Ubuntu Reproducibility")
+            return None
         self.prepare_custom_syzkaller()
         self.find_support_syscalls()
         self.prepare_config()
@@ -137,6 +141,8 @@ class Fuzzing(AnalysisModule):
     
     def check_crashes(self):
         crash_path = self._copy_crashes()
+        if not os.path.exists(crash_path):
+            return
         for crash in os.listdir(crash_path):
             subcrash_path = os.path.join(crash_path, crash)
             self.report_new_impact(subcrash_path)
@@ -162,9 +168,14 @@ class Fuzzing(AnalysisModule):
         return exitcode
    
     def generate_report(self):
+        self.cleanup()
         final_report = "\n".join(self.report)
         self.logger.info(final_report)
         self._write_to(final_report, self.REPORT_NAME)
+    
+    def cleanup(self):
+        if self.syz != None:
+            self.syz.delete_syzkaller()
     
     def _extract_syscall_from_template(self, testcase):
         res = []
@@ -172,7 +183,7 @@ class Fuzzing(AnalysisModule):
         for line in text:
             if len(line)==0 or line[0] == '#':
                 continue
-            syscall = regx_get(r'(\w+(\$\w+)?)\(', line, 0)
+            syscall = regx_get(self._syzlang_func_regx, line, 0)
             if syscall != None:
                 res.append(syscall)
         return res
@@ -196,7 +207,7 @@ class Fuzzing(AnalysisModule):
 
                 if find_it:
                     for line in text:
-                        syscall = regx_get(r'(\w+(\$\w+)?)\(', line, 0)
+                        syscall = regx_get(self._syzlang_func_regx, line, 0)
                         if syscall != None:
                             res.append(syscall)
                     break
@@ -220,3 +231,22 @@ class Fuzzing(AnalysisModule):
     def _write_to(self, content, name):
         file_path = "{}/{}".format(self.path_case_plugin, name)
         super()._write_to(content, file_path)
+    
+    def _ubuntu_reproducible(self):
+        reproducable_regx = r'(debian|fedora|ubuntu) triggers a Kasan bug: ([A-Za-z0-9_: -]+) (by normal user|by root user)'
+        failed_regx = r'(.+) fail to trigger the bug'
+        path_report = os.path.join(self.path_case, "BugReproduce", "Report_BugReproduce")
+        if os.path.exists(path_report):
+            with open(path_report, "r") as f:
+                report = f.readlines()
+                for line in report:
+                    if regx_match(reproducable_regx, line):
+                        distro = regx_get(reproducable_regx, line, 0)
+                        privilege = regx_get(reproducable_regx, line, 2)
+                        if privilege == 'by normal user' and distro == 'ubuntu':
+                            return True
+                        if privilege == 'by root user' and distro == 'ubuntu':
+                            return True
+                    if regx_match(failed_regx, line):
+                        return False
+        return False

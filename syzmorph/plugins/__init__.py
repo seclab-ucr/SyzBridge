@@ -61,7 +61,13 @@ class AnalysisModule:
         def inner(self):
             if self.analyzor == None:
                 return AnalysisModuleError("Can not run analyzor when it is still NULL")
-            return func(self)
+            try:
+                ret = func(self)
+            except Exception as e:
+                self.case_logger.error("Exception happens: {}".format(e))
+                self.main_logger.error("Exception happens: {}".format(e))
+                return None
+            return ret
         return inner
     
     @check
@@ -150,7 +156,7 @@ class AnalysisModule:
 
     def _get_child_logger(self, logger):
         child_logger = logger.getChild(self.NAME)
-        child_logger.propagate = True
+        child_logger.propagate = self.debug
         child_logger.setLevel(logger.level)
 
         handler = logging.FileHandler("{}/log".format(self.path_case_plugin))

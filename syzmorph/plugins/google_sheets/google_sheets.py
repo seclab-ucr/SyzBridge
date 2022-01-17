@@ -59,12 +59,15 @@ class GoogleSheets(AnalysisModule):
         self._write_capability_check(wks)
         self._write_syzscope(wks)
         self._write_fuzzing(wks)
-        if self.manager.module_capable("SlackBot") and \
-                (self.data['reproduce-by-normal'] != "" or self.data['reproduce-by-root'] != ""):
-            bot = self._init_module(SlackBot())
-            bot.prepare()
-            blocks = bot.compose_blocks(self.data)
-            bot.post_message(blocks)
+        try:
+            if self.manager.module_capable("SlackBot") and \
+                    (self.data['reproduce-by-normal'] != "" or self.data['reproduce-by-root'] != ""):
+                bot = self._init_module(SlackBot())
+                bot.prepare()
+                blocks = bot.compose_blocks(self.data)
+                bot.post_message(blocks)
+        except Exception as e:
+            self.logger.error("slackbot error: {}".format(e))
     
     def create_banner(self, wks: pygsheets.Worksheet):
         if wks.get_value('A1') != 'hash':
