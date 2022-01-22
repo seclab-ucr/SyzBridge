@@ -74,9 +74,11 @@ class Launcher(Build):
         sleep(5)
         return
     
-    def launch_qemu(self, c_hash=0, log_suffix="", log_name=None, timeout=10*60, gdb_port=None, mon_port=None, **kwargs):
+    def launch_qemu(self, c_hash=0, log_suffix="", log_name=None, timeout=10*60, gdb_port=None, mon_port=None, ssh_port=None, **kwargs):
         if log_name is None:
             log_name = "qemu-{0}-{1}.log".format(c_hash, self.type_name)
+        if ssh_port != None:
+            self.ssh_port = ssh_port
         if gdb_port != None:
             self.gdb_port = gdb_port
         if mon_port != None:

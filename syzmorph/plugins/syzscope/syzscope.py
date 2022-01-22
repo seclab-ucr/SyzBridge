@@ -25,6 +25,7 @@ class Syzscope(AnalysisModule):
         self._move_to_success = False
         self.timeout = None
         self.gdb_port = None
+        self.ssh_port = None
         self.qemu_monitor_port = None
         self.max_round = None
         self.exception_count = 0
@@ -44,15 +45,20 @@ class Syzscope(AnalysisModule):
                 repro_mode = 0
             elif plugin.repro_mode == 'syz':
                 repro_mode = 1
+            try:
+                ssh_port = plugin.ssh_port
+            except:
+                ssh_port = None
         except KeyError:
             self.logger.error("Failed to get timeout or gdb_port or qemu_monitor_port or max_round")
             return False
-        return self.prepare_on_demand(timeout, gdb_port, qemu_monitor_port, max_round, repro_mode)
+        return self.prepare_on_demand(timeout, gdb_port, ssh_port, qemu_monitor_port, max_round, repro_mode)
     
-    def prepare_on_demand(self, timeout, gdb_port, qemu_monitor_port, max_round, repro_mode):
+    def prepare_on_demand(self, timeout, gdb_port, ssh_port, qemu_monitor_port, max_round, repro_mode):
         self._prepared = True
         self.timeout = timeout
         self.gdb_port = gdb_port
+        self.ssh_port = ssh_port
         self.qemu_monitor_port = qemu_monitor_port
         self.max_round = max_round
         self.repro_mode = repro_mode
@@ -64,11 +70,11 @@ class Syzscope(AnalysisModule):
     def run(self):
         if not self._reproducible():
             self.logger.info("The bug is not reproducible, syzscope will be skipped")
-            return None
+            return True
         if not self.build_kernel():
             return False
         self.run_symbolic_execution()
-        return None
+        return True
     
     def build_kernel(self):
         if self._check_stamp("BUILD_KERNEL") and self._check_stamp("BUILD_CAPABILITY_CHECK_KERNEL"):
@@ -102,7 +108,7 @@ class Syzscope(AnalysisModule):
             self.logger.info("Round {}: Symbolic execution".format(i))
             sym_logger = init_logger(self.path_case_plugin+"/symbolic_execution.log-{}".format(i), cus_format='%(asctime)s %(message)s', debug=self.debug)
             sym = SymExec(syzscope=self, logger=sym_logger, workdir=self.path_case_plugin, index=0, debug=self.debug)
-            qemu = sym.setup_vm(gdb_port=self.gdb_port, mon_port=self.qemu_monitor_port, timeout=5*60, log_suffix="-{}".format(i))
+            qemu = sym.setup_vm(ssh_port=self.ssh_port, gdb_port=self.gdb_port, mon_port=self.qemu_monitor_port, timeout=5*60, log_suffix="-{}".format(i))
             _, qemu_queue = qemu.run(alternative_func=self._run_sym, args=(sym, sym_logger, ))
             ready_for_sym_exec = qemu_queue.get(block=True)
             sym.cleanup()
@@ -213,6 +219,7 @@ chmod +x ./poc
 while :
 do
     nohup ./poc > nohup.out 2>&1 &
+    sleep 1
 done
 """
             self._write_to(poc_script, "run_poc.sh")

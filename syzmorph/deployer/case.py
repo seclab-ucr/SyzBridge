@@ -15,6 +15,7 @@ class Case:
         self.index = index
         self.debug = self.args.debug
         self.case_hash = case_hash[:7]
+        self._success = False
         self.path_syzmorph = os.getcwd()
         self.path_project = owner.proj_dir
         self.path_package = os.path.join(self.path_syzmorph, "syzmorph")
@@ -119,6 +120,8 @@ class Case:
             cases = os.listdir(sub_dir)
             if self.case_hash in cases:
                 path_case = os.path.join(sub_dir, self.case_hash)
+                if each_dir == 'succeed':
+                    self._success = True
                 break
         
         if path_case == None:

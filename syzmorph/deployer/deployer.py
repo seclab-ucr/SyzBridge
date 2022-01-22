@@ -21,7 +21,6 @@ class Deployer(Case, Task):
         self.analysis.setup(self)
         self.build_analyzor_modules()
         self.build_plugins_order()
-        self._success = False
     
     def use_module(self, module):
         if not isinstance(module, AnalysisModule):
@@ -38,9 +37,9 @@ class Deployer(Case, Task):
             if not self.analysis.prepare():
                 self.logger.error("Fail to prepare {}".format(self.analysis.name))
                 return 1
-            self.analysis.run()
-            self.analysis.generate_report()
-            self.analysis.create_stamp()
+            if self.analysis.run():
+                self.analysis.generate_report()
+                self.analysis.create_stamp()
             if not self._success:
                 self._success = self.analysis.success()
         return 0

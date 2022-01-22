@@ -17,13 +17,14 @@ class CaseCommand(Command):
     def add_arguments(self, parser):
         super().add_arguments(parser)
         parser.add_argument('--proj', nargs='?', action='store', help='project name')
-        parser.add_argument('--hash', nargs='?', action='store', help='hash of a case')
+        parser.add_argument('--hash', nargs='?', action='store', help='hash of a case or a file contains multiple hashs')
         parser.add_argument('--all', action='store_true', help='Get all case info')
         parser.add_argument('--completed', action='store_true', help='Get completed case info') 
         parser.add_argument('--incomplete', action='store_true', help='Get incomplete case info')
         parser.add_argument('--succeed', action='store_true', help='Get succeed case info')
         parser.add_argument('--error', action='store_true', help='Get error case info')
         parser.add_argument('--case-title', action='store_true', help='Get case title')
+        parser.add_argument('--remove-stamp', action='append', default=[], help='Remove finish stamp')
 
         parser.add_argument('--prepare4debug', nargs='?', action='store', help='prepare a folder for case debug')
 
@@ -35,7 +36,15 @@ class CaseCommand(Command):
         self.proj_dir = os.path.join(os.getcwd(), "projects/{}".format(args.proj))
         self.cases = self.read_cases(args.proj)
         if args.hash != None:
-            self.cases = {args.hash: self.cases[args.hash]}
+            if os.path.exists(args.hash):
+                t = self.cases.copy()
+                self.cases = {}
+                with open(args.hash, 'r') as f:
+                    for hash_val in f.readlines():
+                        hash_val = hash_val.strip()
+                        self.cases[hash_val] = t[hash_val]
+            else:
+                self.cases = {args.hash: self.cases[args.hash]}
         if args.all:
             self.print_case_info()
         if args.completed:
@@ -50,6 +59,14 @@ class CaseCommand(Command):
         if args.error:
             show = self.read_case_from_folder('error')
             self.print_case_info(show)
+        if args.remove_stamp != []:
+            for hash_val in self.cases:
+                for stamp in args.remove_stamp:
+                    for folder in ['succeed', 'error', 'incomplete', 'completed']:
+                        stamp_path = os.path.join(self.proj_dir, folder, hash_val[:7], '.stamp', stamp)
+                        if os.path.exists(stamp_path):
+                            os.remove(stamp_path)
+            print("Remove finish stamp {} from {} cases".format(args.remove_stamp, len(self.cases)))
         if args.prepare4debug != None:
             if args.hash == None:
                 print('Please specify a case hash for debug')

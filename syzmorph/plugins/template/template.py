@@ -30,8 +30,10 @@ class Template(AnalysisModule):
     def run(self):
         """
         do something
+        True: plugin runs smoothly
+        False: something failed, stamp will not be created
         """
-        return None
+        return True
     
     def generate_report(self):
         self._cleanup()

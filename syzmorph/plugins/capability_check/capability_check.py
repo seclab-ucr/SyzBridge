@@ -43,7 +43,8 @@ class CapabilityCheck(AnalysisModule):
         reports = self.get_capability_check_report()
         if reports == None:
             return None
-        return self.parse_report(reports)
+        self.parse_report(reports)
+        return True
     
     def get_capability_check_report(self):
         upstream = self.cfg.get_upstream()

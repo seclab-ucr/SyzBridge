@@ -45,7 +45,7 @@ class GoogleSheets(AnalysisModule):
 
     def run(self):
         self.write_case_result(self.sh)
-        return None
+        return True
     
     def write_case_result(self, sh: pygsheets.Spreadsheet):
         self.data = {}
@@ -110,6 +110,9 @@ class GoogleSheets(AnalysisModule):
         reproducable_regx = r'(debian|fedora|ubuntu) triggers a Kasan bug: ([A-Za-z0-9_: -]+) (by normal user|by root user)'
         failed_regx = r'(.+) fail to trigger the bug'
         path_report = os.path.join(self.path_case, "BugReproduce", "Report_BugReproduce")
+        normal_text = ''
+        root_text = ''
+        fail_text = ''
         if os.path.exists(path_report):
             with open(path_report, "r") as f:
                 report = f.readlines()
@@ -119,15 +122,18 @@ class GoogleSheets(AnalysisModule):
                         bug_title = regx_get(reproducable_regx, line, 1)
                         privilege = regx_get(reproducable_regx, line, 2)
                         if privilege == 'by normal user':
-                            wks.update_value('D2', "{}-{}".format(distro, bug_title))
+                            normal_text += "{}-{}\n".format(distro, bug_title)
                             self.data['reproduce-by-normal'] += "{} ".format(distro)
                         if privilege == 'by root user':
-                            wks.update_value('E2', "{}-{}".format(distro, bug_title))
+                            root_text += "{}-{}\n".format(distro, bug_title)
                             self.data['reproduce-by-root'] += "{} ".format(distro)
                     if regx_match(failed_regx, line):
                         distros = regx_get(failed_regx, line, 0)
-                        wks.update_value('F2', "{}".format(distros))
+                        fail_text += "{}\n".format(distros)
                         self.data['failed-on'] += "{} ".format(distros)
+        wks.update_value('D2', normal_text)
+        wks.update_value('E2', root_text)
+        wks.update_value('F2', fail_text)
 
     def _write_module_analysis(self, wks: pygsheets.Worksheet):
         self.data['modules-analysis'] = ""

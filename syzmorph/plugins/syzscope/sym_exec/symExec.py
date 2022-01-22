@@ -54,13 +54,13 @@ class SymExec(MemInstrument):
         self._branches = {}
         self.target_site = {}
 
-    def setup_vm(self, gdb_port, mon_port, timeout, log_name="vm.log", log_suffix=""):
+    def setup_vm(self, ssh_port, gdb_port, mon_port, timeout, log_name="vm.log", log_suffix=""):
         self.proj_path = self.syzscope.path_case_plugin
         if timeout != None:
             self._timeout = timeout
         upstream = self.syzscope.cfg.get_upstream()
         self.vm = upstream.repro.launch_qemu(c_hash = self.syzscope.case_hash, work_path=self.syzscope.path_case_plugin\
-            , log_name=log_name, log_suffix=log_suffix, timeout=timeout, gdb_port=gdb_port, mon_port=mon_port)
+            , log_name=log_name, log_suffix=log_suffix, timeout=timeout, ssh_port=ssh_port, gdb_port=gdb_port, mon_port=mon_port)
         self.gdb_port = upstream.repro.gdb_port
         self.mon_port = upstream.repro.mon_port
         return self.vm

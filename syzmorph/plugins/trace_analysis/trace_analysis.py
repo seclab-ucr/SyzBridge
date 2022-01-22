@@ -39,7 +39,7 @@ class TraceAnalysis(AnalysisModule):
     def run(self):
         if not self._prepared:
             self.logger.error("Module {} is not prepared".format(self.NAME))
-            return None
+            return False
 
         for _ in range(0,3):
             self.logger.error("Starting retrieving trace from upstream")
@@ -61,7 +61,7 @@ class TraceAnalysis(AnalysisModule):
                 break
 
         #ret = self.analyze_trace(trace_vendor, trace_upstream)
-        return None
+        return True
     
     def analyze_trace(self, trace1, trace2):
         """if os.path.exists(os.path.join(self.path_case_plugin, "{}.json".format(trace1))):

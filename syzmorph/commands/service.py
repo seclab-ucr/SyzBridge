@@ -149,7 +149,8 @@ class ServiceCommand(Command):
                 filter_by_c_prog=int(self.args.filter_by_c_prog), debug=self.args.debug, log_path = self.proj_dir)
 
             crawler.run()
-            for hash_val in crawler.cases:
+            tmp_cases = crawler.cases.copy()
+            for hash_val in tmp_cases:
                 if hash_val in self.cases and self.finished_case(hash_val):
                     del crawler.cases[hash_val]
             self.cases = crawler.cases
@@ -216,9 +217,9 @@ class ServiceCommand(Command):
         self.print_args_info()
         self.build_work_dir()
         
-        self.queue = self.manager.Queue()
-        
         while True:
+            x = []
+            self.queue = self.manager.Queue()
             cases = self.get_daily_cases()
             start_time = self.get_cur_time()
             for key in cases:
@@ -233,8 +234,10 @@ class ServiceCommand(Command):
                     index = int(self.args.linux)
                 else:
                     index = i
-                x = threading.Thread(target=self.prepare_cases, args=(index,), name="lord-{}".format(i))
-                x.start()
+                x.append(threading.Thread(target=self.prepare_cases, args=(index,), name="lord-{}".format(i)))
+                x[i].start()
+            for i in range(0,min(parallel_max,self.total)):
+                x[i].join()
             print("[+] Finished today's cases, put into sleep")
             next_start_time = start_time + timedelta(days=1)
             end_time = self.get_cur_time()

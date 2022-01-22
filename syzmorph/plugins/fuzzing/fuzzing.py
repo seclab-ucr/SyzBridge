@@ -82,15 +82,14 @@ class Fuzzing(AnalysisModule):
         return self._move_to_success
 
     def run(self):
-        if self._ubuntu_reproducible():
-            self.logger.error("Skipped because of Ubuntu Reproducibility")
-            return None
         self.prepare_custom_syzkaller()
         self.find_support_syscalls()
         self.prepare_config()
-        self.run_syzkaller()
-        self.check_crashes()
-        return None
+        if self.run_syzkaller() != 0:
+            self.main_logger.error("Failed to run syzkaller")
+            return False
+        self.check_output()
+        return True
     
     def find_support_syscalls(self):
         dependent_syscalls = []
@@ -139,7 +138,11 @@ class Fuzzing(AnalysisModule):
         exitcode = p.wait()
         return exitcode
     
-    def check_crashes(self):
+    def check_output(self):
+        reason = self._check_log_for_panic()
+        if reason != None:
+            self.main_logger.error("Fuzzing failed because of panic: {}".format(reason))
+            return 
         crash_path = self._copy_crashes()
         if not os.path.exists(crash_path):
             return
@@ -183,7 +186,7 @@ class Fuzzing(AnalysisModule):
         for line in text:
             if len(line)==0 or line[0] == '#':
                 continue
-            syscall = regx_get(self._syzlang_func_regx, line, 0)
+            syscall = regx_get(r'(\w+(\$\w+)?)\(', line, 0)
             if syscall != None:
                 res.append(syscall)
         return res
@@ -250,3 +253,20 @@ class Fuzzing(AnalysisModule):
                     if regx_match(failed_regx, line):
                         return False
         return False
+    
+    def _check_log_for_panic(self):
+        d = {}
+        disabling_func_regx = r'disabling (\w+(\$\w+)?): (.+)'
+        bias_syscall_regx = r'bias to disabled syscall (\w+(\$\w+)?)'
+        log_path = os.path.join(self.path_case_plugin, "log")
+        with open(log_path, "r") as f:
+            text = f.readlines()
+            for line in text:
+                if regx_match(disabling_func_regx, line):
+                    func = regx_get(disabling_func_regx, line, 0)
+                    reason = regx_get(disabling_func_regx, line, 2)
+                    d[func] = reason
+                if regx_match(bias_syscall_regx, line):
+                    func = regx_get(bias_syscall_regx, line, 0)
+                    return d[func]
+        return None

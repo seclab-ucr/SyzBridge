@@ -182,6 +182,85 @@ index ae9724dfc..858bb98bf 100644
  	}
  }
  
+diff --git a/pkg/host/syscalls_linux.go b/pkg/host/syscalls_linux.go
+index c628d20ab..f7ada236b 100644
+--- a/pkg/host/syscalls_linux.go
++++ b/pkg/host/syscalls_linux.go
+@@ -424,38 +424,42 @@ func onlySandboxNoneOrNamespace(sandbox string) (bool, string) {
+ }
+ 
+ func isSupportedSocket(c *prog.Syscall) (bool, string) {
+-	af, ok := c.Args[0].Type.(*prog.ConstType)
+-	if !ok {
+-		panic("socket family is not const")
+-	}
+-	fd, err := syscall.Socket(int(af.Val), 0, 0)
+-	if fd != -1 {
+-		syscall.Close(fd)
+-	}
+-	if err == syscall.ENOSYS {
+-		return false, "socket syscall returns ENOSYS"
+-	}
+-	if err == syscall.EAFNOSUPPORT {
+-		return false, "socket family is not supported (EAFNOSUPPORT)"
+-	}
+-	proto, ok := c.Args[2].Type.(*prog.ConstType)
+-	if !ok {
+-		return true, ""
+-	}
+-	var typ uint64
+-	if arg, ok := c.Args[1].Type.(*prog.ConstType); ok {
+-		typ = arg.Val
+-	} else if arg, ok := c.Args[1].Type.(*prog.FlagsType); ok {
+-		typ = arg.Vals[0]
+-	} else {
+-		return true, ""
+-	}
+-	fd, err = syscall.Socket(int(af.Val), int(typ), int(proto.Val))
+-	if fd != -1 {
+-		syscall.Close(fd)
+-		return true, ""
+-	}
+-	return false, err.Error()
++	// Distro kernel load modules on demand,
++	// so we can't check by this method.
++	return true, ""
++	/*
++		af, ok := c.Args[0].Type.(*prog.ConstType)
++		if !ok {
++			panic("socket family is not const")
++		}
++		fd, err := syscall.Socket(int(af.Val), 0, 0)
++		if fd != -1 {
++			syscall.Close(fd)
++		}
++		if err == syscall.ENOSYS {
++			return false, "socket syscall returns ENOSYS"
++		}
++		if err == syscall.EAFNOSUPPORT {
++			return false, "socket family is not supported (EAFNOSUPPORT)"
++		}
++		proto, ok := c.Args[2].Type.(*prog.ConstType)
++		if !ok {
++			return true, ""
++		}
++		var typ uint64
++		if arg, ok := c.Args[1].Type.(*prog.ConstType); ok {
++			typ = arg.Val
++		} else if arg, ok := c.Args[1].Type.(*prog.FlagsType); ok {
++			typ = arg.Vals[0]
++		} else {
++			return true, ""
++		}
++		fd, err = syscall.Socket(int(af.Val), int(typ), int(proto.Val))
++		if fd != -1 {
++			syscall.Close(fd)
++			return true, ""
++		}
++		return false, err.Error()*/
+ }
+ 
+ func isSyzOpenProcfsSupported(c *prog.Syscall, target *prog.Target, sandbox string) (bool, string) {
 diff --git a/pkg/instance/instance.go b/pkg/instance/instance.go
 index 68920577b..0ac715073 100644
 --- a/pkg/instance/instance.go
@@ -1371,7 +1450,7 @@ index 62648336c..e31b664a2 100644
  	wq.mu.Unlock()
  	if wantCandidates {
 diff --git a/syz-manager/manager.go b/syz-manager/manager.go
-index dc435f39f..ffab5ea9a 100644
+index dc435f39f..6e6c12529 100644
 --- a/syz-manager/manager.go
 +++ b/syz-manager/manager.go
 @@ -6,6 +6,7 @@ package main
@@ -1558,9 +1637,15 @@ index dc435f39f..ffab5ea9a 100644
  	inst, err := mgr.vmPool.Create(index)
  	if err != nil {
  		return nil, nil, fmt.Errorf("failed to create instance: %v", err)
-@@ -627,15 +692,19 @@ func (mgr *Manager) runInstanceInner(index int, instanceName string) (*report.Re
+@@ -625,17 +690,24 @@ func (mgr *Manager) runInstanceInner(index int, instanceName string) (*report.Re
+ 	atomic.AddUint32(&mgr.numFuzzing, 1)
+ 	defer atomic.AddUint32(&mgr.numFuzzing, ^uint32(0))
  
- 	cmd := instance.FuzzerCmd(fuzzerBin, executorBin, instanceName,
+-	cmd := instance.FuzzerCmd(fuzzerBin, executorBin, instanceName,
++	cmd := "echo \"6\" > /proc/sys/kernel/printk"
++	inst.Run(mgr.cfg.Timeouts.VMRunningTime, mgr.vmStop, cmd)
++
++	cmd = instance.FuzzerCmd(fuzzerBin, executorBin, instanceName,
  		mgr.cfg.TargetOS, mgr.cfg.TargetArch, fwdAddr, mgr.cfg.Sandbox, procs, fuzzerV,
 -		mgr.cfg.Cover, *flagDebug, false, false, true, mgr.cfg.Timeouts.Slowdown)
 +		mgr.cfg.Cover, *flagDebug, false, false, true, mgr.cfg.Timeouts.Slowdown, *flagPoC)
@@ -1580,7 +1665,7 @@ index dc435f39f..ffab5ea9a 100644
  		// This is the only "OK" outcome.
  		log.Logf(0, "%s: running for %v, restarting", instanceName, time.Since(start))
  	} else {
-@@ -918,6 +987,12 @@ func (mgr *Manager) saveRepro(res *repro.Result, stats *repro.Stats, hub bool) {
+@@ -918,6 +990,12 @@ func (mgr *Manager) saveRepro(res *repro.Result, stats *repro.Stats, hub bool) {
  	if len(cprogText) > 0 {
  		osutil.WriteFile(filepath.Join(dir, "repro.cprog"), cprogText)
  	}
@@ -1593,7 +1678,7 @@ index dc435f39f..ffab5ea9a 100644
  	saveReproStats(filepath.Join(dir, "repro.stats"), stats)
  }
  
-@@ -1250,3 +1325,28 @@ func publicWebAddr(addr string) string {
+@@ -1250,3 +1328,28 @@ func publicWebAddr(addr string) string {
  	}
  	return "http://" + addr
  }

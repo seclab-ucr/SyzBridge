@@ -61,14 +61,13 @@ class ModulesAnalysis(AnalysisModule):
 
     @check
     def run(self):
-        res = True
         if not self._prepared:
             self.logger.error("Module {} is not prepared".format(ModulesAnalysis.NAME))
             return False
         self.report.append(ModulesAnalysis.REPORT_START)
 
         self.logger.info("[Modules analysis] Checking modules in KASAN report")
-        res = self.check_kasan_report()
+        self.check_kasan_report()
         self.logger.info("[Modules analysis] Checking modules in ftrace")
         try:
             self.check_ftrace()
@@ -76,7 +75,7 @@ class ModulesAnalysis(AnalysisModule):
             self.logger.error("[Modules analysis] {}".format(e))
                 
         self.report.append(ModulesAnalysis.REPORT_END)
-        return res
+        return True
     
     def check_ftrace(self):
         trace = self._open_trace()

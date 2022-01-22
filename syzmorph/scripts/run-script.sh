@@ -22,7 +22,6 @@ cat << EOF > run.sh
 #!/bin/bash
 set -ex
 
-echo "6" > /proc/sys/kernel/printk || true
 chmod +x ./poc
 set +ex
 while [ 1 ]

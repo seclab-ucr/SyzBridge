@@ -51,7 +51,7 @@ class BugReproduce(AnalysisModule):
             if fail_name != "":
                 self.main_logger.info("{} fail to trigger the bug".format(fail_name))
                 self.report.append("{} fail to trigger the bug".format(fail_name))
-            return ret
+            return True
         return inner
 
     @check
@@ -238,6 +238,7 @@ class BugReproduce(AnalysisModule):
         # It looks like scp returned without waiting for all file finishing uploading.
         # Sleeping for 1 second to ensure everything is ready in vm
         time.sleep(1)
+        qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user="root", wait=True)
         qemu.command(cmds="chmod +x run.sh && ./run.sh", user=user, wait=False)
         return
     
