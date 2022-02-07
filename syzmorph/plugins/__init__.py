@@ -73,7 +73,9 @@ class AnalysisModule:
     @check
     def run(self):
         self.main_logger.info("Running {}".format(self.analyzor.NAME))
-        return self.analyzor.run()
+        ret = self.analyzor.run()
+        self.analyzor.cleanup()
+        return ret
     
     @check
     def prepare(self, **kwargs):
@@ -107,6 +109,9 @@ class AnalysisModule:
         stamp = "FINISH_" + self.analyzor.NAME.upper()
         self.main_logger.info("Finish {}".format(self.analyzor.NAME))
         return self._create_stamp(stamp)
+    
+    def cleanup(self):
+        pass
     
     def _check_dependencies_finished(self):
         dependencies = self.analyzor.DEPENDENCY_PLUGINS

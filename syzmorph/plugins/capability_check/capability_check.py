@@ -156,7 +156,6 @@ class CapabilityCheck(AnalysisModule):
         return exitcode
     
     def generate_report(self):
-        self._cleanup()
         final_report = "\n".join(self.report)
         self.logger.info(final_report)
         self._write_to(final_report, self.REPORT_NAME)
@@ -253,7 +252,7 @@ killall poc || true
         file_path = "{}/{}".format(self.path_case_plugin, name)
         super()._write_to(content, file_path)
     
-    def _cleanup(self):
+    def cleanup(self):
         if self.syz != None:
             self.syz.delete_syzkaller()
 

@@ -171,7 +171,6 @@ class Fuzzing(AnalysisModule):
         return exitcode
    
     def generate_report(self):
-        self.cleanup()
         final_report = "\n".join(self.report)
         self.logger.info(final_report)
         self._write_to(final_report, self.REPORT_NAME)
