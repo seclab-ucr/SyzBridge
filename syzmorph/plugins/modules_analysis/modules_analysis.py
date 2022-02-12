@@ -17,6 +17,12 @@ class ModulesAnalysis(AnalysisModule):
     REPORT_END =   "==================================================================="
     REPORT_NAME = "Report_ModulesAnalysis"
     DEPENDENCY_PLUGINS = ["TraceAnalysis"]
+    MODULE_DISABLED = 0
+    MODULE_ENABLED = 1
+    MODULE_REQUIRED_LOADING = 2
+    MODULE_IN_BLACKLIST = 3
+    MODULE_REQUIRED_LOADING_BY_ROOT = 4
+    MODULE_REQUIRED_LOADING_BY_NON_ROOT = 5
 
     def __init__(self):
         super().__init__()
@@ -33,6 +39,7 @@ class ModulesAnalysis(AnalysisModule):
         self.config_cache['vendor_config_path'] = ''
         self._loadable_modules = {}
         self._ftrace_functions = {}
+        self._missing_modules = {}
     
     def check(func):
         def inner(self):
@@ -66,15 +73,16 @@ class ModulesAnalysis(AnalysisModule):
             return False
         self.report.append(ModulesAnalysis.REPORT_START)
 
-        self.logger.info("[Modules analysis] Checking modules in KASAN report")
-        self.check_kasan_report()
-        self.logger.info("[Modules analysis] Checking modules in ftrace")
+        #self.logger.info("[Modules analysis] Checking modules in KASAN report")
+        #self.check_kasan_report()
+        #self.logger.info("[Modules analysis] Checking modules in ftrace")
         try:
             self.check_ftrace()
         except TraceAnalysisError as e:
             self.logger.error("[Modules analysis] {}".format(e))
                 
         self.report.append(ModulesAnalysis.REPORT_END)
+        self.dump_missing_modules()
         return True
     
     def check_ftrace(self):
@@ -101,37 +109,59 @@ class ModulesAnalysis(AnalysisModule):
     
     def check_modules_in_trace(self, begin_node, vm, check_map, all_distros):
         end_node = begin_node.scope_end_node
+        hook_end_node = None
         while begin_node != end_node:
             if begin_node.is_function:
                 src_file = self.get_src_file_from_function(begin_node, vm)
+                if hook_end_node == None:
+                    hook_end_node = self.is_hook_func(begin_node)
                 if src_file != None:
                     for distro in all_distros:
                         self._cur_distro = distro
                         if src_file in check_map[distro.distro_name]:
                             continue
-                        if dirname(src_file) == "mm":
-                            """
-                            If moduels are in mm/, we ignore them because different allocators 
-                            usually don't make any differences
-                            """
+                        if self._is_generic_module(src_file):
                             continue
                         check_map[distro.distro_name][src_file] = True
                         ret = self.module_check(distro, src_file)
-                        if ret == 0:
+                        if ret != self.MODULE_ENABLED:
+                            self._missing_modules[self.vul_module] = {'name': self.vul_module, 'src_file': src_file, 'hook': hook_end_node != None, 
+                                'distro': distro.distro_name, 'distro_version': distro.distro_version}
+                        if ret == self.MODULE_DISABLED:
+                            self._missing_modules[self.vul_module]['type'] = self.MODULE_DISABLED, 
+                            self._missing_modules[self.vul_module]['missing_reason'] = 'Module disabled'
                             self.report.append(begin_node.text)
                             self.logger.info("Vendor {0} does not have {1} module enabled".format(distro.distro_name, self.vul_module))
-                            self.report.append("Module {} from {} is not enabled in {}".format(self.vul_module, src_file, distro.distro_name))
-                        if ret == 2:
+                            self.report.append("[Disabled] Module {} from {} is not enabled in {}".format(self.vul_module, src_file, distro.distro_name))
+                        if ret == self.MODULE_REQUIRED_LOADING:
+                            self._missing_modules[self.vul_module]['type'] = self.MODULE_REQUIRED_LOADING_BY_ROOT, 
+                            self._missing_modules[self.vul_module]['missing_reason'] = 'need loading by root'
                             self.report.append(begin_node.text)
                             user = 'root'
                             if self.check_module_privilege(self.vul_module):
+                                self._missing_modules[self.vul_module]['type'] = self.MODULE_REQUIRED_LOADING_BY_NON_ROOT, 
+                                self._missing_modules[self.vul_module]['missing_reason'] = 'need loading by normal user'
                                 user = 'normal user'
                             self.report.append("[{}] Module {} from {} need to be loaded in {} ".format(user, self.vul_module, src_file, distro.distro_name))
                         if ret == 3:
+                            self._missing_modules[self.vul_module]['type'] = self.MODULE_IN_BLACKLIST, 
+                            self._missing_modules[self.vul_module]['missing_reason'] = 'Module in blacklist'
                             self.report.append(begin_node.text)
-                            self.report.append("Module {} from {} need root to be loaded".format(self.vul_module, src_file))
+                            self.report.append("[Blacklist] Module {} from {} need root to be loaded".format(self.vul_module, src_file))
             begin_node = begin_node.next_node
+            if hook_end_node == begin_node:
+                hook_end_node = None
         return True
+    
+    def is_hook_func(self, node):
+        # hook functions often link to unnecessary code in terms of bug's root cause
+        if 'hook' in node.function_name:
+            return node.scope_end_node
+        return None
+    
+    def dump_missing_modules(self):
+        cache_file = os.path.join(self.path_case_plugin, "missing_modules.json")
+        json.dump(self._missing_modules, open(cache_file, "w"))
 
     def _prepare_gdb(self):
         linux = os.path.join(self.path_case, "linux")
@@ -218,26 +248,20 @@ class ModulesAnalysis(AnalysisModule):
         return vul_obj, dirname
     
     def module_check(self, distro, upstream_vul_src_file):
-        """
-        0: module disable
-        1: module enable by default
-        2: module enable but need to be loaded
-        3: module enable but must require root
-        """
         victim_module, dirname = self.get_victim_module(upstream_vul_src_file)
         if victim_module == None:
-            return 1
-        k = self.module_check_by_config(dirname)
+            return self.MODULE_ENABLED
+        k = self.module_check_by_config(dirname) # victim_module pass to self.vul_module, this function actually check the vul module
         if k == 'n':
-            return 0
+            return self.MODULE_DISABLED
         if k == 'y':
-            return 1
+            return self.MODULE_ENABLED
         if self.vul_module in distro.default_modules:
-            return 1
+            return self.MODULE_ENABLED
         if self.vul_module in distro.optional_modules:
             if self.vul_module in distro.blacklist_modules:
-                return 3
-            return 2
+                return self.MODULE_IN_BLACKLIST
+            return self.MODULE_REQUIRED_LOADING
         #raise AnalysisModuleError("{} didn't find in distro, should return eariler".format(self.vul_module))
         return None
 
@@ -291,7 +315,32 @@ class ModulesAnalysis(AnalysisModule):
         if self._loadable_modules[module_name] == 'root':
             return False
         return False
-        
+    
+    def _is_generic_module(self, src):
+        if self._base_dir(src) == "mm":
+            """
+            If moduels are in mm/, we ignore them because different allocators 
+            usually don't make any differences
+            """
+            return True
+        if self._base_dir(src) == "security":
+            """
+            Bugs are usually not in the security policies modules
+            """
+            return True
+        if src == "kernel/kcov.c":
+            """
+            kcov collect coverage, not the root cause of any bugs.
+            """
+            return True
+        return False
+    
+    def _base_dir(self, src):
+        try:
+            i = src.index('/')
+            return src[:i]
+        except Exception:
+            return None
     
     def _build_loadable_modules(self):
         p = os.path.join(self.path_package, "resources/loadable_modules")

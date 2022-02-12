@@ -19,6 +19,7 @@ class TraceAnalysis(AnalysisModule):
     def __init__(self):
         super().__init__()
         self.report = ''
+        self.syzcall2syscall = {}
         self._prepared = False
         self._move_to_success = False
         self.path_case_plugin = None
@@ -27,6 +28,11 @@ class TraceAnalysis(AnalysisModule):
         if not self.manager.has_c_repro:
             self.logger.error("Case does not have c reproducer")
             return False
+        syzcalljson = os.path.join(self.path_package, "plugins/trace_analysis/syzcall2syscall.json")
+        if not os.path.exists(syzcalljson):
+            self.logger.error("Cannot find syzcall2syscall.json")
+            return False
+        self.syzcall2syscall = json.load(open(syzcalljson, "r"))
         return self.prepare_on_demand()
     
     def prepare_on_demand(self):
@@ -143,10 +149,10 @@ class TraceAnalysis(AnalysisModule):
             poc_path = os.path.join(self.path_case_plugin, "poc")
             if os.path.exists(poc_path):
                 os.remove(poc_path)
-            shutil.copyfile(os.path.join(self.path_case, "poc"), poc_path)
             trigger_commands = "./poc"
         
-        syscalls = self._get_trace_functions(qemu)
+        syscalls = self._tune_poc(qemu)
+        call(["gcc", "-pthread", "-static", "-o", "poc", "poc.c"], cwd=self.path_case_plugin)
         cmd = "trace-cmd record -p function_graph "
         for each in syscalls:
             cmd += "-g {} ".format(each)
@@ -217,7 +223,7 @@ for i in {{1..60}}; do
     break
 done
 
-sleep 3
+sleep 30
 killall poc || true
 
 for i in {{1..30}}; do
@@ -247,8 +253,23 @@ done""".format(cmd)
             return None
         return trace_path
     
-    def _get_trace_functions(self, qemu):
-        common_setup_syscalls = ['mmap', 'waitpid', 'kill', 'signal', 'exit', 'unshare', 'setrlimit', 'chdir', 'chmod', ]
+    def _tune_poc(self, qemu):
+        insert_exit_line = -1
+        poc_c_text = ""
+        data = []
+
+        src = os.path.join(self.path_case, "poc.c")
+        dst = os.path.join(self.path_case_plugin, "poc.c")
+        poc_func = ""
+        non_thread_func = ""
+        flag_change_iter = False
+        fsrc = open(src, "r")
+        fdst = open(dst, "w")
+
+        common_setup_syscalls = ['mmap', 'waitpid', 'kill', 'signal', 'exit', 'unshare', 'setrlimit', 'chdir', 'chmod', 
+           'clone', 'prctl', 'mprotect', 'chroot', '' ]
+        devices_init_func_regx = ['initialize_vhci\(\);', 'initialize_netdevices_init\(\);', 'initialize_devlink_pci\(\);',
+            'initialize_tun\(\);', 'initialize_netdevices\(\);', 'initialize_wifi_devices\(\);']
         syscalls = []
         enabled_syscalls = ['process_one_work', 'do_kern_addr_fault']
         output = qemu.command(cmds="trace-cmd list -f | grep -E  \"^__x64_sys_\"", user="root", wait=True)
@@ -256,8 +277,59 @@ done""".format(cmd)
             if line.startswith("__x64_sys_"):
                 syscalls.append(line.strip())
         
-        req = request_get(url=self.case['c_repro'])
-        c_text = req.text
+        code = fsrc.readlines()
+        fsrc.close()
+        text = "".join(code)
+        if text.find("int main") != -1:
+            poc_func = r"^(static )?int main\(.*\)\n"
+            non_thread_func = r"^(static )?int main"
+        if text.find("void loop") != -1:
+            poc_func = r"^(static )?void loop\(.*\)\n"
+            non_thread_func = r"^(static )?void loop\(.*\)\n"
+        if text.find("void execute_one") != -1:
+            non_thread_func = r"^(static )?void loop\(.*\)\n"
+            flag_change_iter = True
+        if text.find("void execute_call") != -1:
+            poc_func = r"^(static )?void execute_call\(.*\)\n"
+
+        # Locate the function actual trigger the bug    
+        for i in range(0, len(code)):
+            line = code[i]
+            if insert_exit_line == i:
+                data.append("exit(0);\n")
+            data.append(line)
+            if insert_exit_line != -1 and i < insert_exit_line:
+                if 'for (;; iter++) {' in line:
+                    data.pop()
+                    t = line.split(';')
+                    new_line = t[0] + ";iter<1" + t[1] + ";" + t[2]
+                    data.append(new_line)
+            # target bug triggering function
+            if regx_match(poc_func, line):
+                start_line = i+2
+                end_line = self._extract_func(i, code)
+                poc_c_text = "\n".join(code[start_line:end_line])
+            
+            if regx_match(non_thread_func, line):
+                insert_exit_line = self._extract_func(i, code)
+            
+            # tune netdevice init function
+            for each in devices_init_func_regx:
+                if regx_match(each, line):
+                    data.insert(len(data)-1, "system(\"echo 0 > /sys/kernel/debug/tracing/tracing_on\");\n")
+                    data.insert(len(data)-1, "system(\"echo 0 > /proc/sys/kernel/ftrace_enabled\");\n")
+                    data.append("system(\"echo 1 > /sys/kernel/debug/tracing/tracing_on\");\n")
+                    data.append("system(\"echo 1 > /proc/sys/kernel/ftrace_enabled\");\n")
+                    break
+
+        if poc_c_text == "":
+            poc_c_text = text
+            fdst.writelines(text)
+            fdst.close()
+        else:
+            fdst.writelines(data)
+            fdst.close()
+
         for each in syscalls:
             group = [each]
             if each == '__x64_sys_recv':
@@ -265,17 +337,32 @@ done""".format(cmd)
             if each == '__x64_sys_send':
                 group = ['__x64_sys_send', '__x64_sys_sendto']
             call_name = each.split("__x64_sys_")[1]
-            if regx_match(r'(\W|^){}\('.format(call_name), c_text):
-                if call_name not in common_setup_syscalls and each not in enabled_syscalls:
+            if regx_match(r'(\W|^){}\('.format(call_name), poc_c_text):
+                if each not in enabled_syscalls:
                     enabled_syscalls.extend(group)
-            if "__NR_"+call_name in c_text:
-                if call_name not in common_setup_syscalls and each not in enabled_syscalls:
+            if "__NR_"+call_name+"," in poc_c_text:
+                if each not in enabled_syscalls:
                     enabled_syscalls.extend(group)
-            if "sys_"+call_name in c_text:
-                if call_name not in common_setup_syscalls and each not in enabled_syscalls:
+            if "sys_"+call_name+"," in poc_c_text:
+                if each not in enabled_syscalls:
                     enabled_syscalls.extend(group)
-        return enabled_syscalls
+        for syzcall in self.syzcall2syscall:
+            if syzcall in poc_c_text:
+                enabled_syscalls.extend(self.syzcall2syscall[syzcall])
+        return unique(enabled_syscalls)
     
+    def _extract_func(self, start_line, text):
+        n_bracket = 0
+        for i in range(start_line, len(text)):
+            line = text[i].strip()
+            if '{' in line:
+                n_bracket += 1
+            if '}' in line:
+                n_bracket -= 1
+                if n_bracket == 0:
+                    return i
+        return -1
+
     def _write_to(self, content, name):
         file_path = "{}/{}".format(self.path_case_plugin, name)
         super()._write_to(content, file_path)

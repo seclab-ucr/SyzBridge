@@ -1,0 +1,98 @@
+{
+    "syz_kvm_setup_cpu": [
+        "__x64_sys_ioctl",
+        "__x64_sys_close"
+    ],
+    "syz_emit_ethernet": [
+        "__x64_sys_write",
+        "__x64_sys_writev"
+    ],
+    "syz_io_uring_complete": [
+    ],
+    "syz_io_uring_setup": [
+        "__x64_sys_io_uring_setup"
+    ],
+    "syz_io_uring_submit": [
+    ],
+    "syz_usbip_server_init": [
+        "__x64_sys_socketpair",
+        "__x64_sys_write"
+    ],
+    "syz_btf_id_by_name": [
+        "__x64_sys_open",
+        "__x64_sys_read"
+    ],
+    "syz_memcpy_off": [
+    ],
+    "syz_extract_tcp_res": [
+        "__x64_sys_read"
+    ],
+    "syz_open_dev": [
+        "__x64_sys_open"
+    ],
+    "syz_open_procfs": [
+        "__x64_sys_open"
+    ],
+    "syz_open_pts": [
+        "__x64_sys_open"
+    ],
+    "syz_init_net_socket": [
+        "__x64_sys_open",
+        "__x64_sys_socket",
+        "__x64_sys_close",
+        "__x64_sys_setns"
+    ],
+    "syz_emit_vhci": [
+        "__x64_sys_write"
+    ],
+    "syz_genetlink_get_family_id": [
+        "__x64_sys_socket"
+    ],
+    "syz_read_part_table": [
+        "__x64_sys_memfd_create",
+        "__x64_sys_ftruncate",
+        "__x64_sys_pwritev",
+        "__x64_sys_open",
+        "__x64_sys_close",
+        "__x64_sys_ioctl",
+        "__x64_sys_stat"
+    ],
+    "syz_mount_image": [
+        "__x64_sys_memfd_create",
+        "__x64_sys_ftruncate",
+        "__x64_sys_pwritev",
+        "__x64_sys_open",
+        "__x64_sys_close",
+        "__x64_sys_ioctl",
+        "__x64_sys_mkdir",
+        "__x64_sys_mount"
+    ],
+    "syz_fuse_handle_req": [
+        "__x64_sys_read",
+        "__x64_sys_write"
+    ],
+    "syz_80211_inject_frame": [
+        "__x64_sys_socket",
+        "__x64_sys_sendto",
+        "__x64_sys_send",
+        "__x64_sys_recv",
+        "__x64_sys_recvfrom",
+        "__x64_sys_close"
+    ],
+    "syz_80211_join_ibss": [
+        "__x64_sys_socket",
+        "__x64_sys_sendto",
+        "__x64_sys_send",
+        "__x64_sys_recv",
+        "__x64_sys_recvfrom",
+        "__x64_sys_close",
+        "__x64_sys_ioctl"
+    ],
+    "syz_clone": [
+        "__x64_sys_clone",
+        "__x64_sys_exit"
+    ],
+    "syz_clone3": [
+        "__x64_sys_clone3"
+    ]
+}

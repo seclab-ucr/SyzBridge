@@ -4,12 +4,14 @@ import time
 import os, queue
 import infra.tool_box as utilities
 
+from time import sleep
 from subprocess import Popen, PIPE, STDOUT, call
 from .network import Network
 from .error import AlternativeFunctionError
 
 reboot_regx = r'reboot: machine restart'
 port_error_regx = r'Could not set up host forwarding rule'
+default_output_timer = 5
 
 class VMInstance(Network):
     DISTROS = 0
@@ -36,6 +38,9 @@ class VMInstance(Network):
         self.alternative_func_args = None
         self.alternative_func_output = None
         self.output = []
+        self._output_timer = default_output_timer
+        self._output_lock = threading.Lock()
+        self.lock = threading.Lock()
         log_name += log_suffix
         self.logger = utilities.init_logger(os.path.join(work_path, log_name), debug=debug, propagate=debug)
         self.case_logger = self.logger
@@ -69,7 +74,9 @@ class VMInstance(Network):
             x = threading.Thread(target=self.monitor_execution, name="{} qemu killer".format(self.tag))
             x.start()
         x1 = threading.Thread(target=self.__log_qemu, args=(p.stdout,), name="{} qemu logger".format(self.tag))
+        x2 = threading.Thread(target=self._new_output_timer, name="{} qemu output timer".format(self.tag))
         x1.start()
+        x2.start()
 
         self.alternative_func = alternative_func
         self.alternative_func_args = args
@@ -113,13 +120,13 @@ class VMInstance(Network):
         qemu_failed = False
         count = 0
         run_alternative_func = False
-        while (count <self.timeout/10):
+        while (count <self.timeout):
             if self.kill_qemu:
                 self.case_logger.info('Signal kill qemu received.')
                 self.kill_vm()
                 return
             count += 1
-            time.sleep(10)
+            time.sleep(1)
             poll = self.instance.poll()
             if poll != None:
                 if not self.qemu_ready:
@@ -156,6 +163,9 @@ class VMInstance(Network):
                     pid = int(line)
                     call("kill -9 {}".format(pid), shell=True)
                     break
+    
+    def no_new_output(self):
+        return self._output_lock.locked()
     
     def _setup_distros(self, port, image, linux, key, mem="2G", cpu="2", gdb_port=None, mon_port=None, timeout=None):
         #self.qemu_ready_bar = r'(\w+ login:)|(Ubuntu \d+\.\d+\.\d+ LTS ubuntu20 ttyS0)'
@@ -226,11 +236,30 @@ class VMInstance(Network):
         else:
             return True
     
+    def _new_output_timer(self):
+        while (self.instance.poll() is None):
+            while (self._output_timer > 0):
+                self.lock.acquire()
+                self._output_timer -= 1
+                self.lock.release()
+                sleep(1)
+            self._output_lock.acquire(blocking=True)
+        #if not self._has_new_output:
+        return
+    
+    def _resume_output_timer(self):
+        self.lock.acquire()
+        self._output_timer = default_output_timer
+        self.lock.release()
+    
     def __log_qemu(self, pipe):
         try:
             self.logger.info("\n".join(self.cmd_launch)+"\n")
             self.logger.info("pid: {}  timeout: {}".format(self.instance.pid, self.timeout))
             for line in iter(pipe.readline, b''):
+                self._resume_output_timer()
+                if self._output_lock.locked():
+                    self._output_lock.release()
                 try:
                     line = line.decode("utf-8").strip('\n').strip('\r')
                 except:
