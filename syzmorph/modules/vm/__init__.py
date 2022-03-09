@@ -8,6 +8,7 @@ class VM(VMInstance, VMState):
         VMState.__init__(self, vmlinux, gdb_port, arch, work_path=work_path, log_suffix=log_suffix, debug=debug)
     
     def kill(self):
+        self.logger.info("Kill QEMU on demand")
         self.kill_vm()
         if self.gdb != None:
             self.gdb.close()

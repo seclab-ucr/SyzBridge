@@ -9,6 +9,7 @@ from infra.tool_box import *
 from infra.ftraceparser.trace import Trace, Node
 from plugins.error import *
 
+TIMEOUT_TRACE_ANALYSIS = 10*60
 class TraceAnalysis(AnalysisModule):
     NAME = "TraceAnalysis"
     REPORT_START = "======================TraceAnalysis Report======================"
@@ -53,16 +54,25 @@ class TraceAnalysis(AnalysisModule):
             if cfg == None:
                 break
             trace_upstream = self._get_trace(cfg)
-            if trace_upstream is None:
+            if trace_upstream == None:
                 self.logger.error("Failed to get upstream trace, try again")
                 continue
+            if self._is_trace_empty(trace_upstream):
+                continue
             break
+
+        if self._is_trace_empty(trace_upstream):
+            self.logger.error("Failed to get upstream trace")
+            return False
+        
         for distro in self.cfg.get_distros():
             for _ in range(0,3):
-                self.logger.error("Starting retrieving trace from {}".format(distro.distro_name))
+                self.logger.info("Starting retrieving trace from {}".format(distro.distro_name))
                 trace_vendor = self._get_trace(distro)
                 if trace_vendor is None:
                     self.logger.error("Failed to get vendor trace, try again")
+                    continue
+                if self._is_trace_empty(trace_vendor):
                     continue
                 break
 
@@ -127,7 +137,7 @@ class TraceAnalysis(AnalysisModule):
     def build_env_upstream(self):
         image = "stretch"
         gcc_version = set_compiler_version(time_parser.parse(self.case["time"]), self.case["config"])
-        script = "syzmorph/scripts/deploy-linux.sh"
+        script = os.path.join(self.path_package, "scripts/deploy-linux.sh")
         chmodX(script)
         p = Popen([script, gcc_version, self.path_case, str(self.args.parallel_max), self.case["commit"], self.case["config"], 
             image, "", "", str(self.index), self.case["kernel"], ""],
@@ -190,7 +200,7 @@ class TraceAnalysis(AnalysisModule):
         return None
     
     def _prepare_syzkaller_bin(self, i386):
-        script = "syzmorph/scripts/deploy-syzkaller.sh"
+        script = os.path.join(self.path_package, "scripts/deploy-syzkaller.sh")
         chmodX(script)
         p = Popen([script, self.path_case_plugin, self.case["syz_repro"], self.case["syzkaller"], "0", str(i386)],
             stderr=STDOUT,
@@ -229,7 +239,19 @@ killall poc || true
 for i in {{1..30}}; do
     sleep 5
     ls trace.dat.cpu* || break
-done""".format(cmd)
+done
+
+CPU_DATA=0
+ls trace.dat.cpu0 && CPU_DATA=1 || true
+if [ $CPU_DATA -eq 1 ]; then
+    echo "try to manually restore trace.dat"
+    CPU_DATA_LIST=`ls trace.dat.cpu*`
+    trace-cmd restore -o $CPU_DATA_LIST
+fi
+
+EXIT_CODE=0
+ls trace.dat || EXIT_CODE=1
+exit $EXIT_CODE""".format(cmd)
         script_path = os.path.join(self.path_case_plugin, "trace-poc.sh")
         with open(script_path, "w") as f:
             f.write(trace_poc_text)
@@ -245,7 +267,7 @@ done""".format(cmd)
                 self.logger.error("Failed to build upstream environment")
                 return None
 
-        qemu = cfg.repro.launch_qemu(self.case_hash, work_path=self.path_case_plugin, log_name="qemu-{}.log".format(cfg.repro.type_name))
+        qemu = cfg.repro.launch_qemu(self.case_hash, work_path=self.path_case_plugin, log_name="qemu-{}.log".format(cfg.repro.type_name), timeout=TIMEOUT_TRACE_ANALYSIS)
         _, qemu_queue = qemu.run(alternative_func=self._run_trace_cmd, args=("trace-{}".format(cfg.repro.type_name), ))
         done = qemu_queue.get(block=True)
         qemu.kill()
@@ -256,18 +278,15 @@ done""".format(cmd)
     def _tune_poc(self, qemu):
         insert_exit_line = -1
         poc_c_text = ""
+        skip_funcs = [r"setup_usb\(\);", r"setup_leak\(\);", r"setup_cgroups\(\);", r"initialize_cgroups\(\);", r"setup_cgroups_loop\(\);"]
         data = []
 
         src = os.path.join(self.path_case, "poc.c")
         dst = os.path.join(self.path_case_plugin, "poc.c")
-        poc_func = ""
         non_thread_func = ""
-        flag_change_iter = False
         fsrc = open(src, "r")
         fdst = open(dst, "w")
 
-        common_setup_syscalls = ['mmap', 'waitpid', 'kill', 'signal', 'exit', 'unshare', 'setrlimit', 'chdir', 'chmod', 
-           'clone', 'prctl', 'mprotect', 'chroot', '' ]
         devices_init_func_regx = ['initialize_vhci\(\);', 'initialize_netdevices_init\(\);', 'initialize_devlink_pci\(\);',
             'initialize_tun\(\);', 'initialize_netdevices\(\);', 'initialize_wifi_devices\(\);']
         syscalls = []
@@ -281,16 +300,11 @@ done""".format(cmd)
         fsrc.close()
         text = "".join(code)
         if text.find("int main") != -1:
-            poc_func = r"^(static )?int main\(.*\)\n"
             non_thread_func = r"^(static )?int main"
         if text.find("void loop") != -1:
-            poc_func = r"^(static )?void loop\(.*\)\n"
             non_thread_func = r"^(static )?void loop\(.*\)\n"
         if text.find("void execute_one") != -1:
             non_thread_func = r"^(static )?void loop\(.*\)\n"
-            flag_change_iter = True
-        if text.find("void execute_call") != -1:
-            poc_func = r"^(static )?void execute_call\(.*\)\n"
 
         # Locate the function actual trigger the bug    
         for i in range(0, len(code)):
@@ -304,11 +318,6 @@ done""".format(cmd)
                     t = line.split(';')
                     new_line = t[0] + ";iter<1" + t[1] + ";" + t[2]
                     data.append(new_line)
-            # target bug triggering function
-            if regx_match(poc_func, line):
-                start_line = i+2
-                end_line = self._extract_func(i, code)
-                poc_c_text = "\n".join(code[start_line:end_line])
             
             if regx_match(non_thread_func, line):
                 insert_exit_line = self._extract_func(i, code)
@@ -322,35 +331,63 @@ done""".format(cmd)
                     data.append("system(\"echo 1 > /proc/sys/kernel/ftrace_enabled\");\n")
                     break
 
-        if poc_c_text == "":
-            poc_c_text = text
-            fdst.writelines(text)
-            fdst.close()
-        else:
-            fdst.writelines(data)
-            fdst.close()
+            for each in skip_funcs:
+                if regx_match(each, line):
+                    data.pop()
+            
+            # Some PoC pause the entire pocess by sleeping a very long time
+            # We skip it in order to speed up trace analysis
+            sleep_regx = r'^( )+?sleep\((\d+)\);'
+            if regx_match(sleep_regx, line):
+                time = regx_get(sleep_regx, line, 1)
+                if time == None:
+                    self.logger.error("Wrong sleep format: {}".format(line))
+                    continue
+                if int(time) > 5:
+                    data.pop()
+                    data.append("sleep(5);\n")
+            
+            """# Somehow if PoC exit too quickly, the trace will not be complete
+            exit_regx = r'^( )+?exit\((\d+)\);'
+            if regx_match(exit_regx, line):
+                data.insert(len(data)-1, "sleep(1);\n")"""
 
-        for each in syscalls:
-            group = [each]
-            if each == '__x64_sys_recv':
-                group = ['__x64_sys_recv', '__x64_sys_recvfrom']
-            if each == '__x64_sys_send':
-                group = ['__x64_sys_send', '__x64_sys_sendto']
-            call_name = each.split("__x64_sys_")[1]
-            if regx_match(r'(\W|^){}\('.format(call_name), poc_c_text):
-                if each not in enabled_syscalls:
+        fdst.writelines(data)
+        fdst.close()
+
+        r = request_get(self.case['syz_repro'])
+        testcase = self._extract_syscall_from_template(r.text)
+        for each in testcase:
+            if '$' in each:
+                syscall = each.split('$')[0]
+            else:
+                syscall = each
+            
+            if '__x64_sys_' + syscall in syscalls: 
+                syscall = '__x64_sys_' + syscall
+                group = [syscall]
+                if syscall == '__x64_sys_recv':
+                    group = ['__x64_sys_recv', '__x64_sys_recvfrom']
+                if syscall == '__x64_sys_send':
+                    group = ['__x64_sys_send', '__x64_sys_sendto']
+                if syscall not in enabled_syscalls:
                     enabled_syscalls.extend(group)
-            if "__NR_"+call_name+"," in poc_c_text:
-                if each not in enabled_syscalls:
-                    enabled_syscalls.extend(group)
-            if "sys_"+call_name+"," in poc_c_text:
-                if each not in enabled_syscalls:
-                    enabled_syscalls.extend(group)
-        for syzcall in self.syzcall2syscall:
-            if syzcall in poc_c_text:
-                enabled_syscalls.extend(self.syzcall2syscall[syzcall])
+            if syscall.startswith("syz_"):
+                if syscall in self.syzcall2syscall:
+                    enabled_syscalls.extend(self.syzcall2syscall[syscall])
         return unique(enabled_syscalls)
     
+    def _extract_syscall_from_template(self, testcase):
+        res = []
+        text = testcase.split('\n')
+        for line in text:
+            if len(line)==0 or line[0] == '#':
+                continue
+            syscall = regx_get(r'(\w+(\$\w+)?)\(', line, 0)
+            if syscall != None:
+                res.append(syscall)
+        return res
+
     def _extract_func(self, start_line, text):
         n_bracket = 0
         for i in range(start_line, len(text)):
@@ -362,6 +399,18 @@ done""".format(cmd)
                 if n_bracket == 0:
                     return i
         return -1
+    
+    def _is_trace_empty(self, trace_path):
+        if trace_path == None:
+            return False
+        if not os.path.exists(trace_path):
+            return True
+        f = open(trace_path, "r")
+        lines = f.readlines()
+        f.close()
+        if len(lines) == 0:
+            return True
+        return False
 
     def _write_to(self, content, name):
         file_path = "{}/{}".format(self.path_case_plugin, name)

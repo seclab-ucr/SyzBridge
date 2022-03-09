@@ -37,12 +37,15 @@ class CapabilityCheck(AnalysisModule):
 
     def run(self):
         if not self.build_kernel():
-            return None
+            self.logger.error("Fail to build kernel")
+            return False
         if not self.tune_poc(debug=True):
-            return None
+            self.logger.error("Fail to tune poc")
+            return False
         reports = self.get_capability_check_report()
         if reports == None:
-            return None
+            self.logger.error("Fail to get capability check report")
+            return True
         self.parse_report(reports)
         return True
     
@@ -54,8 +57,6 @@ class CapabilityCheck(AnalysisModule):
         done = qemu_queue.get(block=True)
         report = self._parse_capability_log(qemu.output)
         qemu.kill()
-        if not done:
-            return None
         return report
     
     def parse_report(self, reports):
@@ -104,13 +105,13 @@ class CapabilityCheck(AnalysisModule):
         fsrc.close()
         text = "".join(code)
         if text.find("int main") != -1:
-            poc_func = r"^int main"
+            poc_func = r"^(static )?int main\(.*\)\n"
         if text.find("void loop") != -1:
-            poc_func = r"^void loop"
+            poc_func = r"^(static )?void loop\(.*\)\n"
         if text.find("void execute_call") != -1:
-            poc_func = r"^void execute_call"
+            poc_func = r"^(static )?void execute_call\(.*\)\n"
         for i in range(0, len(code)):
-            line = code[i].strip()
+            line = code[i]
             if regx_match(poc_func, line):
                 start_line = i+2
                 data = code[:start_line]
@@ -143,7 +144,7 @@ class CapabilityCheck(AnalysisModule):
         image = "stretch"
         patch = os.path.join(self.path_package, "plugins/capability_check/capability_check.patch")
         gcc_version = set_compiler_version(time_parser.parse(self.case["time"]), self.case["config"])
-        script = "syzmorph/scripts/deploy-linux.sh"
+        script = os.path.join(self.path_package, "scripts/deploy-linux.sh")
         chmodX(script)
         p = Popen([script, gcc_version, self.path_case, str(self.args.parallel_max), self.case["commit"], self.case["config"], 
             image, "", "", str(self.index), self.case["kernel"], patch],
@@ -196,6 +197,7 @@ killall poc || true
             call_trace = extrace_call_trace(out1, start_with=self.LOG_HEADER)
             self._write_to("\n".join(call_trace), "call_trace.log-{}".format(n))
             if not self._build_syz_logparser(self.syz):
+                self.logger.error("Fail to build syz logparser")
                 return None
             self.syz.pull_cfg_for_cur_case()
             src = os.path.join(self.path_case_plugin, "call_trace.log-{}".format(n))
@@ -227,8 +229,10 @@ killall poc || true
         if syz.check_binary(binary_name="syz-logparser"):
             return True
         if syz.pull_syzkaller(commit=self.case['syzkaller']) != 0:
+            self.logger.error("Fail to pull syzkaller")
             return False
         if syz.patch_syzkaller(patch=patch) != 0:
+            self.logger.error("Fail to patch syzkaller")
             return False
         """
         Will fail in first time
@@ -236,6 +240,7 @@ killall poc || true
         """
         syz.build_syzkaller()
         if syz.build_syzkaller(component='all') != 0:
+            self.logger.error("Fail to build syzkaller")
             return False
         return True
     

@@ -72,6 +72,7 @@ class Task:
                 cap_text = "TASK_" + each.upper()
                 setattr(Task, cap_text, 1 << index)
                 self.task_value += (1 << index,)
+                self.logger.debug("Task: {} {}".format(cap_text, self.task_value))
                 index += 1
                 if getattr(self.args, each):
                     task |= getattr(Task, cap_text)

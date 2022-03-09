@@ -34,6 +34,8 @@ class Case:
         folder = os.path.basename(dirname)
         if folder == 'incomplete':
             folder = 'completed'
+        if folder == 'error':
+            folder = 'completed'
         if error:
             folder = 'error'
         self._save_to(folder)

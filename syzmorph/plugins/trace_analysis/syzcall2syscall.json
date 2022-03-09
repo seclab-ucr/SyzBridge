@@ -20,6 +20,7 @@
     ],
     "syz_btf_id_by_name": [
         "__x64_sys_open",
+        "__x64_sys_openat",
         "__x64_sys_read"
     ],
     "syz_memcpy_off": [
@@ -28,16 +29,20 @@
         "__x64_sys_read"
     ],
     "syz_open_dev": [
-        "__x64_sys_open"
+        "__x64_sys_open",
+        "__x64_sys_openat"
     ],
     "syz_open_procfs": [
-        "__x64_sys_open"
+        "__x64_sys_open",
+        "__x64_sys_openat"
     ],
     "syz_open_pts": [
-        "__x64_sys_open"
+        "__x64_sys_open",
+        "__x64_sys_openat"
     ],
     "syz_init_net_socket": [
         "__x64_sys_open",
+        "__x64_sys_openat",
         "__x64_sys_socket",
         "__x64_sys_close",
         "__x64_sys_setns"
@@ -53,6 +58,7 @@
         "__x64_sys_ftruncate",
         "__x64_sys_pwritev",
         "__x64_sys_open",
+        "__x64_sys_openat",
         "__x64_sys_close",
         "__x64_sys_ioctl",
         "__x64_sys_stat"
@@ -62,6 +68,7 @@
         "__x64_sys_ftruncate",
         "__x64_sys_pwritev",
         "__x64_sys_open",
+        "__x64_sys_openat",
         "__x64_sys_close",
         "__x64_sys_ioctl",
         "__x64_sys_mkdir",

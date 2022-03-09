@@ -102,6 +102,7 @@ class ModulesAnalysis(AnalysisModule):
             if begin_node.parent is None and begin_node.is_function and not trace.is_filtered(begin_node):
                 if all_distros == []:
                     return False
+                self.logger.info("[Modules analysis] Starting from node {}".format(begin_node.info))
                 if not self.check_modules_in_trace(begin_node, vm, check_map, all_distros):
                     return False
             begin_node = begin_node.next_node_by_time
@@ -124,9 +125,10 @@ class ModulesAnalysis(AnalysisModule):
                             continue
                         check_map[distro.distro_name][src_file] = True
                         ret = self.module_check(distro, src_file)
-                        if ret != self.MODULE_ENABLED:
-                            self._missing_modules[self.vul_module] = {'name': self.vul_module, 'src_file': src_file, 'hook': hook_end_node != None, 
-                                'distro': distro.distro_name, 'distro_version': distro.distro_version}
+                        if ret == None or ret == self.MODULE_ENABLED:
+                            continue
+                        self._missing_modules[self.vul_module] = {'name': self.vul_module, 'src_file': src_file, 'hook': hook_end_node != None, 
+                            'distro': distro.distro_name, 'distro_version': distro.distro_version}
                         if ret == self.MODULE_DISABLED:
                             self._missing_modules[self.vul_module]['type'] = self.MODULE_DISABLED, 
                             self._missing_modules[self.vul_module]['missing_reason'] = 'Module disabled'
@@ -143,7 +145,7 @@ class ModulesAnalysis(AnalysisModule):
                                 self._missing_modules[self.vul_module]['missing_reason'] = 'need loading by normal user'
                                 user = 'normal user'
                             self.report.append("[{}] Module {} from {} need to be loaded in {} ".format(user, self.vul_module, src_file, distro.distro_name))
-                        if ret == 3:
+                        if ret == self.MODULE_IN_BLACKLIST:
                             self._missing_modules[self.vul_module]['type'] = self.MODULE_IN_BLACKLIST, 
                             self._missing_modules[self.vul_module]['missing_reason'] = 'Module in blacklist'
                             self.report.append(begin_node.text)
@@ -362,6 +364,8 @@ class ModulesAnalysis(AnalysisModule):
         trace_file = os.path.join(self.path_case, TraceAnalysis.NAME, "trace-upstream.report")
         if not os.path.exists(trace_file):
             return None
+        self.logger.info("Open trace file: {}".format(trace_file))
+
         trace = Trace(logger=self.logger, debug=self.debug, as_servicve=True)
         trace.load_tracefile(trace_file)
         try:

@@ -75,6 +75,7 @@ class Launcher(Build):
             self.queue.put([[], False, True])
         else:
             self.queue.put(res)
+        qemu.kill();
         
         # sleep 5 seconds to wait qemu to exit
         sleep(5)

@@ -70,6 +70,13 @@ class VMInstance(Network):
         """
         p = Popen(self.cmd_launch, stdout=PIPE, stderr=STDOUT)
         self.instance = p
+
+        self.alternative_func = alternative_func
+        self.alternative_func_args = args
+
+        if self.alternative_func != None:
+            self.alternative_func_output = queue.Queue()
+
         if self.timeout != None:
             x = threading.Thread(target=self.monitor_execution, name="{} qemu killer".format(self.tag))
             x.start()
@@ -78,17 +85,14 @@ class VMInstance(Network):
         x1.start()
         x2.start()
 
-        self.alternative_func = alternative_func
-        self.alternative_func_args = args
-
-        if self.alternative_func != None:
-            self.alternative_func_output = queue.Queue()
-
         return p, self.alternative_func_output
 
     def kill_vm(self):
         self.logger.info('Kill VM pid: {}'.format(self.instance.pid))
-        self.instance.kill()
+        try:
+            self.instance.kill()
+        except:
+            self.logger.error("VM exit abnormally")
     
     def write_cmd_to_script(self, cmd, name, build_append=False):
         path_name = os.path.join(self.work_path, name)
@@ -133,7 +137,7 @@ class VMInstance(Network):
                     self.kill_proc_by_port(self.port)
                     self.case_logger.error('QEMU: Error occur at booting qemu')
                     self.qemu_fail = True
-                    self.alternative_func_output.put([self.qemu_fail])
+                    self.alternative_func_output.put([False])
                 return
             if not self.qemu_ready and self._is_qemu_ready():
                 self.qemu_ready = True
@@ -146,7 +150,7 @@ class VMInstance(Network):
         self.case_logger.info('Time out, kill qemu')
         if not self.qemu_ready:
             self.qemu_fail = True
-            self.alternative_func_output.put([self.qemu_fail])
+            self.alternative_func_output.put([False])
         self.kill_vm()
     
     def kill_proc_by_port(self, ssh_port):
@@ -234,7 +238,10 @@ class VMInstance(Network):
         if output == []:
             return False
         else:
-            return True
+            for line in output:
+                if utilities.regx_match(r'^\d+\.\d+', line):
+                    return True
+        return False
     
     def _new_output_timer(self):
         while (self.instance.poll() is None):

@@ -9,6 +9,9 @@ from infra.strings import *
 from subprocess import Popen, STDOUT, PIPE, call
 from plugins.modules_analysis import ModulesAnalysis
 
+BUG_REPRODUCE_TIMEOUT = 5*60
+MAX_BUG_REPRODUCE_TIMEOUT = 4*60*60
+
 class BugReproduce(AnalysisModule):
     NAME = "BugReproduce"
     REPORT_START = "======================BugReproduce Report======================"
@@ -78,7 +81,7 @@ class BugReproduce(AnalysisModule):
         res["triggered"] = False
         res["bug_title"] = ""
         res["root"] = True
-    
+        
         success, _ = self.reproduce(distro, func=self.capture_kasan, root=True)
         if success:
             res["triggered"] = True
@@ -89,11 +92,11 @@ class BugReproduce(AnalysisModule):
                 res["bug_title"] = self.bug_title
                 res["root"] = False
             return
-
-        self.logger.info("{} does not trigger any bug, try to enable moissing modules".format(distro.distro_name))
+        
+        self.logger.info("{} does not trigger any bugs, try to enable missing modules".format(distro.distro_name))
         m = self.get_missing_modules()
         missing_modules = [e['name'] for e in m ]
-        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, [], ), root=True)
+        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, [], ), root=True, log_prefix='missing-modules', timeout=MAX_BUG_REPRODUCE_TIMEOUT)
         if success:
             tested_modules = t[0]
             res["triggered"] = True
@@ -105,7 +108,7 @@ class BugReproduce(AnalysisModule):
                 return
             essential_modules = self.minimize_modules(distro, tested_modules, [tested_modules[::-1][0]])
             if essential_modules == None:
-                self.logger.error("Essential modules are not stable, fail to minimize")
+                self.logger.error("{} trigger the bug, but essential modules are not stable, fail to minimize".format(distro.distro_name))
             else:
                 if self.check_module_priviledge(essential_modules):
                     res["root"] = False
@@ -132,7 +135,8 @@ class BugReproduce(AnalysisModule):
     
     def minimize_modules(self, distro, tested_modules: list, essential_modules: list):
         tested_modules = tested_modules[::-1][1:]
-        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(tested_modules, essential_modules), root=True)
+        self.logger.info("{} is minimizing modules list {}, current essential list {}".format(distro.distro_name, tested_modules, essential_modules))
+        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(tested_modules, essential_modules), root=True, log_prefix='minimize', timeout=MAX_BUG_REPRODUCE_TIMEOUT)
         if success:
             tested_modules = t[0]
             if tested_modules != []:
@@ -142,15 +146,15 @@ class BugReproduce(AnalysisModule):
                 return essential_modules
         return None
 
-    def reproduce(self, distro, root: bool, func, func_args=()):
+    def reproduce(self, distro, root: bool, func, func_args=(), log_prefix= "qemu", **kwargs):
         self.distro_lock.acquire()
         self.tune_poc(root)
         self.distro_lock.release()
         if root:
-            log_name = "qemu-{}-root".format(distro.distro_name)
+            log_name = "{}-{}-root".format(log_prefix, distro.distro_name)
         else:
-            log_name = "qemu-{}-normal".format(distro.distro_name)
-        report, triggered, t = distro.repro.reproduce(func=func, func_args=func_args, root=root, work_dir=self.path_case_plugin, vm_tag=distro.distro_name, c_hash=self.case_hash, log_name=log_name)
+            log_name = "{}-{}-normal".format(log_prefix, distro.distro_name)
+        report, triggered, t = distro.repro.reproduce(func=func, func_args=func_args, root=root, work_dir=self.path_case_plugin, vm_tag=distro.distro_name, c_hash=self.case_hash, log_name=log_name, **kwargs)
         if triggered:
             is_kasan_bug, title = self._KasanChecker(report)
             if is_kasan_bug:
@@ -175,48 +179,58 @@ class BugReproduce(AnalysisModule):
         def module_sort(e):
             return (e['type'], e['hook'] == False) 
         
-        res.sort(key=module_sort, reverse=True)
+        try: 
+            res.sort(key=module_sort, reverse=True)
+        except:
+            self.logger.error("Failed to sort missing modules {}".format(res))
+            raise Exception("{} failed to sort missing modules {}".format(self.case_hash, res))
         return res
 
     def tune_poc(self, root: bool):
-        if not root:
-            data = []
-            src = os.path.join(self.path_case, "poc.c")
-            dst = os.path.join(self.path_case_plugin, "poc_normal.c")
-            poc_func = ""
-            fsrc = open(src, "r")
-            fdst = open(dst, "w")
 
-            code = fsrc.readlines()
-            fsrc.close()
-            text = "".join(code)
-            if text.find("int main") != -1:
-                poc_func = r"^int main"
-            for i in range(0, len(code)):
-                line = code[i].strip()
-                if regx_match(poc_func, line):
-                    start_line = i
-                    data = code[:start_line]
-                    data.append("#include \"sandbox.h\"")
-                    data.append("\n")
-                    data.extend(code[start_line:start_line+2])
-                    data.append("setup_sandbox();\n")
-                    data.extend(code[start_line+2:])
+        skip_funcs = [r"setup_usb\(\);", r"setup_leak\(\);", r"setup_cgroups\(\);", r"initialize_cgroups\(\);", r"setup_cgroups_loop\(\);"]
+        data = []
+        src = os.path.join(self.path_case, "poc.c")
+        if not root:
+            dst = os.path.join(self.path_case_plugin, "poc_normal.c")
+        else:
+            dst = os.path.join(self.path_case_plugin, "poc_root.c")
+
+        if os.path.exists(dst):
+            os.remove(dst)
+
+        main_func = ""
+        insert_line = []
+        fsrc = open(src, "r")
+        fdst = open(dst, "w")
+
+        code = fsrc.readlines()
+        fsrc.close()
+        text = "".join(code)
+        if text.find("int main") != -1:
+            main_func = r"^int main"
+
+        for i in range(0, len(code)):
+            line = code[i].strip()
+            data.append(code[i])
+            if not root:
+                if regx_match(main_func, line):
+                    data.insert(len(data), "#include \"sandbox.h\"")
+                    insert_line.append([i+2, "setup_sandbox();"])
                     break
-            if data != []:
-                fdst.writelines(data)
-                fdst.close()
+            for each in skip_funcs:
+                if regx_match(each, line):
+                    data.pop()
+
+        if data != []:
+            fdst.writelines(data)
+            fdst.close()
+            if not root:
                 src = os.path.join(self.path_package, "plugins/bug_reproduce/sandbox.h")
                 dst = os.path.join(self.path_case_plugin, "sandbox.h")
                 shutil.copyfile(src, dst)
-            else:
-                self.logger.error("Cannot find real PoC function")
         else:
-            src = os.path.join(self.path_case, "poc.c")
-            dst = os.path.join(self.path_case_plugin, "poc_root.c")
-            if os.path.exists(dst):
-                os.remove(dst)
-            shutil.copy(src, dst)
+            self.logger.error("Cannot find real PoC function")
         self._compile_poc(root)
         return
     
@@ -249,16 +263,18 @@ class BugReproduce(AnalysisModule):
         q = queue.Queue()
         threading.Thread(target=warp_qemu_capture_kasan, args=(qemu, th_index, q)).start()
         
+        qemu.logger.info("Loading essential modules {}".format(essential_modules))
         if essential_modules != []:
             self._enable_missing_modules(qemu, essential_modules)
             if root:
                 user = "root"
             else:
                 user = "etenal"
+            qemu.command(cmds="killall poc", user="root", wait=True)
             qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
-            self.logger.info("running PoC")
+            qemu.logger.info("running PoC")
             qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user="root", wait=True)
-            qemu.command(cmds="chmod +x poc && ./poc", user=user, wait=False, timeout=5*60)
+            qemu.command(cmds="rm -rf ./tmp && mkdir ./tmp && mv ./poc ./tmp && cd ./tmp && chmod +x poc && ./poc", user=user, wait=True, timeout=BUG_REPRODUCE_TIMEOUT)
             while True:
                 try:
                     [res, trigger] = q.get(block=True, timeout=5)
@@ -270,16 +286,18 @@ class BugReproduce(AnalysisModule):
                         break
 
         for module in missing_modules:
+            qemu.logger.info("Loading missing module {}".format(module))
             self._enable_missing_modules(qemu, [module])
             tested_modules.append(module)
             if root:
                 user = "root"
             else:
                 user = "etenal"
+            qemu.command(cmds="killall poc", user="root", wait=True)
             qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
-            self.logger.info("running PoC")
+            qemu.logger.info("running PoC")
             qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user="root", wait=True)
-            qemu.command(cmds="chmod +x poc && ./poc", user=user, wait=False, timeout=5*60)
+            qemu.command(cmds="rm -rf ./tmp && mkdir ./tmp && mv ./poc ./tmp && cd ./tmp && chmod +x poc && ./poc", user=user, wait=True, timeout=BUG_REPRODUCE_TIMEOUT)
             while True:
                 try:
                     [res, trigger] = q.get(block=True, timeout=5)
@@ -367,8 +385,8 @@ class BugReproduce(AnalysisModule):
         else:
             user = "etenal"
         qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
-        self.logger.info("running PoC")
-        script = "syzmorph/scripts/run-script.sh"
+        qemu.logger.info("running PoC")
+        script = os.path.join(self.path_package, "scripts/run-script.sh")
         chmodX(script)
         p = Popen([script, str(qemu.port), self.path_case_plugin, qemu.key, user],
             stderr=STDOUT,

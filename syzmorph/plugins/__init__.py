@@ -64,8 +64,9 @@ class AnalysisModule:
             try:
                 ret = func(self)
             except Exception as e:
-                self.case_logger.error("Exception happens: {}".format(e))
-                self.main_logger.error("Exception happens: {}".format(e))
+                logging.exception("Case {} caught exception in plugin {}".format(self.case_hash, self.NAME))
+                self.case_logger.error("[{}] Exception happens: {}".format(self.analyzor.NAME, e))
+                self.main_logger.error("[{}] Exception happens: {}".format(self.analyzor.NAME, e))
                 return None
             return ret
         return inner
