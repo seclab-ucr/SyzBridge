@@ -82,7 +82,7 @@ class BugReproduce(AnalysisModule):
         res["bug_title"] = ""
         res["root"] = True
         
-        success, _ = self.reproduce(distro, func=self.capture_kasan, root=True)
+        """success, _ = self.reproduce(distro, func=self.capture_kasan, root=True)
         if success:
             res["triggered"] = True
             res["bug_title"] = self.bug_title
@@ -92,7 +92,7 @@ class BugReproduce(AnalysisModule):
                 res["bug_title"] = self.bug_title
                 res["root"] = False
             return
-        
+        """
         self.logger.info("{} does not trigger any bugs, try to enable missing modules".format(distro.distro_name))
         m = self.get_missing_modules(distro.distro_name)
         missing_modules = [e['name'] for e in m ]
@@ -175,12 +175,16 @@ class BugReproduce(AnalysisModule):
         r = json.load(open(t, "r"))
         res = []
         for e in r:
-            if distro_name in r[e]['missing']:
-                t = r[e].copy()
-                for key in t['missing'][distro_name]:
-                    t[key] = t['missing'][distro_name][key]
-                t.pop('missing')
-                res.append(t)
+            try:
+                if distro_name in r[e]['missing']:
+                    t = r[e].copy()
+                    for key in t['missing'][distro_name]:
+                        t[key] = t['missing'][distro_name][key]
+                    t.pop('missing')
+                    res.append(t)
+            except KeyError:
+                self.logger.error("{} doesn't have missing section".format(r[e]))
+                raise(Exception("[{}] {} doesn't have missing section".format(self.case_hash, r[e])))
 
         def module_sort(e):
             return (e['type'], e['hook'] == False) 
@@ -189,7 +193,7 @@ class BugReproduce(AnalysisModule):
             res.sort(key=module_sort, reverse=True)
         except:
             self.logger.error("Failed to sort missing modules {}".format(res))
-            raise Exception("{} failed to sort missing modules {}".format(self.case_hash, res))
+            raise Exception("[{}] failed to sort missing modules {}".format(self.case_hash, res))
         return res
 
     def tune_poc(self, root: bool):
