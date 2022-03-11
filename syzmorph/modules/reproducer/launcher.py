@@ -48,8 +48,8 @@ class Launcher(Build):
             if qemu_fail:
                 continue
             i += 1
-            if not trigger and high_risk:
-                trigger = high_risk
+            if not trigger and crashes != []:
+                trigger = True
                 res = crashes
                 self.kill_qemu = True
                 self.save_crash_log(res, self.type_name)

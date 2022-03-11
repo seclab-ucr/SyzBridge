@@ -94,7 +94,7 @@ class BugReproduce(AnalysisModule):
             return
         
         self.logger.info("{} does not trigger any bugs, try to enable missing modules".format(distro.distro_name))
-        m = self.get_missing_modules()
+        m = self.get_missing_modules(distro.distro_name)
         missing_modules = [e['name'] for e in m ]
         success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, [], ), root=True, log_prefix='missing-modules', timeout=MAX_BUG_REPRODUCE_TIMEOUT)
         if success:
@@ -156,10 +156,9 @@ class BugReproduce(AnalysisModule):
             log_name = "{}-{}-normal".format(log_prefix, distro.distro_name)
         report, triggered, t = distro.repro.reproduce(func=func, func_args=func_args, root=root, work_dir=self.path_case_plugin, vm_tag=distro.distro_name, c_hash=self.case_hash, log_name=log_name, **kwargs)
         if triggered:
-            is_kasan_bug, title = self._KasanChecker(report)
-            if is_kasan_bug:
-                self.bug_title = title
-                return True, t
+            title = self._BugChecker(report)
+            self.bug_title = title
+            return triggered, t
         return False, t
     
     def rename_poc(self, root: bool):
@@ -168,13 +167,20 @@ class BugReproduce(AnalysisModule):
         else:
             shutil.move(os.path.join(self.path_case_plugin, "poc.c"), os.path.join(self.path_case_plugin, "poc_normal.c"))
 
-    def get_missing_modules(self):
+    def get_missing_modules(self, distro_name):
         res = []
         t = os.path.join(self.path_case, ModulesAnalysis.NAME, "missing_modules.json")
         if not os.path.exists(t):
             return res
         r = json.load(open(t, "r"))
-        res = [r[e] for e in r]
+        res = []
+        for e in r:
+            if distro_name in r[e]['missing']:
+                t = r[e].copy()
+                for key in t['missing'][distro_name]:
+                    t[key] = t['missing'][distro_name][key]
+                t.pop('missing')
+                res.append(t)
 
         def module_sort(e):
             return (e['type'], e['hook'] == False) 
@@ -321,14 +327,24 @@ class BugReproduce(AnalysisModule):
             trigger_hunted_bug = False
         qemu.alternative_func_output.put([res, trigger_hunted_bug, qemu.qemu_fail], block=False)
 
+    def _crash_start(self, line):
+        crash_head = [r'BUG: ', r'WARNING:', r'INFO:', r'Unable to handle kernel', 
+                r'general protection fault', r'stack segment:', r'kernel BUG',
+                r'BUG kmalloc-', r'divide error:', r'divide_error:', r'invalid opcode:',
+                r'UBSAN:', r'unregister_netdevice: waiting for', r'Internal error:',
+                r'Unhandled fault:', r'Alignment trap:']
+
+        for each in crash_head:
+            if regx_match(each, line):
+                return True
+        return False
+                
     def _qemu_capture_kasan(self, qemu, th_index):
         qemu_close = False
         out_begin = 0
         record_flag = 0
+        crash_flag = 0
         kasan_flag = 0
-        write_flag = 0
-        double_free_flag = 0
-        read_flag = 0
         crash = []
         res = []
         trigger_hunted_bug = False
@@ -339,32 +355,23 @@ class BugReproduce(AnalysisModule):
             for line in qemu.output[out_begin:]:
                 if regx_match(call_trace_regx, line) or \
                 regx_match(message_drop_regx, line):
-                    record_flag = 1
+                    crash_flag = 1
                 if regx_match(boundary_regx, line) or \
                 regx_match(panic_regx, line):
-                    if record_flag == 1:
+                    if crash_flag == 1:
                         res.append(crash)
                         crash = []
-                        if kasan_flag and (write_flag or read_flag or double_free_flag):
+                        if kasan_flag:
                             trigger_hunted_bug = True
-                            if write_flag:
-                                self.logger.debug("QEMU threaded {}: OOB/UAF write triggered".format(th_index))
-                            if double_free_flag:
-                                self.logger.debug("QEMU threaded {}: Double free triggered".format(th_index))
-                            if read_flag:
-                                self.logger.debug("QEMU threaded {}: OOB/UAF read triggered".format(th_index)) 
                             qemu.kill_qemu = True
-                    record_flag = 1
+                    record_flag = 0
+                    crash_flag = 0
                     continue
                 if (regx_match(kasan_mem_regx, line) and 'null-ptr-deref' not in line):
                     kasan_flag = 1
-                if regx_match(write_regx, line):
-                    write_flag = 1
-                if regx_match(kasan_double_free_regx, line):
-                    double_free_flag = 1
-                if regx_match(read_regx, line):
-                    read_flag = 1
-                if record_flag or kasan_flag:
+                if self._crash_start(line):
+                    record_flag = 1
+                if record_flag:
                     crash.append(line)
         return res, trigger_hunted_bug
 
@@ -400,13 +407,13 @@ class BugReproduce(AnalysisModule):
         qemu.command(cmds="chmod +x run.sh && ./run.sh", user=user, wait=False)
         return
     
-    def _KasanChecker(self, report):
+    def _BugChecker(self, report):
         title = None
-        ret = False
         flag_double_free = False
         flag_kasan_write = False
         flag_kasan_read = False
         if report != []:
+            title = report[0][0]
             for each in report:
                 for line in each:
                     if regx_match(r'BUG: (KASAN: [a-z\\-]+ in [a-zA-Z0-9_]+)', line) or \
@@ -418,24 +425,22 @@ class BugReproduce(AnalysisModule):
                         if m != None and len(m.groups()) > 0:
                             title = m.groups()[0]
                     if regx_match(double_free_regx, line) and not flag_double_free:
-                            ret = True
                             self.logger.info("Double free")
                             self._write_to(self.path_project, "VendorDoubleFree")
                             flag_double_free = True
                             break
                     if regx_match(kasan_write_addr_regx, line) and not flag_kasan_write:
-                            ret = True
                             self.logger.info("KASAN MemWrite")
                             self._write_to(self.path_project, "VendorMemWrite")
                             flag_kasan_write = True
                             break
                     if regx_match(kasan_read_addr_regx, line) and not flag_kasan_read:
-                            ret = True
                             self.logger.info("KASAN MemRead")
                             self._write_to(self.path_project, "VendorMemRead")
                             flag_kasan_read = True
                             break
-        return ret, title
+                    
+        return title
     
     def _write_to(self, content, name):
         file_path = "{}/{}".format(self.path_case_plugin, name)
