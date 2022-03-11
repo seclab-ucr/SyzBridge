@@ -92,7 +92,7 @@ class SyzkallerInterface(AnalysisModule):
             log_anything(p.stdout, self.logger, self.debug)
         exitcode = p.wait()
         if exitcode != 0:
-            self.logger.info("Fail to generate a decent report from bug log")
+            self.logger.info("Fail to pull syzkaller")
         else:
             self.syzkaller_path = os.path.join(self.path_case_plugin, "gopath/src/github.com/google/syzkaller")
         return exitcode

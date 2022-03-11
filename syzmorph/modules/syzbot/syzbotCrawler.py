@@ -15,7 +15,7 @@ class Crawler:
     def __init__(self,
                  url="https://syzkaller.appspot.com/upstream/fixed",
                  keyword=[], max_retrieve=99999, filter_by_reported=-1, log_path = ".",
-                 filter_by_closed=-1, filter_by_c_prog=-1, include_high_risk=True, debug=False):
+                 filter_by_closed=-1, filter_by_c_prog=-1, filter_by_kernel=[], include_high_risk=True, debug=False):
         self.url = url
         if type(keyword) == list:
             self.keyword = keyword
@@ -29,6 +29,7 @@ class Crawler:
         self.filter_by_reported = filter_by_reported
         self.filter_by_closed = filter_by_closed
         self.filter_by_c_prog = filter_by_c_prog
+        self.filter_by_kernel = filter_by_kernel
 
     def run(self):
         cases_hash, high_risk_impacts = self.gather_cases()
@@ -165,9 +166,14 @@ class Crawler:
             if table.caption.text.find('Crash') != -1:
                 for case in table.tbody.contents:
                     if type(case) == element.Tag:
+                        targeting_kernel = False
                         kernel = case.find('td', {"class": "kernel"})
-                        if (kernel.text != "upstream"):
-                            continue
+                        if self.filter_by_kernel != []:
+                            for each in self.filter_by_kernel:
+                                if (kernel.text == each):
+                                    targeting_kernel = True
+                            if not targeting_kernel:
+                                continue
                         count += 1
                         if count < index:
                             continue

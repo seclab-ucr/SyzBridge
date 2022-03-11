@@ -218,12 +218,17 @@ class BugReproduce(AnalysisModule):
 
         for i in range(0, len(code)):
             line = code[i].strip()
+            if insert_line != []:
+                for t in insert_line:
+                    if i == t[0]:
+                        data.append(t[1])
+                        insert_line.remove(t)
             data.append(code[i])
             if not root:
                 if regx_match(main_func, line):
-                    data.insert(len(data), "#include \"sandbox.h\"")
-                    insert_line.append([i+2, "setup_sandbox();"])
-                    break
+                    data.insert(len(data)-1, "#include \"sandbox.h\"\n")
+                    insert_line.append([i+2, "setup_sandbox();\n"])
+
             for each in skip_funcs:
                 if regx_match(each, line):
                     data.pop()

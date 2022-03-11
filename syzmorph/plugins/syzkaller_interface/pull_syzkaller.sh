@@ -55,7 +55,7 @@ echo "[+] Building syzkaller"
 if [ ! -d "$GOPATH/src/github.com/google/syzkaller" ]; then
     mkdir -p $GOPATH/src/github.com/google/ || echo "Dir exists"
     cd $GOPATH/src/github.com/google/
-    cp -r $PROJECT_PATH/tools/syzkaller ./
+    cp -r $PROJECT_PATH/tools/gopath/src/github.com/google/syzkaller ./
 
     cd $GOPATH/src/github.com/google/syzkaller || exit 1
     make clean

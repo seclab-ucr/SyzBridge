@@ -12,29 +12,32 @@ class SyzbotCommand(Command):
     def add_arguments(self, parser):
         super().add_arguments(parser)
         parser.add_argument('--get',  nargs='?', action='store',
-                            help='To get a case by hash or a file contains multiple hashs.')
+                            help='[string] To get a case by hash or a file contains multiple hashs.')
         parser.add_argument('--proj',  nargs='?', action='store',
-                            help='To save the cases into a project')
+                            help='[string] To save the cases into a project')
         parser.add_argument('--url', nargs='?', action='store',
                             default="https://syzkaller.appspot.com/upstream",
-                            help='Indicate an URL for automatically crawling and running.\n'
+                            help='[string] Indicate an URL for automatically crawling and running.\n'
                                 '(default value is \'https://syzkaller.appspot.com/upstream\')')
         parser.add_argument('--key', action='append', default=[],
-                            help='The keywords for detecting cases.\n'
+                            help='[list] The keywords for detecting cases.\n'
                                 '(By default, it retrieve all cases)\n'
                                 'This argument could be multiple values')
         parser.add_argument('--max-retrieval', nargs='?', action='store',
                             default='9999',
-                            help='The maximum of cases for retrieval\n'
+                            help='[string] The maximum of cases for retrieval\n'
                                 '(By default all the cases will be retrieved)')
         parser.add_argument('--filter-by-reported', nargs='?',
                             default='-1',
-                            help='filter bugs by the days they were reported\n')
+                            help='[string] filter by bug reported days (0-X days)\n')
         parser.add_argument('--filter-by-closed', nargs='?',
                             default='-1',
-                            help='filter bugs by the days they were closed\n')
+                            help='[string] filter by bug closed days (0-X days) \n')
+        parser.add_argument('--filter-by-kernel', action='append', default=['upstream'],
+                            help='[list] filter by targeting kernel. By default it is \'upstream\'.\n\
+                            e.g., --filter-by-kernel=upstream --filter-by-kernel=linux-next')
         parser.add_argument('--filter-by-c-prog', action='store_true',
-                            help='filter bugs do not have a c reproducer\n')
+                            help='[bool] filter bugs do not have a c reproducer\n')
     
     def custom_subparser(self, parser, cmd):
         return parser.add_parser(cmd, help='Get a case by hash or a file contains multiple hashs.')
@@ -57,7 +60,8 @@ class SyzbotCommand(Command):
 
         crawler = Crawler(url=self.args.url, keyword=self.args.key, max_retrieve=int(self.args.max_retrieval), 
             filter_by_reported=int(self.args.filter_by_reported), filter_by_closed=int(self.args.filter_by_closed), 
-            filter_by_c_prog=int(self.args.filter_by_c_prog), debug=self.args.debug, log_path = self.proj_dir)
+            filter_by_c_prog=int(self.args.filter_by_c_prog), filter_by_kernel=self.args.filter_by_kernel,
+            debug=self.args.debug, log_path = self.proj_dir)
         
         if self.args.get != None:
             if len(self.args.get) == 40:

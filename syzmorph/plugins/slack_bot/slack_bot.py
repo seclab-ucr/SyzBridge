@@ -1,5 +1,5 @@
-from slack import WebClient
-from slack.errors import *
+from slack_sdk import WebClient
+from slack_sdk.errors import *
 
 from infra.tool_box import init_logger
 from plugins import AnalysisModule

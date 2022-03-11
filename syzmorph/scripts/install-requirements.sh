@@ -97,7 +97,6 @@ if [ ! -f "$TOOLS_PATH/.stamp/BUILD_GCC_CLANG" ]; then
   rm clang-11-prerelease-ca2dcbd030e.tar.xz
 
   touch $TOOLS_PATH/.stamp/BUILD_GCC_CLANG
-  cd ..
 fi
 
 echo "[+] Setup golang environment"
