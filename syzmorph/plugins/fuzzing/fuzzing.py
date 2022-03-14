@@ -82,7 +82,9 @@ class Fuzzing(AnalysisModule):
         return self._move_to_success
 
     def run(self):
-        self.prepare_custom_syzkaller()
+        if self.prepare_custom_syzkaller() != 0:
+            self.logger.error("Failed to prepare syzkaller, stop fuzzing.")
+            return False
         self.find_support_syscalls()
         self.prepare_config()
         if self.run_syzkaller() != 0:
@@ -113,10 +115,17 @@ class Fuzzing(AnalysisModule):
         if self.syz == None:
             self.syz = self._init_module(SyzkallerInterface())
         self.syz.prepare_on_demand(self.path_case_plugin)
-        self.syz.pull_syzkaller(commit="b8d780ab30ab6ba340c43ad1944096dae15e6e79")
-        self.syz.patch_syzkaller(patch=patch_path)
-        self.syz.build_syzkaller()
+        if self.syz.pull_syzkaller(commit="b8d780ab30ab6ba340c43ad1944096dae15e6e79") != 0:
+            self.logger.error("Failed to pull syzkaller")
+            return -1
+        if self.syz.patch_syzkaller(patch=patch_path) != 0:
+            self.logger.error("Failed to patch syzkaller")
+            return -1
+        if self.syz.build_syzkaller() != 0:
+            self.logger.error("Failed to build syzkaller")
+            return -1
         self.path_syzkaller = self.syz.syzkaller_path
+        return 0
     
     def prepare_config(self):
         self.create_snapshot(self.path_image, self.path_syzkaller+"/workdir", "ubuntu")

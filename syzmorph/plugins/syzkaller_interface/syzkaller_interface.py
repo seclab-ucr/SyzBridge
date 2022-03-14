@@ -87,7 +87,9 @@ class SyzkallerInterface(AnalysisModule):
     def pull_syzkaller(self, commit=""):
         script_path = os.path.join(self.path_package, "plugins/syzkaller_interface/pull_syzkaller.sh")
         chmodX(script_path)
-        p = Popen([script_path, self.path_case_plugin, commit], stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        p = Popen([script_path, self.path_case_plugin, commit], 
+            stderr=STDOUT,
+            stdout=PIPE)
         with p.stdout:
             log_anything(p.stdout, self.logger, self.debug)
         exitcode = p.wait()
