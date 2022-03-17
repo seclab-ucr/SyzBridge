@@ -26,7 +26,7 @@ class GoogleSheets(AnalysisModule):
             if plugin == None:
                 self.logger.error("No such plugin: {}".format(self.NAME))
             credential = plugin.credential
-        except KeyError:
+        except AttributeError:
             self.logger.error("Credential not found in config file")
             return False
         return self.prepare_on_demand(credential, self.args.proj)

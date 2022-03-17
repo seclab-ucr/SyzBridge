@@ -19,6 +19,8 @@ class BugReproduce(AnalysisModule):
     REPORT_NAME = "Report_BugReproduce"
     DEPENDENCY_PLUGINS = ["ModulesAnalysis"]
 
+    FEATURE_LOOP_DEVICE = 1
+
     def __init__(self):
         super().__init__()
         self.report = []
@@ -82,7 +84,7 @@ class BugReproduce(AnalysisModule):
         res["bug_title"] = ""
         res["root"] = True
         
-        """success, _ = self.reproduce(distro, func=self.capture_kasan, root=True)
+        success, _ = self.reproduce(distro, func=self.capture_kasan, root=True)
         if success:
             res["triggered"] = True
             res["bug_title"] = self.bug_title
@@ -92,7 +94,7 @@ class BugReproduce(AnalysisModule):
                 res["bug_title"] = self.bug_title
                 res["root"] = False
             return
-        """
+        
         self.logger.info("{} does not trigger any bugs, try to enable missing modules".format(distro.distro_name))
         m = self.get_missing_modules(distro.distro_name)
         missing_modules = [e['name'] for e in m ]
@@ -148,12 +150,13 @@ class BugReproduce(AnalysisModule):
 
     def reproduce(self, distro, root: bool, func, func_args=(), log_prefix= "qemu", **kwargs):
         self.distro_lock.acquire()
-        self.tune_poc(root)
+        poc_feature = self.tune_poc(root)
         self.distro_lock.release()
         if root:
             log_name = "{}-{}-root".format(log_prefix, distro.distro_name)
         else:
             log_name = "{}-{}-normal".format(log_prefix, distro.distro_name)
+        func_args += (poc_feature,)
         report, triggered, t = distro.repro.reproduce(func=func, func_args=func_args, root=root, work_dir=self.path_case_plugin, vm_tag=distro.distro_name, c_hash=self.case_hash, log_name=log_name, **kwargs)
         if triggered:
             title = self._BugChecker(report)
@@ -197,6 +200,7 @@ class BugReproduce(AnalysisModule):
         return res
 
     def tune_poc(self, root: bool):
+        feature = 0
 
         skip_funcs = [r"setup_usb\(\);", r"setup_leak\(\);", r"setup_cgroups\(\);", r"initialize_cgroups\(\);", r"setup_cgroups_loop\(\);"]
         data = []
@@ -237,6 +241,9 @@ class BugReproduce(AnalysisModule):
                 if regx_match(each, line):
                     data.pop()
 
+            if 'setup_loop_device' in line:
+                feature |= self.FEATURE_LOOP_DEVICE
+
         if data != []:
             fdst.writelines(data)
             fdst.close()
@@ -247,7 +254,7 @@ class BugReproduce(AnalysisModule):
         else:
             self.logger.error("Cannot find real PoC function")
         self._compile_poc(root)
-        return
+        return feature
     
     def success(self):
         return self._move_to_success
@@ -257,7 +264,7 @@ class BugReproduce(AnalysisModule):
         self.logger.info(final_report)
         self._write_to(final_report, self.REPORT_NAME)
 
-    def tweak_modules(self, qemu, th_index, poc_path, root, missing_modules: list, essential_modules: list):
+    def tweak_modules(self, qemu, th_index, poc_path, root, missing_modules: list, essential_modules: list, poc_feature: int):
         tested_modules = []
         def warp_qemu_capture_kasan(qemu, th_index, q):
             try:
@@ -281,15 +288,7 @@ class BugReproduce(AnalysisModule):
         qemu.logger.info("Loading essential modules {}".format(essential_modules))
         if essential_modules != []:
             self._enable_missing_modules(qemu, essential_modules)
-            if root:
-                user = "root"
-            else:
-                user = "etenal"
-            qemu.command(cmds="killall poc", user="root", wait=True)
-            qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
-            qemu.logger.info("running PoC")
-            qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user="root", wait=True)
-            qemu.command(cmds="rm -rf ./tmp && mkdir ./tmp && mv ./poc ./tmp && cd ./tmp && chmod +x poc && ./poc", user=user, wait=True, timeout=BUG_REPRODUCE_TIMEOUT)
+            self._execute_poc(root, qemu, poc_path, poc_feature)
             while True:
                 try:
                     [res, trigger] = q.get(block=True, timeout=5)
@@ -304,15 +303,7 @@ class BugReproduce(AnalysisModule):
             qemu.logger.info("Loading missing module {}".format(module))
             self._enable_missing_modules(qemu, [module])
             tested_modules.append(module)
-            if root:
-                user = "root"
-            else:
-                user = "etenal"
-            qemu.command(cmds="killall poc", user="root", wait=True)
-            qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
-            qemu.logger.info("running PoC")
-            qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user="root", wait=True)
-            qemu.command(cmds="rm -rf ./tmp && mkdir ./tmp && mv ./poc ./tmp && cd ./tmp && chmod +x poc && ./poc", user=user, wait=True, timeout=BUG_REPRODUCE_TIMEOUT)
+            self._execute_poc(root, qemu, poc_path, poc_feature)
             while True:
                 try:
                     [res, trigger] = q.get(block=True, timeout=5)
@@ -324,8 +315,8 @@ class BugReproduce(AnalysisModule):
                         break
         qemu.alternative_func_output.put([[], False, False, []], block=False)
     
-    def capture_kasan(self, qemu, th_index, poc_path, root):
-        self._run_poc(qemu, poc_path, root)
+    def capture_kasan(self, qemu, th_index, poc_path, root, poc_feature):
+        self._run_poc(qemu, poc_path, root, poc_feature)
         try:
             res, trigger_hunted_bug = self._qemu_capture_kasan(qemu, th_index)
         except Exception as e:
@@ -347,6 +338,18 @@ class BugReproduce(AnalysisModule):
             if regx_match(each, line):
                 return True
         return False
+    
+    def _execute_poc(self, root, qemu, poc_path, poc_feature):
+        if root:
+            user = "root"
+        else:
+            user = "etenal"
+        qemu.command(cmds="killall poc", user="root", wait=True)
+        qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
+        qemu.logger.info("running PoC")
+        qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user="root", wait=True)
+        self._check_poc_feature(poc_feature, qemu, user)
+        qemu.command(cmds="rm -rf ./tmp && mkdir ./tmp && mv ./poc ./tmp && cd ./tmp && chmod +x poc && ./poc", user=user, wait=True, timeout=BUG_REPRODUCE_TIMEOUT)
                 
     def _qemu_capture_kasan(self, qemu, th_index):
         qemu_close = False
@@ -395,7 +398,15 @@ class BugReproduce(AnalysisModule):
             poc_file = "poc_normal.c"
         call(["gcc", "-pthread", "-static", "-o", "poc", poc_file], cwd=self.path_case_plugin)
     
-    def _run_poc(self, qemu, poc_path, root):
+    def _check_poc_feature(self, poc_feature, qemu, user):
+        script_name = "check-poc-feature.sh"
+        script = os.path.join(self.path_package, "plugins/bug_reproduce", script_name)
+        shutil.copy(script, self.path_case_plugin)
+        cur_script = os.path.join(self.path_case_plugin, script_name)
+        qemu.upload(user=user, src=[cur_script], dst="~/", wait=True)
+        qemu.command(cmds="chmod +x check-poc-feature.sh && ./check-poc-feature.sh {}".format(poc_feature), user=user, wait=True)
+
+    def _run_poc(self, qemu, poc_path, root, poc_feature):
         if root:
             user = "root"
         else:
@@ -413,6 +424,7 @@ class BugReproduce(AnalysisModule):
         # Sleeping for 1 second to ensure everything is ready in vm
         time.sleep(1)
         qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user="root", wait=True)
+        self._check_poc_feature(poc_feature, qemu, user)
         qemu.command(cmds="chmod +x run.sh && ./run.sh", user=user, wait=False)
         return
     

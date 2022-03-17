@@ -28,7 +28,7 @@ class SlackBot(AnalysisModule):
                 self.logger.error("No such plugin {}".format(self.NAME))
             slack_token = plugin.slack_token
             channel = plugin.channel
-        except KeyError:
+        except AttributeError:
             self.logger.error("Failed to get slack token or channel")
             return False
         return self.prepare_on_demand(slack_token, channel)

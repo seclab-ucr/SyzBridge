@@ -62,7 +62,7 @@ class Fuzzing(AnalysisModule):
                 self.logger.error("No such plugin {}".format(self.NAME))
             path_kernel = plugin.kernel
             time_limit = int(plugin.time)
-        except KeyError:
+        except AttributeError:
             self.logger.error("Failed to get timeout or gdb_port or qemu_monitor_port or max_round")
             return False
         return self.prepare_on_demand(path_kernel, time_limit)
@@ -108,6 +108,7 @@ class Fuzzing(AnalysisModule):
         new_syscalls = syscalls.copy()
         new_syscalls.extend(dependent_syscalls)
         new_syscalls = unique(new_syscalls)
+        self.logger.info("supported syscall: {}".format(new_syscalls))
         self.enable_syscalls = "\"" + "\",\n\t\"".join(new_syscalls) + "\""
 
     def prepare_custom_syzkaller(self):

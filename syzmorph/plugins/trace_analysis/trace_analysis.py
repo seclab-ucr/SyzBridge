@@ -1,5 +1,5 @@
 import os
-import shutil
+import random
 
 from plugins import AnalysisModule
 from modules.vm import VMInstance
@@ -162,7 +162,14 @@ class TraceAnalysis(AnalysisModule):
             trigger_commands = "./poc"
         
         syscalls = self._tune_poc(qemu)
-        call(["gcc", "-pthread", "-static", "-o", "poc", "poc.c"], cwd=self.path_case_plugin)
+        p = Popen(["gcc", "-pthread", "-static", "-o", "poc", "poc.c"], cwd=self.path_case_plugin, stdout=PIPE, stderr=PIPE)
+        with p.stdout:
+            log_anything(p.stdout, self.logger, self.debug)
+        exitcode = p.wait()
+        if exitcode != 0:
+            self.logger.error('Failed to compile poc')
+            qemu.alternative_func_output.put(False)
+            return
         cmd = "trace-cmd record -p function_graph "
         for each in syscalls:
             cmd += "-g {} ".format(each)
@@ -182,10 +189,6 @@ class TraceAnalysis(AnalysisModule):
             self.logger.error("Failed to download trace report from qemu")
             qemu.alternative_func_output.put(False)
             return
-        if qemu.download(user="root", src=["/root/trace.dat"], dst="{}/{}.dat".format(self.path_case_plugin, trace_filename), wait=True) != 0:
-            self.logger.error("Failed to download trace data from qemu")
-            qemu.alternative_func_output.put(False)
-            return 
         qemu.alternative_func_output.put(True)
     
     def prepare_syzkaller(self):
@@ -236,7 +239,7 @@ done
 sleep 30
 killall poc || true
 
-for i in {{1..30}}; do
+for i in {{1..720}}; do
     sleep 5
     ls trace.dat.cpu* || break
 done
@@ -290,7 +293,7 @@ exit $EXIT_CODE""".format(cmd)
         devices_init_func_regx = ['initialize_vhci\(\);', 'initialize_netdevices_init\(\);', 'initialize_devlink_pci\(\);',
             'initialize_tun\(\);', 'initialize_netdevices\(\);', 'initialize_wifi_devices\(\);']
         syscalls = []
-        enabled_syscalls = ['process_one_work', 'do_kern_addr_fault']
+        enabled_syscalls = ['process_one_work', 'do_kern_addr_fault', '__do_softirq']
         output = qemu.command(cmds="trace-cmd list -f | grep -E  \"^__x64_sys_\"", user="root", wait=True)
         for line in output:
             if line.startswith("__x64_sys_"):
@@ -310,6 +313,9 @@ exit $EXIT_CODE""".format(cmd)
         for i in range(0, len(code)):
             line = code[i]
             if insert_exit_line == i:
+                status = "status{}".format(random.randint(0,10000))
+                data.append("int {};\n".format(status))
+                data.append("wait(&{});\n".format(status))
                 data.append("exit(0);\n")
             data.append(line)
             if insert_exit_line != -1 and i < insert_exit_line:
@@ -345,7 +351,15 @@ exit $EXIT_CODE""".format(cmd)
                     continue
                 if int(time) > 5:
                     data.pop()
-                    data.append("sleep(5);\n")
+                    status = "status{}".format(random.randint(0,10000))
+                    data.append("int {};\n".format(status))
+                    data.append("wait(&{});\n".format(status))
+            
+            if 'for (procid = 0;' in line:
+                    data.pop()
+                    t = line.split(';')
+                    new_line = t[0] + ";procid<1;" + t[2]
+                    data.append(new_line)
             
             """# Somehow if PoC exit too quickly, the trace will not be complete
             exit_regx = r'^( )+?exit\((\d+)\);'

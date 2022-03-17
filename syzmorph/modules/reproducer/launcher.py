@@ -97,7 +97,6 @@ class Launcher(Build):
         return qemu
     
     def run_qemu(self, qemu, func, *args):
-        self.case_logger.info("Waiting qemu to launch")
         return qemu.run(alternative_func=func, args=(*args, ))
 
     def kill_proc_by_port(self, ssh_port):

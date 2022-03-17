@@ -54,6 +54,7 @@ class Config:
         for module_name in module_folder:
             try:
                 module = importlib.import_module("plugins.{}".format(module_name))
+                setattr(module, "dependency", "strong")
                 class_name = convert_folder_name_to_plugin_name(module_name)
                 setattr(self.plugin, class_name, module)
             except Exception as e:

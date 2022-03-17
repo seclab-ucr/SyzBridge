@@ -1,3 +1,4 @@
+from distutils import extension
 import os, random
 from posixpath import basename, dirname
 
@@ -30,6 +31,7 @@ class ModulesAnalysis(AnalysisModule):
         self.config_cache = {}
         self._prepared = False
         self._move_to_success = False
+        self._remove_trace_file = False
 
         self.vul_module = None
         self.cfg = None
@@ -52,12 +54,20 @@ class ModulesAnalysis(AnalysisModule):
         return inner
     
     def prepare(self):
+        try:
+            plugin = self.cfg.get_plugin(self.NAME)
+            if plugin == None:
+                self.logger.error("No such plugin {}".format(self.NAME))
+            remove_trace_file = plugin.remove_trace_file
+        except AttributeError:
+            remove_trace_file = False
         report = request_get(self.case['report'])
         self._build_loadable_modules()
-        return self.prepare_on_demand(report.text)
+        return self.prepare_on_demand(report.text, remove_trace_file)
     
-    def prepare_on_demand(self, report):
+    def prepare_on_demand(self, report, remove_trace_file):
         self._prepared = True
+        self._remove_trace_file = remove_trace_file
         self.kasan_report = report.split('\n')
         if self.kasan_report == []:
             return False
@@ -83,8 +93,18 @@ class ModulesAnalysis(AnalysisModule):
                 
         self.report.append(ModulesAnalysis.REPORT_END)
         self.dump_missing_modules()
+        if self._remove_trace_file:
+            self.remove_trace_file()
         return True
     
+    def remove_trace_file(self):
+        for file in os.listdir(self.path_case_plugin):
+            if file.endswith('.report'):
+                try:
+                    os.remove(os.path.join(self.path_case_plugin, file))
+                except:
+                    pass
+
     def check_ftrace(self):
         trace = self._open_trace()
         if trace == None:
@@ -113,10 +133,13 @@ class ModulesAnalysis(AnalysisModule):
         hook_end_node = None
         while begin_node != end_node:
             if begin_node.is_function:
-                src_file = self.get_src_file_from_function(begin_node, vm)
+                src_file, procceed = self.get_src_file_from_function(begin_node, vm)
                 if hook_end_node == None:
                     hook_end_node = self.is_hook_func(begin_node)
-                if src_file != None:
+                if src_file == None:
+                    self.logger.info("[Modules analysis] Module {} doesn't have symbol file".format(self.vul_module))
+                    continue
+                if procceed:
                     for distro in all_distros:
                         self._cur_distro = distro
                         if src_file in check_map[distro.distro_name]:
@@ -125,6 +148,7 @@ class ModulesAnalysis(AnalysisModule):
                             continue
                         check_map[distro.distro_name][src_file] = True
                         ret = self.module_check(distro, src_file)
+                        self.logger.info("[Modules analysis] Module {} in {} {}".format(self.vul_module, distro.distro_name, ret))
                         if ret == None or ret == self.MODULE_ENABLED:
                             continue
                         if self.vul_module not in self._missing_modules:
@@ -180,13 +204,14 @@ class ModulesAnalysis(AnalysisModule):
     
     def get_src_file_from_function(self, begin_node, vm):
         if begin_node.function_name in self._ftrace_functions:
-            return None
-        self._ftrace_functions[begin_node.function_name] = True
+            return self._ftrace_functions[begin_node.function_name], False
         addr = vm.get_func_addr(begin_node.function_name)
         if addr == 0:
-            return None
+            self._ftrace_functions[begin_node.function_name] = None
+            return None, False
         file, _ = vm.get_dbg_info(addr)
-        return file
+        self._ftrace_functions[begin_node.function_name] = file
+        return file, True
         
     def check_kasan_report(self):
         res = {}

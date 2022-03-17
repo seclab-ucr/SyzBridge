@@ -96,7 +96,7 @@ class SyzbotCommand(Command):
         self.logger.info("[*] proj: {}".format(self.args.proj))
         self.logger.info("[*] hash: {}".format(self.args.get))
         self.logger.info("[*] url: {}".format(self.args.url))
-        self.logger.info("[*] url: {}".format(self.args.key))
+        self.logger.info("[*] key: {}".format(self.args.key))
         self.logger.info("[*] max_retrieval: {}".format(self.args.max_retrieval))
 
     def save_cases(self, cases, name):

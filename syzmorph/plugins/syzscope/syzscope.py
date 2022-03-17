@@ -49,7 +49,7 @@ class Syzscope(AnalysisModule):
                 ssh_port = plugin.ssh_port
             except:
                 ssh_port = None
-        except KeyError:
+        except AttributeError:
             self.logger.error("Failed to get timeout or gdb_port or qemu_monitor_port or max_round")
             return False
         return self.prepare_on_demand(timeout, gdb_port, ssh_port, qemu_monitor_port, max_round, repro_mode)
