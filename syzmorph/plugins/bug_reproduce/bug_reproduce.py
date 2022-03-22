@@ -93,6 +93,7 @@ class BugReproduce(AnalysisModule):
                 res["triggered"] = True
                 res["bug_title"] = self.bug_title
                 res["root"] = False
+            q.put([distro.distro_name, res])
             return
         
         self.logger.info("{} does not trigger any bugs, try to enable missing modules".format(distro.distro_name))
@@ -117,6 +118,7 @@ class BugReproduce(AnalysisModule):
                 self.report.append("{} requires loading [{}] to trigger the bug".format(distro.distro_name, ",".join(essential_modules)))
 
         q.put([distro.distro_name, res])
+        return
     
     def check_module_priviledge(self, essential_modules):
         ret = True
@@ -157,6 +159,7 @@ class BugReproduce(AnalysisModule):
         else:
             log_name = "{}-{}-normal".format(log_prefix, distro.distro_name)
         func_args += (poc_feature,)
+        distro.repro.init_logger(self.logger)
         report, triggered, t = distro.repro.reproduce(func=func, func_args=func_args, root=root, work_dir=self.path_case_plugin, vm_tag=distro.distro_name, c_hash=self.case_hash, log_name=log_name, **kwargs)
         if triggered:
             title = self._BugChecker(report)

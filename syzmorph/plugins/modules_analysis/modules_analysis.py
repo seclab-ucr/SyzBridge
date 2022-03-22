@@ -137,8 +137,7 @@ class ModulesAnalysis(AnalysisModule):
                 if hook_end_node == None:
                     hook_end_node = self.is_hook_func(begin_node)
                 if src_file == None:
-                    self.logger.info("[Modules analysis] Module {} doesn't have symbol file".format(self.vul_module))
-                    continue
+                    self.logger.info("[Modules analysis] Function {} doesn't have symbol file".format(begin_node.function_name))
                 if procceed:
                     for distro in all_distros:
                         self._cur_distro = distro
