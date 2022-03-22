@@ -86,6 +86,9 @@ class Syzscope(AnalysisModule):
         if exitcode == 1:
             self.logger.error("Fail to build upstream environment")
             return False
+        if exitcode != 0:
+            self.logger.error("Unknown error that fails to build kernel")
+            return False
         return True
     
     def build_env_upstream(self):

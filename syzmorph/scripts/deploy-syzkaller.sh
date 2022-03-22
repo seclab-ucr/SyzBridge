@@ -48,7 +48,7 @@ if [ ! -d "$GOPATH/src/github.com/google/syzkaller" ]; then
     cp -r $PROJECT_PATH/tools/gopath/src/github.com/google/syzkaller ./
     cd $GOPATH/src/github.com/google/syzkaller || exit 1
 
-    git checkout -f $SYZKALLER || (git pull https://github.com/google/syzkaller.git master > /dev/null 2>&1 && git checkout -f $SYZKALLER)
+    git checkout -f $SYZKALLER || (git pull origin master > /dev/null 2>&1 && git checkout -f $SYZKALLER)
     make TARGETARCH=$ARCH TARGETVMARCH=amd64 execprog executor
     if [ -d "bin/linux_$ARCH" ]; then
         cp bin/linux_amd64/syz-execprog $BIN_PATH

@@ -130,7 +130,7 @@ if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
       git stash || echo "it's ok"
       make clean > /dev/null || echo "it's ok"
       git clean -fdx > /dev/null || echo "it's ok"
-      git checkout -f $COMMIT || (git pull https://github.com/torvalds/linux.git master > /dev/null 2>&1 && git checkout -f $COMMIT)
+      git checkout -f $COMMIT || (git fetch --all > /dev/null && git reset --hard origin/master > /dev/null && git checkout -f $COMMIT)
     fi
     curl $CONFIG > .config
     # Panic on data corruption may stop the fuzzing session
