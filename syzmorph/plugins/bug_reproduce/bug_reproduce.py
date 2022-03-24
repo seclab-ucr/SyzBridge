@@ -8,6 +8,7 @@ from infra.tool_box import *
 from infra.strings import *
 from subprocess import Popen, STDOUT, PIPE, call
 from plugins.modules_analysis import ModulesAnalysis
+from .error import *
 
 BUG_REPRODUCE_TIMEOUT = 5*60
 MAX_BUG_REPRODUCE_TIMEOUT = 4*60*60
@@ -244,8 +245,14 @@ class BugReproduce(AnalysisModule):
                 if regx_match(each, line):
                     data.pop()
 
+            # We dont have too much devices to connect, limit the number to 1
+            if '*hash = \'0\' + (char)(a1 % 10);' in line:
+                data.pop()
+                data.append('*hash = \'0\' + (char)(a1 % 2);')
+
             if 'setup_loop_device' in line:
                 feature |= self.FEATURE_LOOP_DEVICE
+
 
         if data != []:
             fdst.writelines(data)
@@ -409,6 +416,15 @@ class BugReproduce(AnalysisModule):
         qemu.upload(user=user, src=[cur_script], dst="~/", wait=True)
         qemu.command(cmds="chmod +x check-poc-feature.sh && ./check-poc-feature.sh {}".format(poc_feature), user=user, wait=True)
 
+    def _kernel_config_pre_check(self, qemu, config):
+        out = qemu.command(cmds="grep {} /boot/config-`uname -r`".format(config), user="root", wait=True)
+        for line in out:
+            line = line.strip()
+            if line == config:
+                self.logger.info("{} is enabled".format(config))
+                return True
+        return False
+
     def _run_poc(self, qemu, poc_path, root, poc_feature):
         if root:
             user = "root"
@@ -426,6 +442,9 @@ class BugReproduce(AnalysisModule):
         # It looks like scp returned without waiting for all file finishing uploading.
         # Sleeping for 1 second to ensure everything is ready in vm
         time.sleep(1)
+        if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
+            self.logger.fatal("KASAN is not enabled in kernel!")
+            raise KASANDoesNotEnabled
         qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user="root", wait=True)
         self._check_poc_feature(poc_feature, qemu, user)
         qemu.command(cmds="chmod +x run.sh && ./run.sh", user=user, wait=False)
