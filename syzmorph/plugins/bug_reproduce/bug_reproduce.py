@@ -19,7 +19,7 @@ class BugReproduce(AnalysisModule):
     REPORT_NAME = "Report_BugReproduce"
     DEPENDENCY_PLUGINS = ["ModulesAnalysis"]
 
-    FEATURE_LOOP_DEVICE = 1
+    FEATURE_LOOP_DEVICE = 1 << 0
 
     def __init__(self):
         super().__init__()
@@ -50,8 +50,8 @@ class BugReproduce(AnalysisModule):
                         str_privilege = " by normal user"
                     else:
                         str_privilege = " by root user"
-                    self.main_logger.info("{} triggers a Kasan bug: {} {}".format(key ,title, str_privilege))
-                    self.report.append("{} triggers a Kasan bug: {} {}".format(key ,title, str_privilege))
+                    self.main_logger.info("{} triggers a bug: {} {}".format(key ,title, str_privilege))
+                    self.report.append("{} triggers a bug: {} {}".format(key ,title, str_privilege))
                     self._move_to_success = True
                 else:
                     fail_name += key + " "
@@ -438,6 +438,8 @@ class BugReproduce(AnalysisModule):
         flag_kasan_read = False
         if report != []:
             title = report[0][0]
+            if regx_match(r'\[(( )+)?\d+\.\d+\] (.+)', title):
+                title = regx_get(r'\[(( )+)?\d+\.\d+\] (.+)', title, 2)
             for each in report:
                 for line in each:
                     if regx_match(r'BUG: (KASAN: [a-z\\-]+ in [a-zA-Z0-9_]+)', line) or \

@@ -1,6 +1,8 @@
 import importlib
 import logging
+import os
 
+from infra.error import *
 from syzmorph.commands import Command
 
 logger = logging.getLogger(__name__)
@@ -12,30 +14,63 @@ class TestCommand(Command):
     def add_arguments(self, parser):
         super().add_arguments(parser)
         parser.add_argument('--all',  action='store_true', help='test all modules')
-        parser.add_argument('--config',  action='store_true', help='test config module')
-        parser.add_argument('--modules-analysis',  action='store_true', help='test modules_analysis module')
-        parser.add_argument('--lts-analysis', action='store_true', help='test lts_analysis module')
-        parser.add_argument('--bug-reproduce', action='store_true', help='test bug_reproduce module')
-        parser.add_argument('--trace-analysis', action='store_true', help='test trace_analysis module')
-        parser.add_argument('--google-sheets', action='store_true', help='test Google sheets module')
+        parser.add_argument('--config', nargs='?', action='store', help='config file.')
+        
+        self.add_arguments_for_plugins(parser)
 
     def custom_subparser(self, parser, cmd):
         return parser.add_parser(cmd, help='Modular test (Debug only)')
+    
+    def parse_config(self, config):
+        from syzmorph.infra.config.config import Config
+        
+        cfg = Config()
+        cfg.load_from_file(config)
+
+        return cfg
+    
+    def add_arguments_for_plugins(self, parser):
+        proj_dir = os.path.join(os.getcwd(), "syzmorph")
+        modules_dir = os.path.join(proj_dir, "plugins")
+        module_folder = [ cmd for cmd in os.listdir(modules_dir)
+                    if not cmd.endswith('.py') and not cmd == "__pycache__" ]
+        for module_name in module_folder:
+            try:
+                module = importlib.import_module("plugins.{}".format(module_name))
+                enable = module.ENABLE
+                if not enable:
+                    continue
+                help_msg = "TEST " + module.DESCRIPTION
+                t = module_name.split('_')
+                cmd_msg = '--' + '-'.join(t)
+                parser.add_argument(cmd_msg, action='store_true', help=help_msg)
+            except Exception as e:
+                print("Fail to load plugin {}: {}".format(module_name, e))
+                continue
 
     def run(self, args):
+        try:
+            if args.config != None:
+                self.cfg = self.parse_config(args.config)
+            else:
+                print("--config is necessary")
+                return
+        except TargetFileNotExist as e:
+            logger.error(e)
+            return
+        except ParseConfigError as e:
+            logger.error(e)
+            return
+        except TargetFormatNotMatch as e:
+            logger.error(e)
+            return
+
         if args.all:
             self.test_all()
         else:
-            if args.config:
-                self.test_target('config')
-            if args.lts_analysis:
-                self.test_target('lts_analysis')
-            if args.bug_reproduce:
-                self.test_target('bug_reproduce')
-            if args.trace_analysis:
-                self.test_target('trace_analysis')
-            if args.google_sheets:
-                self.test_target('google_sheets')
+            for key in args.__dict__:
+                if getattr(args, key) and type(getattr(args, key)) == bool:
+                    self.test_target(key)
     
     def test_target(self, name):
         try:
@@ -47,4 +82,4 @@ class TestCommand(Command):
 
     def _test(self, module):
         test_all_func = getattr(module, "test_all")
-        test_all_func()
+        test_all_func(self.cfg)

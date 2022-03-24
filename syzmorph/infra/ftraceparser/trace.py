@@ -56,7 +56,7 @@ class Trace:
         try:
             self.n_cpu = int(regx_get(r'cpus=(\d+)', self.trace_text[start], 0))
         except TypeError:
-            raise TraceParseError('CPU number is not found')
+            raise TraceParseError('CPU number does not found')
         last_node = Node(self.trace_text[start+1], node_id)
         self.node.append(last_node)
         self.index2node[node_id] = last_node

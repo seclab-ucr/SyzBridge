@@ -346,7 +346,7 @@ done
         super()._write_to(content, file_path)
     
     def _reproducible(self):
-        reproducable_regx = r'(debian|fedora|ubuntu) triggers a Kasan bug: ([A-Za-z0-9_: -]+) (by normal user|by root user)'
+        reproducable_regx = r'(debian|fedora|ubuntu) triggers a bug: ([A-Za-z0-9_: -/]+) (by normal user|by root user)'
         failed_regx = r'(.+) fail to trigger the bug'
         path_report = os.path.join(self.path_case, "BugReproduce", "Report_BugReproduce")
         if os.path.exists(path_report):

@@ -445,32 +445,37 @@ class ModulesAnalysis(AnalysisModule):
         t = os.path.dirname(makefile)
         foler = os.path.basename(t)
         obj2config[foler] = 'y'
+        comeback = False
 
-        for line in content:
-            if line[0] == '#' or line[0] == '\n' or regx_match(r'endif', line):
-                value = None
-            if regx_match(assignment, line):
-                updated_module_name = regx_get(r'^([a-zA-Z-_0-9]+)-.+', line, 0)
-                if updated_module_name == 'obj':
-                    value = 'y'
-                elif updated_module_name != None:
-                    try:
-                        value = obj2config[updated_module_name]
-                    except Exception:
-                        value = None
-            v = regx_get(obj_config, line, 0)
-            if v != None:
-                value = v
-            objects = regx_getall(obj_o, line)
-            for each_obj in objects:
-                if  value == None:
-                    break
-                for e in each_obj:
-                    obj2config[e] = value
-                    if e == vul_obj:
-                        if updated_module_name != None and updated_module_name != 'obj':
-                            self.vul_module = updated_module_name
-                        return value
+        for i in range(0, 2):
+            for line in content:
+                if line[0] == '#' or line[0] == '\n' or regx_match(r'endif', line):
+                    value = None
+                if regx_match(assignment, line):
+                    updated_module_name = regx_get(r'^([a-zA-Z-_0-9]+)-.+', line, 0)
+                    if updated_module_name == 'obj':
+                        value = 'y'
+                    elif updated_module_name != None:
+                        try:
+                            value = obj2config[updated_module_name]
+                        except Exception:
+                            comeback = True
+                            value = None
+                v = regx_get(obj_config, line, 0)
+                if v != None:
+                    value = v
+                objects = regx_getall(obj_o, line)
+                for each_obj in objects:
+                    if  value == None:
+                        break
+                    for e in each_obj:
+                        obj2config[e] = value
+                        if e == vul_obj:
+                            if updated_module_name != None and updated_module_name != 'obj':
+                                self.vul_module = updated_module_name
+                            return value
+            if not comeback:
+                break
     
     def _write_to(self, content, name):
         file_path = "{}/{}".format(self.path_case_plugin, name)

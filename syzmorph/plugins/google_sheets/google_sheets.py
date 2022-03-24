@@ -107,7 +107,7 @@ class GoogleSheets(AnalysisModule):
         self.data['reproduce-by-normal'] = ""
         self.data['reproduce-by-root'] = ""
         self.data['failed-on'] = ""
-        reproducable_regx = r'(debian|fedora|ubuntu) triggers a Kasan bug: ([A-Za-z0-9_: -]+) (by normal user|by root user)'
+        reproducable_regx = r'(debian|fedora|ubuntu) triggers a bug: ([A-Za-z0-9_: -/]+) (by normal user|by root user)'
         failed_regx = r'(.+) fail to trigger the bug'
         path_report = os.path.join(self.path_case, "BugReproduce", "Report_BugReproduce")
         normal_text = ''

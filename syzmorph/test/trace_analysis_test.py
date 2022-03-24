@@ -9,7 +9,8 @@ logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.NOTSET)
 
-trace = """<...>-1318  [001]    30.824950: funcgraph_entry:                   |  __x64_sys_close() {
+trace = """cpus=1
+           <...>-1318  [001]    30.824950: funcgraph_entry:                   |  __x64_sys_close() {
            <...>-1318  [001]    30.824954: funcgraph_entry:                   |    __close_fd() {
            <...>-1318  [001]    30.824955: funcgraph_entry:        1.504 us   |      _raw_spin_lock();
            <...>-1318  [001]    30.824959: funcgraph_entry:                   |      filp_close() {
@@ -46,8 +47,7 @@ trace = """<...>-1318  [001]    30.824950: funcgraph_entry:                   | 
            <...>-1318  [001]    30.828471: funcgraph_exit:       + 18.527 us  |    }
            <...>-1318  [001]    30.828473: funcgraph_exit:       + 22.432 us  |  }"""
 
-def test_trace_analysis(hash_val):
-    cfg = create_mini_cfg()
+def test_trace_analysis(hash_val, cfg):
     ana = TraceAnalysis()
     ana.prepare_on_demand()
     ana.cfg = cfg
@@ -59,8 +59,8 @@ def test_trace_dump():
     t = Trace()
     t.load_trace(trace)
     node = t.serialize()
-    node.dump()
+    node[0].dump()
 
-def test_all():
+def test_all(cfg):
     test_trace_dump()
-    #test_trace_analysis("97b7072a02091741ffc58f97884ab91565fd97ce")
+    assert test_trace_analysis("97b7072a02091741ffc58f97884ab91565fd97ce", cfg), "Trace analysis didn't pass"
