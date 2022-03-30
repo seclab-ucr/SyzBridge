@@ -1,0 +1,3 @@
+[submodule "syzmorph/infra/ftracepaser"]
+	path = syzmorph/infra/ftracepaser
+	url = https://github.com/plummm/ftracepaser.git
