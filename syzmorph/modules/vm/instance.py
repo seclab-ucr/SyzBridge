@@ -139,7 +139,7 @@ class VMInstance(Network):
                     self.qemu_fail = True
                     self.alternative_func_output.put([False])
                 return
-            if not self.qemu_ready and self._is_qemu_ready():
+            if not self.qemu_ready and self.is_qemu_ready():
                 self.qemu_ready = True
                 count = 0
                 time.sleep(10)
@@ -171,7 +171,17 @@ class VMInstance(Network):
     def no_new_output(self):
         return self._output_lock.locked()
     
-    def _setup_distros(self, port, image, linux, key, mem="2G", cpu="2", gdb_port=None, mon_port=None, timeout=None):
+    def is_qemu_ready(self):
+        output = self.command("uname -r", "root", wait=True, timeout=1)
+        if type(output) == list and len(output) > 0:
+            for line in output:
+                if utilities.regx_match(r'^\d+\.\d+', line):
+                    return True
+        else:
+            return False
+        return False
+    
+    def _setup_distros(self, port, image, linux, key, mem="2G", cpu="2", gdb_port=None, mon_port=None, timeout=None, kasan_multi_shot=0, snapshot=True):
         #self.qemu_ready_bar = r'(\w+ login:)|(Ubuntu \d+\.\d+\.\d+ LTS ubuntu20 ttyS0)'
         self.port = port
         self.image = image
@@ -189,11 +199,11 @@ class VMInstance(Network):
                     "-drive", "file={},format=qcow2,cache=writeback,l2-cache-size=6553600,cache-clean-interval=900".format(self.image)])
         self.write_cmd_to_script(self.cmd_launch, "launch_{}.sh".format(self.cfg.distro_name))
     
-    def _setup_upstream(self, port, image, linux, mem="2G", cpu="2", key=None, gdb_port=None, mon_port=None, opts=None, timeout=None, kasan_multi_shot=0):
+    def _setup_upstream(self, port, image, linux, mem="2G", cpu="2", key=None, gdb_port=None, mon_port=None, opts=None, timeout=None, kasan_multi_shot=0, snapshot=True):
         #self.qemu_ready_bar = r'Debian GNU\/Linux \d+ syzkaller ttyS\d+'
         cur_opts = ["root=/dev/sda", "console=ttyS0"]
-        def_opts = ["earlyprintk=serial", "nmi_watchdog=panic", \
-                        "ftrace_dump_on_oops=orig_cpu", "rodata=n", "vsyscall=native", "net.ifnames=0", \
+        def_opts = ["earlyprintk=serial", \
+                        "ftrace_dump_on_oops", "rodata=n", "vsyscall=native", "net.ifnames=0", \
                         "biosdevname=0", "kvm-intel.nested=1", \
                         "kvm-intel.unrestricted_guest=1", "kvm-intel.vmm_exclusive=1", \
                         "kvm-intel.fasteoi=1", "kvm-intel.ept=1", "kvm-intel.flexpriority=1", \
@@ -214,9 +224,11 @@ class VMInstance(Network):
         if self.port != None:
             self.cmd_launch.extend(["-net", "nic,model=e1000", "-net", "user,host=10.0.2.10,hostfwd=tcp::{}-:22".format(self.port)])
         self.cmd_launch.extend(["-display", "none", "-serial", "stdio", "-no-reboot", "-enable-kvm", "-cpu", "host,migratable=off", 
-                    "-hda", "{}".format(self.image), 
-                    "-snapshot", "-kernel", "{}/arch/x86_64/boot/bzImage".format(self.linux),
-                    "-append"])
+                    "-hda", "{}".format(self.image)])
+        if snapshot:
+            self.cmd_launch.append("-snapshot")
+        
+        self.cmd_launch.extend(["-kernel", "{}/arch/x86_64/boot/bzImage".format(self.linux), "-append"])
         if opts == None:
             cur_opts.extend(def_opts)
         else:
@@ -232,16 +244,6 @@ class VMInstance(Network):
         except Exception as e:
             self.logger.error("alternative_func failed: {}".format(e))
             raise AlternativeFunctionError("alternative_func failed: {}".format(e))
-    
-    def _is_qemu_ready(self):
-        output = self.command("uname -r", "root", wait=True, timeout=1)
-        if output == []:
-            return False
-        else:
-            for line in output:
-                if utilities.regx_match(r'^\d+\.\d+', line):
-                    return True
-        return False
     
     def _new_output_timer(self):
         while (self.instance.poll() is None):

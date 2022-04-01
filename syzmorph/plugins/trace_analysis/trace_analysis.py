@@ -6,7 +6,7 @@ from modules.vm import VMInstance
 from subprocess import Popen, PIPE, STDOUT, call
 from dateutil import parser as time_parser
 from infra.tool_box import *
-from infra.ftraceparser.trace import Trace, Node
+from infra.ftraceparser.ftraceparser.trace import Trace, Node
 from plugins.error import *
 
 TIMEOUT_TRACE_ANALYSIS = 10*60
@@ -149,7 +149,7 @@ class TraceAnalysis(AnalysisModule):
         self.logger.info("script/deploy.sh is done with exitcode {}".format(exitcode))
         return exitcode
     
-    def _run_trace_cmd(self, qemu, trace_filename, syz_repro=False):
+    def _run_trace_cmd(self, qemu: VMInstance, trace_filename, syz_repro=False):
         if syz_repro:
             syz_execprog = os.path.join(self.path_case_plugin, "syz-execprog")
             syz_executor = os.path.join(self.path_case_plugin, "syz-executor")
@@ -186,6 +186,13 @@ class TraceAnalysis(AnalysisModule):
         qemu.command(cmds="chmod +x trace-poc.sh && ./trace-poc.sh\n", user="root", wait=True)
         qemu.command(cmds="trace-cmd report > trace.report", user="root", wait=True)
         if qemu.download(user="root", src=["/root/trace.report"], dst="{}/{}.report".format(self.path_case_plugin, trace_filename), wait=True) != 0:
+            if not qemu.is_qemu_ready():
+                self.logger.error("qemu paniced, restoring raw ftrace")
+                self._save_dumped_ftrace(qemu, "{}/raw-{}.report".format(self.path_case_plugin, trace_filename))
+                self._convert_raw_ftrace("{}/raw-{}.report".format(self.path_case_plugin, trace_filename),
+                    "{}/{}.report".format(self.path_case_plugin, trace_filename), syscalls)
+                qemu.alternative_func_output.put(True)
+                return
             self.logger.error("Failed to download trace report from qemu")
             qemu.alternative_func_output.put(False)
             return
@@ -202,6 +209,34 @@ class TraceAnalysis(AnalysisModule):
             return syz_commands
         return None
     
+    def _save_dumped_ftrace(self, qemu: VMInstance, save_to):
+        res = []
+        kernel_log_regx = r'\[(( )+)?\d+\.\d+\]\[(( )+)?T(\d+)\] (.+)'
+        begin_ftrace = False
+        separate_line = 0
+        for line in qemu.output:
+            line = line.strip()
+            if 'Dumping ftrace buffer' in line:
+                begin_ftrace = True
+                continue
+            if begin_ftrace:
+                if regx_match(kernel_log_regx, line):
+                    text = regx_get(kernel_log_regx, line, 5)
+                    if text == '---------------------------------':
+                        separate_line ^= 1
+                        continue
+                    if separate_line:
+                        res.append(line+"\n")
+                    else:
+                        break
+        with open(save_to, 'w') as f:
+            f.writelines(res)
+        return
+    
+    def _convert_raw_ftrace(self, src, dst, entry_functions):
+        trace = Trace()
+        trace.convert_ftrace(ftrace_file=src, entry_functions=entry_functions, save_to=dst)
+
     def _prepare_syzkaller_bin(self, i386):
         script = os.path.join(self.path_package, "scripts/deploy-syzkaller.sh")
         chmodX(script)
@@ -270,7 +305,7 @@ exit $EXIT_CODE""".format(cmd)
                 self.logger.error("Failed to build upstream environment")
                 return None
 
-        qemu = cfg.repro.launch_qemu(self.case_hash, work_path=self.path_case_plugin, log_name="qemu-{}.log".format(cfg.repro.type_name), timeout=TIMEOUT_TRACE_ANALYSIS)
+        qemu = cfg.repro.launch_qemu(self.case_hash, work_path=self.path_case_plugin, log_name="qemu-{}.log".format(cfg.repro.type_name), timeout=TIMEOUT_TRACE_ANALYSIS, snapshot=False)
         _, qemu_queue = qemu.run(alternative_func=self._run_trace_cmd, args=("trace-{}".format(cfg.repro.type_name), ))
         done = qemu_queue.get(block=True)
         qemu.kill()
@@ -293,7 +328,7 @@ exit $EXIT_CODE""".format(cmd)
         devices_init_func_regx = ['initialize_vhci\(\);', 'initialize_netdevices_init\(\);', 'initialize_devlink_pci\(\);',
             'initialize_tun\(\);', 'initialize_netdevices\(\);', 'initialize_wifi_devices\(\);']
         syscalls = []
-        enabled_syscalls = ['process_one_work', 'do_kern_addr_fault', '__do_softirq']
+        enabled_syscalls = ['process_one_work', 'do_kern_addr_fault', '__do_softirq', '__x64_sys_exit_group']
         output = qemu.command(cmds="trace-cmd list -f | grep -E  \"^__x64_sys_\"", user="root", wait=True)
         for line in output:
             if line.startswith("__x64_sys_"):

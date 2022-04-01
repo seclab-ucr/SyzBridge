@@ -253,7 +253,6 @@ class BugReproduce(AnalysisModule):
             if 'setup_loop_device' in line:
                 feature |= self.FEATURE_LOOP_DEVICE
 
-
         if data != []:
             fdst.writelines(data)
             fdst.close()
@@ -354,6 +353,9 @@ class BugReproduce(AnalysisModule):
             user = "root"
         else:
             user = "etenal"
+        if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
+            self.logger.fatal("KASAN is not enabled in kernel!")
+            raise KASANDoesNotEnabled
         qemu.command(cmds="killall poc", user="root", wait=True)
         qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
         qemu.logger.info("running PoC")

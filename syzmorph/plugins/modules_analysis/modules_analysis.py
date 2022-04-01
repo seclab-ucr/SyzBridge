@@ -7,7 +7,7 @@ from infra.strings import source_file_regx
 from plugins import AnalysisModule
 from plugins.error import *
 from plugins.trace_analysis import TraceAnalysis
-from infra.ftraceparser.trace import Trace
+from infra.ftraceparser.ftraceparser.trace import Trace
 from modules.vm import VM, VMInstance
 
 class TraceAnalysisError(Exception):

@@ -16,7 +16,10 @@ class Network:
         x.start()
         if wait:
             x.join()
-            exitcode = ret_queue.get(block=False)
+            try:
+                exitcode = ret_queue.get(block=False)
+            except BrokenPipeError:
+                return None
             return exitcode
         return None
     
@@ -26,7 +29,10 @@ class Network:
         x.start()
         if wait:
             x.join()
-            pipe_output = ret_queue.get(block=False)
+            try:
+                pipe_output = ret_queue.get(block=False)
+            except BrokenPipeError:
+                return None
             return pipe_output
         return None
 
