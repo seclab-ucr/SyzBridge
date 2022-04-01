@@ -6,6 +6,7 @@ from infra.tool_box import *
 from dateutil import parser as time_parser
 from plugins import AnalysisModule
 from plugins.syzkaller_interface import SyzkallerInterface
+from infra.config.vendor import Vendor
 from .sym_exec import *
 from modules.vm.error import *
 
@@ -38,28 +39,19 @@ class Syzscope(AnalysisModule):
             if plugin == None:
                 self.logger.error("No such plugin {}".format(self.NAME))
             timeout = int(plugin.timeout)
-            gdb_port = plugin.gdb_port
-            qemu_monitor_port = plugin.qemu_monitor_port
             max_round = int(plugin.max_round)
             if plugin.repro_mode == 'c':
                 repro_mode = 0
             elif plugin.repro_mode == 'syz':
                 repro_mode = 1
-            try:
-                ssh_port = plugin.ssh_port
-            except:
-                ssh_port = None
         except AttributeError:
             self.logger.error("Failed to get timeout or gdb_port or qemu_monitor_port or max_round")
             return False
-        return self.prepare_on_demand(timeout, gdb_port, ssh_port, qemu_monitor_port, max_round, repro_mode)
+        return self.prepare_on_demand(timeout, max_round, repro_mode)
     
-    def prepare_on_demand(self, timeout, gdb_port, ssh_port, qemu_monitor_port, max_round, repro_mode):
+    def prepare_on_demand(self, timeout, max_round, repro_mode):
         self._prepared = True
         self.timeout = timeout
-        self.gdb_port = gdb_port
-        self.ssh_port = ssh_port
-        self.qemu_monitor_port = qemu_monitor_port
         self.max_round = max_round
         self.repro_mode = repro_mode
         return True
@@ -68,12 +60,12 @@ class Syzscope(AnalysisModule):
         return self._move_to_success
 
     def run(self):
-        if not self._reproducible():
-            self.logger.info("The bug is not reproducible, syzscope will be skipped")
+        distros = self._reproducible()
+        if len(distros) == 0:
+            self.logger.info("The bug is not reproducible on any distros, syzscope will be skipped")
             return True
-        if not self.build_kernel():
-            return False
-        self.run_symbolic_execution()
+        for each in distros:
+            self.run_symbolic_execution(each)
         return True
     
     def build_kernel(self):
@@ -106,12 +98,19 @@ class Syzscope(AnalysisModule):
         self.logger.info("script/deploy.sh is done with exitcode {}".format(exitcode))
         return exitcode
     
-    def run_symbolic_execution(self):
+    def run_symbolic_execution(self, distro: Vendor):
+        sub_dir = os.path.join(self.path_case_plugin, distro.distro_name)
+        os.makedirs(sub_dir, exist_ok=True)
+        if self._check_distro_port(distro):
+            self.logger.error("{} doesn't have one of the following port in configuration file: ssh_port, gdb_port, mon_port".format(distro.distro_name))
+            return
+        
         for i in range(0, self.max_round):
-            self.logger.info("Round {}: Symbolic execution".format(i))
-            sym_logger = init_logger(self.path_case_plugin+"/symbolic_execution.log-{}".format(i), cus_format='%(asctime)s %(message)s', debug=self.debug)
+            self.logger.info("Round {}: {} symbolic execution".format(i, distro.distro_name))
+            sym_logger = init_logger(sub_dir+"/symbolic_execution.log-{}".format(i), cus_format='%(asctime)s %(message)s', debug=self.debug)
             sym = SymExec(syzscope=self, logger=sym_logger, workdir=self.path_case_plugin, index=0, debug=self.debug)
-            qemu = sym.setup_vm(ssh_port=self.ssh_port, gdb_port=self.gdb_port, mon_port=self.qemu_monitor_port, timeout=5*60, log_suffix="-{}".format(i))
+            qemu = sym.setup_vm(timeout=5*60, log_suffix="-{}".format(i), distro=distro, work_path=sub_dir)
+            sym.prepare_angr()
             _, qemu_queue = qemu.run(alternative_func=self._run_sym, args=(sym, sym_logger, ))
             ready_for_sym_exec = qemu_queue.get(block=True)
             sym.cleanup()
@@ -344,25 +343,24 @@ done
         if self.syz != None:
             self.syz.delete_syzkaller()
     
+    def _check_distro_port(self, distro: Vendor):
+        return distro.ssh_port == None or distro.gdb_port == None or distro.mon_port == None
+
     def _write_to(self, content, name):
         file_path = "{}/{}".format(self.path_case_plugin, name)
         super()._write_to(content, file_path)
     
     def _reproducible(self):
-        reproducable_regx = r'(debian|fedora|ubuntu) triggers a bug: ([A-Za-z0-9_: -/]+) (by normal user|by root user)'
-        failed_regx = r'(.+) fail to trigger the bug'
+        ret = []
+        reproducable_regx = r'(debian|fedora|ubuntu) triggers a (Kasan )?bug: ([A-Za-z0-9_: -/]+) (by normal user|by root user)'
         path_report = os.path.join(self.path_case, "BugReproduce", "Report_BugReproduce")
         if os.path.exists(path_report):
             with open(path_report, "r") as f:
                 report = f.readlines()
                 for line in report:
                     if regx_match(reproducable_regx, line):
-                        privilege = regx_get(reproducable_regx, line, 2)
-                        if privilege == 'by normal user':
-                            return True
-                        if privilege == 'by root user':
-                            return True
-                    if regx_match(failed_regx, line):
-                        return False
-        return False
+                        distro_name = regx_get(reproducable_regx, line, 0)
+                        distro = self.cfg.get_distro(distro_name)
+                        ret.append(distro)
+        return ret
 

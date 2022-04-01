@@ -44,7 +44,7 @@ class Config:
         for vendor in kernel_cfg:
             vend_cfg = kernel_cfg[vendor]
             _cfg = Vendor(vend_cfg, i)
-            setattr(self.kernel, vendor, _cfg)
+            setattr(self.kernel, vendor.lower(), _cfg)
             i += 1
 
         proj_dir = os.path.join(os.getcwd(), "syzmorph")
@@ -73,6 +73,12 @@ class Config:
             cfg = getattr(self.kernel, name)
             res.append(cfg)
         return res
+
+    def get_distro(self, name):
+        distro = getattr(self.kernel, name)
+        if distro.type == VMInstance.DISTROS:
+            return distro
+        return None
 
     def get_distros(self):
         res = []

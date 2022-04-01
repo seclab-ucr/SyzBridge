@@ -11,6 +11,8 @@ class Vendor():
         self.optional_modules = {}
         self.blacklist_modules = {}
         self._ssh_port = None
+        self._gdb_port = None
+        self._mon_port = None
         self._distro_image = None
         self._vmlinux = None
         self._ssh_key = None
@@ -25,12 +27,12 @@ class Vendor():
             for key in self.keys_must_have:
                 if key not in cfg:
                     raise ParseConfigError(key)
-                setattr(self, key, cfg[key])
         if cfg["type"] == "upstream":
             for key in ["ssh_port", "ssh_key", "type", "distro_image", "distro_name"]:
                 if key not in cfg:
                     raise ParseConfigError(key)
-                setattr(self, key, cfg[key])
+        for key in cfg:
+            setattr(self, key, cfg[key])
     
     def build_module_list(self):
         if self._built_modules:
@@ -198,6 +200,26 @@ class Vendor():
         if type(n) != int:
             raise TargetFormatNotMatch(n, type(n), int)
         self._ssh_port = n
+
+    @property
+    def gdb_port(self):
+        return self._gdb_port
+    
+    @gdb_port.setter
+    def gdb_port(self, n):
+        if type(n) != int:
+            raise TargetFormatNotMatch(n, type(n), int)
+        self._gdb_port = n
+
+    @property
+    def mon_port(self):
+        return self._mon_port
+    
+    @mon_port.setter
+    def mon_port(self, n):
+        if type(n) != int:
+            raise TargetFormatNotMatch(n, type(n), int)
+        self._mon_port = n
 
     @property
     def distro_name(self):

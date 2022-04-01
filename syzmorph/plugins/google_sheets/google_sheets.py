@@ -107,7 +107,7 @@ class GoogleSheets(AnalysisModule):
         self.data['reproduce-by-normal'] = ""
         self.data['reproduce-by-root'] = ""
         self.data['failed-on'] = ""
-        reproducable_regx = r'(debian|fedora|ubuntu) triggers a bug: ([A-Za-z0-9_: -/]+) (by normal user|by root user)'
+        reproducable_regx = r'(debian|fedora|ubuntu) triggers a (Kasan )?bug: ([A-Za-z0-9_: -/]+) (by normal user|by root user)'
         failed_regx = r'(.+) fail to trigger the bug'
         path_report = os.path.join(self.path_case, "BugReproduce", "Report_BugReproduce")
         normal_text = ''
@@ -119,8 +119,8 @@ class GoogleSheets(AnalysisModule):
                 for line in report:
                     if regx_match(reproducable_regx, line):
                         distro = regx_get(reproducable_regx, line, 0)
-                        bug_title = regx_get(reproducable_regx, line, 1)
-                        privilege = regx_get(reproducable_regx, line, 2)
+                        bug_title = regx_get(reproducable_regx, line, 2)
+                        privilege = regx_get(reproducable_regx, line, 3)
                         if privilege == 'by normal user':
                             normal_text += "{}-{}\n".format(distro, bug_title)
                             self.data['reproduce-by-normal'] += "{} ".format(distro)

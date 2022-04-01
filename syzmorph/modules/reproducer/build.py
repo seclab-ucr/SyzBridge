@@ -34,9 +34,13 @@ class Build():
     def setup(self):
         self.vmtype = self.cfg.type
         self.ssh_port = self.cfg.ssh_port
+        if self.cfg.gdb_port != None:
+            self.gdb_port = self.cfg.gdb_port
+        if self.cfg.mon_port != None:
+            self.mon_port = self.cfg.mon_port
         if self.vmtype == VMInstance.DISTROS:
             self.image_path = "{}/img/{}-snapshot.img".format(self.path_case, self.cfg.distro_name)
-            self.vmlinux = "{}/vmlinux".format(self.path_case)
+            self.vmlinux = "{}/vmlinux".format(self.cfg.distro_src)
             self.ssh_key = "{}/img/id_rsa_{}".format(self.path_case, self.cfg.distro_name)
             self.type_name = self.cfg.distro_name
         if self.vmtype == VMInstance.UPSTREAM:

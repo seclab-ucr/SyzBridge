@@ -9,7 +9,7 @@ import infra.tool_box as utilities
 import datetime
 import sys
 
-from modules.vm import VM
+from modules.vm import VM, VMInstance
 from math import e
 from modules.vm.error import QemuIsDead
 from .mem_instrument import MemInstrument
@@ -54,15 +54,15 @@ class SymExec(MemInstrument):
         self._branches = {}
         self.target_site = {}
 
-    def setup_vm(self, ssh_port, gdb_port, mon_port, timeout, log_name="vm.log", log_suffix=""):
+    def setup_vm(self, distro, timeout, ssh_port=None, gdb_port=None, mon_port=None, log_name="vm.log", log_suffix="", **kwargs):
         self.proj_path = self.syzscope.path_case_plugin
         if timeout != None:
             self._timeout = timeout
-        upstream = self.syzscope.cfg.get_upstream()
-        self.vm = upstream.repro.launch_qemu(c_hash = self.syzscope.case_hash, work_path=self.syzscope.path_case_plugin\
-            , log_name=log_name, log_suffix=log_suffix, timeout=timeout, ssh_port=ssh_port, gdb_port=gdb_port, mon_port=mon_port)
-        self.gdb_port = upstream.repro.gdb_port
-        self.mon_port = upstream.repro.mon_port
+        self.vm = distro.repro.launch_qemu(c_hash = self.syzscope.case_hash, log_name=log_name, log_suffix=log_suffix, \
+            timeout=timeout, ssh_port=ssh_port, gdb_port=gdb_port, mon_port=mon_port, **kwargs)
+        self.ssh_port = distro.repro.ssh_port
+        self.gdb_port = distro.repro.gdb_port
+        self.mon_port = distro.repro.mon_port
         return self.vm
     
     def cleanup(self):
@@ -72,13 +72,25 @@ class SymExec(MemInstrument):
     def setup_bug_capture(self, extra_noisy_func=None):
         self.extra_noisy_func = extra_noisy_func
 
-    def setup_gdb_and_monitor(self, qemu):
+    def prepare_angr(self):
+        self.logger.info("Loading kernel into angr")
+        self.vm.gdb_attach_vmlinux()
+
+    def setup_gdb_and_monitor(self, qemu: VMInstance):
         if self.vm == None:
             self.logger.error("Call setup_vm() to initialize the vm first")
             return True
+        
+        kaslr = True
+        out = qemu.command(cmds="dmesg | grep nokaslr", timeout=5, wait=True, user='root')
+        for line in out:
+            if "nokaslr" in line:
+                kaslr = False
+                break
+        if kaslr:
+            self.logger.error("KASLR enabled, cannot proceed symbolic execution")
+            return False
 
-        self.logger.info("Loading kernel into angr")
-        self.vm.gdb_attach_vmlinux()
         self.vm.timeout = 5*60
         if not self.vm.gdb_connect(self.gdb_port):
             self.logger.error("SyzScope does not support current gdb, please change to pwndbg in ~/.gdbinit")
