@@ -248,7 +248,7 @@ class BugReproduce(AnalysisModule):
             # We dont have too much devices to connect, limit the number to 1
             if '*hash = \'0\' + (char)(a1 % 10);' in line:
                 data.pop()
-                data.append('*hash = \'0\' + (char)(a1 % 2);')
+                data.append('*hash = \'0\' + (char)(a1 % 2);\n')
 
             if 'setup_loop_device' in line:
                 feature |= self.FEATURE_LOOP_DEVICE
@@ -300,7 +300,7 @@ class BugReproduce(AnalysisModule):
             self._execute_poc(root, qemu, poc_path, poc_feature)
             while True:
                 try:
-                    [res, trigger] = q.get(block=True, timeout=5)
+                    [res, trigger] = q.get(block=True, timeout=15)
                     if trigger:
                         qemu.alternative_func_output.put([res, trigger, qemu.qemu_fail, []], block=False)
                         return
@@ -315,7 +315,7 @@ class BugReproduce(AnalysisModule):
             self._execute_poc(root, qemu, poc_path, poc_feature)
             while True:
                 try:
-                    [res, trigger] = q.get(block=True, timeout=5)
+                    [res, trigger] = q.get(block=True, timeout=15)
                     if trigger:
                         qemu.alternative_func_output.put([res, trigger, qemu.qemu_fail, tested_modules], block=False)
                         return
@@ -385,9 +385,8 @@ class BugReproduce(AnalysisModule):
                     if crash_flag == 1:
                         res.append(crash)
                         crash = []
-                        if kasan_flag:
-                            trigger_hunted_bug = True
-                            qemu.kill_qemu = True
+                        trigger_hunted_bug = True
+                        qemu.kill_qemu = True
                     record_flag = 0
                     crash_flag = 0
                     continue
@@ -397,6 +396,7 @@ class BugReproduce(AnalysisModule):
                     record_flag = 1
                 if record_flag:
                     crash.append(line)
+            out_begin = out_end
         return res, trigger_hunted_bug
 
     def _enable_missing_modules(self, qemu, manual_enable_modules):
@@ -458,7 +458,11 @@ class BugReproduce(AnalysisModule):
         flag_kasan_write = False
         flag_kasan_read = False
         if report != []:
-            title = report[0][0]
+            try:
+                title = report[0][0]
+            except IndexError:
+                self.logger.error("Bug report error: {}".format(report))
+                return None
             if regx_match(r'\[(( )+)?\d+\.\d+\] (.+)', title):
                 title = regx_get(r'\[(( )+)?\d+\.\d+\] (.+)', title, 2)
             for each in report:
@@ -486,9 +490,8 @@ class BugReproduce(AnalysisModule):
                             self._write_to(self.path_project, "VendorMemRead")
                             flag_kasan_read = True
                             break
-                    
         return title
-    
+
     def _write_to(self, content, name):
         file_path = "{}/{}".format(self.path_case_plugin, name)
         super()._write_to(content, file_path)

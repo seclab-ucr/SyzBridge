@@ -28,7 +28,7 @@ class Build():
             self.create_snapshot(self.cfg.distro_image, path_image, self.cfg.distro_name)
             self.symlink(self.cfg.ssh_key, os.path.join(path_image, "id_rsa_{}".format(self.cfg.distro_name)))
         if self.cfg.type == VMInstance.UPSTREAM:
-            self.symlink(self.cfg.distro_image, os.path.join(path_image, "stretch.img"))
+            self.create_snapshot(self.cfg.distro_image, path_image, self.cfg.distro_name)
             self.symlink(self.cfg.ssh_key, os.path.join(path_image, "stretch.img.key"))
     
     def setup(self):
@@ -44,13 +44,13 @@ class Build():
             self.ssh_key = "{}/img/id_rsa_{}".format(self.path_case, self.cfg.distro_name)
             self.type_name = self.cfg.distro_name
         if self.vmtype == VMInstance.UPSTREAM:
-            self.image_path = "{}/img/stretch.img".format(self.path_case)
+            self.image_path = "{}/img/{}-snapshot.img".format(self.path_case, self.cfg.distro_name)
             self.vmlinux = "{}/linux/vmlinux".format(self.path_case)
             self.ssh_key = "{}/img/stretch.img.key".format(self.path_case)
-            self.type_name = "upstream"
+            self.type_name = self.cfg.distro_name
 
-    def create_snapshot(self, src, img, distro_name):
-        dst = "{}/{}-snapshot.img".format(img, distro_name)
+    def create_snapshot(self, src, img, image_name):
+        dst = "{}/{}-snapshot.img".format(img, image_name)
         if os.path.isfile(dst):
             os.remove(dst)
         cmd = ["qemu-img", "create", "-f", "qcow2", "-b", src, dst]
