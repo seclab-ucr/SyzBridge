@@ -241,7 +241,6 @@ class RawBugReproduce(AnalysisModule):
             self.logger.fatal("KASAN is not enabled in kernel!")
             raise KASANDoesNotEnabled
         qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user="root", wait=True)
-        self._check_poc_feature(poc_feature, qemu, user)
         qemu.command(cmds="chmod +x run.sh && ./run.sh", user=user, wait=False)
         return
     

@@ -27,7 +27,9 @@ class BugReproduce(AnalysisModule):
         self.report = []
         self.path_case_plugin = None
         self.bug_title = ''
+        self.results = {}
         self.distro_lock = threading.Lock()
+        self._init_results( )
         
     def prepare(self):
         if not self.manager.has_c_repro:
@@ -76,6 +78,8 @@ class BugReproduce(AnalysisModule):
         for _ in self.cfg.get_distros():
             [distro_name, m] = output.get(block=True)
             res[distro_name] = m
+        
+        json.dump(self.results, open(os.path.join(self.path_case_plugin, "results.json"), 'w'))
         return res
     
     def reproduce_async(self, distro, q):
@@ -117,6 +121,8 @@ class BugReproduce(AnalysisModule):
                 if self.check_module_priviledge(essential_modules):
                     res["root"] = False
                 self.report.append("{} requires loading [{}] to trigger the bug".format(distro.distro_name, ",".join(essential_modules)))
+                self.results['missing_module'] = essential_modules
+                self.results['root'] = res['root']
 
         q.put([distro.distro_name, res])
         return
@@ -244,14 +250,17 @@ class BugReproduce(AnalysisModule):
             for each in skip_funcs:
                 if regx_match(each, line):
                     data.pop()
+                    self.results['skip_funcs'].append(each)
 
             # We dont have too much devices to connect, limit the number to 1
             if '*hash = \'0\' + (char)(a1 % 10);' in line:
                 data.pop()
                 data.append('*hash = \'0\' + (char)(a1 % 2);')
+                self.results['interface_tuning'].append('usb')
 
             if 'setup_loop_device' in line:
                 feature |= self.FEATURE_LOOP_DEVICE
+                self.results['device_tuning'].append('loop')
 
         if data != []:
             fdst.writelines(data)
@@ -426,6 +435,15 @@ class BugReproduce(AnalysisModule):
                 self.logger.info("{} is enabled".format(config))
                 return True
         return False
+    
+    def _init_results(self):
+        self.results['missing_module'] = []
+        self.results['skip_funcs'] = []
+        self.results['device_tuning'] = []
+        self.results['interface_tuning'] = []
+        self.results['namespace'] = True
+        self.results['root'] = None
+        self.results['hash'] = self.case['hash']
 
     def _run_poc(self, qemu, poc_path, root, poc_feature):
         if root:
