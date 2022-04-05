@@ -40,6 +40,7 @@ class VMInstance(Network):
         self.output = []
         self._output_timer = default_output_timer
         self._output_lock = threading.Lock()
+        self._reboot_once = False
         self.lock = threading.Lock()
         log_name += log_suffix
         self.logger = utilities.init_logger(os.path.join(work_path, log_name), debug=debug, propagate=debug)
@@ -59,7 +60,7 @@ class VMInstance(Network):
             self._setup_upstream(**kwargs)
         return
         
-    def run(self, alternative_func=None, args=()):
+    def run(self, alternative_func=None, alternative_func_output=None, args=()):
         """
         alternative_func: function to be called when qemu is ready
         args: arguments to be passed to alternative_func
@@ -73,8 +74,9 @@ class VMInstance(Network):
 
         self.alternative_func = alternative_func
         self.alternative_func_args = args
+        self.alternative_func_output = alternative_func_output
 
-        if self.alternative_func != None:
+        if self.alternative_func != None and alternative_func_output == None:
             self.alternative_func_output = queue.Queue()
 
         if self.timeout != None:
@@ -136,6 +138,16 @@ class VMInstance(Network):
                 if not self.qemu_ready:
                     self.kill_proc_by_port(self.port)
                     self.case_logger.error('QEMU: Error occur at booting qemu')
+                    if self.need_reboot():
+                        if self._reboot_once:
+                            self.case_logger.debug('QEMU: Image reboot already')
+                            # The image should be ready after rebooting, run instance again
+                            self._enable_snapshot_in_cmd()
+                            self.run(self.alternative_func, self.alternative_func_output, self.alternative_func_args)
+                            return
+                        self._reboot_once = True
+                        self.case_logger.error('QEMU: Upstream image need a reboot')
+                        break
                     self.qemu_fail = True
                     self.alternative_func_output.put([False])
                 return
@@ -147,11 +159,18 @@ class VMInstance(Network):
                     x = threading.Thread(target=self._prepare_alternative_func, name="{} qemu call back".format(self.tag))
                     x.start()
                     run_alternative_func = True
+        if self._reboot_once:
+            self.case_logger.debug('QEMU: Try to reboot the image')
+            # Disable snapshot and reboot the image
+            self._disable_snapshot_in_cmd()
+            self.run(self.alternative_func, self.alternative_func_output, self.alternative_func_args)
+            return
         self.case_logger.info('Time out, kill qemu')
         if not self.qemu_ready:
             self.qemu_fail = True
             self.alternative_func_output.put([False])
         self.kill_vm()
+        return
     
     def kill_proc_by_port(self, ssh_port):
         p = Popen("lsof -i :{} | awk '{{print $2}}'".format(ssh_port), shell=True, stdout=PIPE, stderr=PIPE)
@@ -171,6 +190,11 @@ class VMInstance(Network):
     def no_new_output(self):
         return self._output_lock.locked()
     
+    def need_reboot(self):
+        if self.cfg.type != VMInstance.UPSTREAM:
+            return False
+        return 'reboot' in self.output[-1]
+
     def is_qemu_ready(self):
         output = self.command("uname -r", "root", wait=True, timeout=1)
         if type(output) == list and len(output) > 0:
@@ -237,6 +261,24 @@ class VMInstance(Network):
             self.cmd_launch.append(" ".join(cur_opts))
         self.write_cmd_to_script(self.cmd_launch, "launch_upstream.sh", build_append=True)
         return
+    
+    def _disable_snapshot_in_cmd(self):
+        lengh = len(self.cmd_launch)
+        if lengh == 0:
+            return
+        for i in range(0, lengh):
+            key = self.cmd_launch[i]
+            if key == '-snapshot':
+                self.cmd_launch.pop(i)
+    
+    def _enable_snapshot_in_cmd(self):
+        lengh = len(self.cmd_launch)
+        if lengh == 0:
+            return
+        for i in range(0, lengh):
+            key = self.cmd_launch[i]
+            if key == '-kernel':
+                self.cmd_launch.insert(i, '-snapshot')
     
     def _prepare_alternative_func(self):
         try:

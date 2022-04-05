@@ -190,9 +190,8 @@ class RawBugReproduce(AnalysisModule):
                     if crash_flag == 1:
                         res.append(crash)
                         crash = []
-                        if kasan_flag:
-                            trigger_hunted_bug = True
-                            qemu.kill_qemu = True
+                        trigger_hunted_bug = True
+                        qemu.kill_qemu = True
                     record_flag = 0
                     crash_flag = 0
                     continue
@@ -202,6 +201,7 @@ class RawBugReproduce(AnalysisModule):
                     record_flag = 1
                 if record_flag:
                     crash.append(line)
+            out_begin = out_end
         return res, trigger_hunted_bug
     
     def _compile_poc(self, root: bool):
@@ -250,7 +250,11 @@ class RawBugReproduce(AnalysisModule):
         flag_kasan_write = False
         flag_kasan_read = False
         if report != []:
-            title = report[0][0]
+            try:
+                title = report[0][0]
+            except IndexError:
+                self.logger.error("Bug report error: {}".format(report))
+                return None
             if regx_match(r'\[(( )+)?\d+\.\d+\] (.+)', title):
                 title = regx_get(r'\[(( )+)?\d+\.\d+\] (.+)', title, 2)
             for each in report:

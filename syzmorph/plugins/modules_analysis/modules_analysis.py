@@ -90,6 +90,7 @@ class ModulesAnalysis(AnalysisModule):
             self.check_ftrace()
         except TraceAnalysisError as e:
             self.logger.error("[Modules analysis] {}".format(e))
+            self.main_logger.error("[Modules analysis] {}".format(e))
                 
         self.report.append(ModulesAnalysis.REPORT_END)
         self.dump_missing_modules()
