@@ -113,6 +113,7 @@ class BugReproduce(AnalysisModule):
         missing_modules = [e['name'] for e in m ]
         success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, [], ), root=True, log_prefix='missing-modules', timeout=MAX_BUG_REPRODUCE_TIMEOUT)
         if success:
+            self.results['trigger'] = True
             tested_modules = t[0]
             res["triggered"] = True
             res["bug_title"] = self.bug_title

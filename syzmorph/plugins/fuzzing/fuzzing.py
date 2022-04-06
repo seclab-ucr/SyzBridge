@@ -70,11 +70,11 @@ class Fuzzing(AnalysisModule):
     def prepare_on_demand(self, path_kernel, time_limit):
         if regx_match(r'386', self.case["manager"]):
             self.arch = "386"
-        self.path_image = self.cfg.kernel.Ubuntu.distro_image
-        self.port = self.cfg.kernel.Ubuntu.repro.ssh_port
+        self.path_image = self.cfg.kernel.ubuntu.distro_image
+        self.port = self.cfg.kernel.ubuntu.repro.ssh_port
         self.path_kernel = path_kernel
         self.time_limit = time_limit
-        self.ssh_key = self.cfg.kernel.Ubuntu.ssh_key
+        self.ssh_key = self.cfg.kernel.ubuntu.ssh_key
         self._prepared = True
         return True
     

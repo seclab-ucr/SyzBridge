@@ -47,6 +47,25 @@ class PocCommand(Command):
 
 set -ex
 
+function solve_feature() {{
+    FEATURE=$1
+    # FEATURE_LOOP_DEVICE
+    if [[ $((FEATURE&1)) == 1 ]]; then
+        echo "FEATURE_LOOP_DEVICE"
+        # check if loop device is created
+        DEV_LIST=`losetup -a | awk '{{{{print $1}}}}'`
+        echo "Busy loop devices:\\n" $DEV_LIST
+
+        echo $DEV_LIST |
+        while read -r line; do \\
+            DEV_NAME=${{line//:/ }}; \\
+            echo "free loop device $DEV_NAME"; \\
+            umount $DEV_NAME > /dev/null 2>&1; \\
+        done
+    fi
+}}
+
+echo 140800 >  /sys/kernel/debug/tracing/buffer_size_kb
 {0}
 chmod +x ./poc
 while :
@@ -63,18 +82,17 @@ done
         case = crawler.cases[re['hash']]
         r = request_get(case['c_repro'])
         c_prog_text = r.text
+        print("generating poc.c")
         feature = self.tune_poc(re, c_prog_text)
         if feature != 0:
-            src = os.path.join(self.path_package, "scripts", "check-poc-feature.sh")
-            dst = os.path.join(self.args.output, "check-poc-feature.sh")
-            shutil.copyfile(src, dst)
-            extra_cmd += "chmod +x ./check-poc-feature.sh && ./check-poc-feature.sh {}\n".format(feature)
+            extra_cmd += "solve_feature {}\n".format(feature)
         if len(re['missing_module']) > 0:
             cmd = []
             for each in re['missing_module']:
                 cmd.append("modprobe {}".format(each))
             extra_cmd += " && ".join(cmd) + '\n'
         poc_script = poc_script.format(extra_cmd)
+        print("generating /run_poc.sh")
 
         f = open(self.args.output+'/run_poc.sh', 'w')
         f.writelines(poc_script)

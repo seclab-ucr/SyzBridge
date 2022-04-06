@@ -68,9 +68,9 @@ class Deployer(Case, Task):
     
     def call_syzmorph(self, cmd, args):
         out = []
-        run_cmd = [cmd]
+        run_cmd = ['python3', 'syzmorph', cmd]
         run_cmd.extend(args)
-        p = Popen(run_cmd, stdout=PIPE, stderr=PIPE, shell=True, cwd=self.path_project, env=os.environ.copy())
+        p = Popen(run_cmd, stdout=PIPE, stderr=STDOUT, shell=False, cwd=self.path_syzmorph, env=os.environ.copy())
         with p.stdout:
             try:
                 for line in iter(p.stdout.readline, b''):

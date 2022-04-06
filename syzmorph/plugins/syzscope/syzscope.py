@@ -233,6 +233,7 @@ class Syzscope(AnalysisModule):
 
 set -ex
 
+echo 140800 >  /sys/kernel/debug/tracing/buffer_size_kb
 chmod +x ./poc
 while :
 do
