@@ -29,9 +29,9 @@ class BugReproduce(AnalysisModule):
         self.bug_title = ''
         self.results = {}
         self.distro_lock = threading.Lock()
-        self._init_results( )
         
     def prepare(self):
+        self._init_results()
         if not self.manager.has_c_repro:
             self.logger.info("Case does not have c reproducer")
             return False
@@ -70,10 +70,14 @@ class BugReproduce(AnalysisModule):
         output = queue.Queue()
         for distro in self.cfg.get_distros():
             self.logger.info("start reproducing bugs on {}".format(distro.distro_name))
-            x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="reproduce_async-{}".format(distro.distro_name))
-            x.start()
-            if self.debug:
-                x.join()
+            try:
+                x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="reproduce_async-{}".format(distro.distro_name))
+                x.start()
+                if self.debug:
+                    x.join()
+            except KASANDoesNotEnabled:
+                self.logger.error("case {} has distro {} with KASAN disabled".format(self.case['hash'], distro.distro_name))
+                break
 
         for _ in self.cfg.get_distros():
             [distro_name, m] = output.get(block=True)
@@ -94,10 +98,13 @@ class BugReproduce(AnalysisModule):
             res["triggered"] = True
             res["bug_title"] = self.bug_title
             res["root"] = True
-            if self.reproduce(distro, func=self.capture_kasan, root=False):
+            success, _ = self.reproduce(distro, func=self.capture_kasan, root=False)
+            if success:
                 res["triggered"] = True
                 res["bug_title"] = self.bug_title
                 res["root"] = False
+            self.results['root'] = res['root']
+            self.results['trigger'] = True
             q.put([distro.distro_name, res])
             return
         
@@ -256,10 +263,14 @@ class BugReproduce(AnalysisModule):
             if '*hash = \'0\' + (char)(a1 % 10);' in line:
                 data.pop()
                 data.append('*hash = \'0\' + (char)(a1 % 2);\n')
+                if 'use' not in self.results['device_tuning']:
+                    self.results['device_tuning'].append('usb')
 
             if 'setup_loop_device' in line:
-                feature |= self.FEATURE_LOOP_DEVICE
-                self.results['device_tuning'].append('loop')
+                if not (feature & self.FEATURE_LOOP_DEVICE):
+                    feature |= self.FEATURE_LOOP_DEVICE
+                    if 'loop' not in self.results['device_tuning']:
+                        self.results['device_tuning'].append('loop')
 
         if data != []:
             fdst.writelines(data)
@@ -443,6 +454,7 @@ class BugReproduce(AnalysisModule):
         self.results['namespace'] = True
         self.results['root'] = None
         self.results['hash'] = self.case['hash']
+        self.results['trigger'] = False
 
     def _run_poc(self, qemu, poc_path, root, poc_feature):
         if root:

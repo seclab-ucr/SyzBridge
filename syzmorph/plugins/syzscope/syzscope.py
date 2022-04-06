@@ -212,6 +212,22 @@ class Syzscope(AnalysisModule):
 
     def _run_poc(self, qemu, mode=0):
         if mode == 0:
+            poc_path = os.path.join(self.path_case_plugin, "poc")
+            poc_script_path = os.path.join(self.path_case_plugin, "run_poc.sh")
+
+            args = ['--build', None, '--output', None]
+            args[1] = os.path.join(self.path_case, "BugReproduce", "results.json")
+            args[3] = self.path_case_plugin
+
+            if os.path.exists(args[1]):
+                self.logger.info("call syzmorph: poc {}".format(args))
+                out = self.manager.call_syzmorph('poc', args)
+                self.logger.info("\n".join(out))
+                check_feature_script_path = os.path.join(self.path_case_plugin, "check-poc-feature.sh")
+                qemu.upload(user="root", src=[poc_path, poc_script_path, check_feature_script_path], dst="/root", wait=True)
+                qemu.command(cmds="chmod +x ./run_poc.sh && ./run_poc.sh", user="root", wait=False)
+                return
+            
             poc_script = """
 #!/bin/bash
 
@@ -229,8 +245,6 @@ done
             dst = os.path.join(self.path_case_plugin, "poc.c")
             shutil.copyfile(src, dst)
             call(["gcc", "-pthread", "-static", "-o", "poc", "poc.c"], cwd=self.path_case_plugin)
-            poc_path = os.path.join(self.path_case_plugin, "poc")
-            poc_script_path = os.path.join(self.path_case_plugin, "run_poc.sh")
             qemu.upload(user="root", src=[poc_path, poc_script_path], dst="/root", wait=True)
             qemu.command(cmds="chmod +x ./run_poc.sh && ./run_poc.sh", user="root", wait=False)
         elif mode == 1:

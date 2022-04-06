@@ -1,4 +1,9 @@
+from asyncio.subprocess import STDOUT
 import importlib, os
+from tkinter.tix import Tree
+from xml.etree.ElementTree import PI
+
+from psutil import Popen
 
 from infra.tool_box import STREAM_HANDLER, init_logger, convert_folder_name_to_plugin_name
 from infra.strings import *
@@ -8,6 +13,7 @@ from .case import Case
 from .error import *
 from .task import Task
 from modules.vm import VMInstance
+from subprocess import Popen, PIPE, STDOUT
 
 class Deployer(Case, Task):
 
@@ -59,6 +65,24 @@ class Deployer(Case, Task):
             folder = self.save_to_others(error)
             self.logger.info("Copy to {}".format(folder))
             return False
+    
+    def call_syzmorph(self, cmd, args):
+        out = []
+        run_cmd = [cmd]
+        run_cmd.extend(args)
+        p = Popen(run_cmd, stdout=PIPE, stderr=PIPE, shell=True, cwd=self.path_project, env=os.environ.copy())
+        with p.stdout:
+            try:
+                for line in iter(p.stdout.readline, b''):
+                    try:
+                        line = line.decode("utf-8").strip('\n').strip('\r')
+                    except:
+                        continue
+                    out.append(line)
+            except ValueError:
+                if p.stdout.close:
+                    return out
+        return out
     
     def build_analyzor_modules(self):
         res = []

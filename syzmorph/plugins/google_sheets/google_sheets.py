@@ -10,7 +10,7 @@ class GoogleSheets(AnalysisModule):
     REPORT_START = "======================GoogleSheets Report======================"
     REPORT_END =   "==================================================================="
     REPORT_NAME = "Report_GoogleSheets"
-    DEPENDENCY_PLUGINS = ["BugReproduce", "CapabilityCheck", "ModulesAnalysis", "Syzscope"]
+    DEPENDENCY_PLUGINS = ["BugReproduce", "CapabilityCheck", "ModulesAnalysis"]
 
     def __init__(self):
         super().__init__()
@@ -57,7 +57,7 @@ class GoogleSheets(AnalysisModule):
         self._write_reproducable(wks)
         self._write_module_analysis(wks)
         self._write_capability_check(wks)
-        self._write_syzscope(wks)
+        #self._write_syzscope(wks)
         self._write_fuzzing(wks)
         try:
             if self.manager.module_capable("SlackBot") and \

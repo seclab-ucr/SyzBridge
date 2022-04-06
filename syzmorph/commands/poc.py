@@ -1,12 +1,15 @@
 import os, json, shutil
 
 from commands import Command
+from subprocess import call
 from infra.tool_box import STREAM_HANDLER, init_logger, request_get, regx_match
 
 class PocCommand(Command):
+    FEATURE_LOOP_DEVICE = 1 << 0
+
     def __init__(self):
         super().__init__()
-        self.proj_dir = None
+        self.path_package = os.getcwd() + '/syzmorph'
         self.logger = init_logger(__name__, handler_type=STREAM_HANDLER)
 
     def add_arguments(self, parser):
@@ -26,21 +29,25 @@ class PocCommand(Command):
         if self.args.output == None:
             print("Missing output path")
 
-        if not os.path.exist(self.args.build):
+        if not os.path.exists(self.args.build):
             print("Can not find {}".format(self.args.build))
-        if not os.path.exist(self.args.output):
+        if not os.path.exists(self.args.output):
             print("Path {} doesn't exist".format(self.args.output))
         
         results = json.load(open(self.args.build, 'r'))
+        if not results['trigger']:
+            print("Bug cannot be triggered")
+            return
         self.build_poc(results)
     
     def build_poc(self, re):
+        extra_cmd = ""
         poc_script = """
 #!/bin/bash
 
 set -ex
 
-{}
+{0}
 chmod +x ./poc
 while :
 do
@@ -54,16 +61,22 @@ done
 
         crawler.run_one_case(re['hash'])
         case = crawler.cases[re['hash']]
-        c_prog_text = request_get(case['c_prog'])
-        self.tune_poc(re, c_prog_text)
+        r = request_get(case['c_repro'])
+        c_prog_text = r.text
+        feature = self.tune_poc(re, c_prog_text)
+        if feature != 0:
+            src = os.path.join(self.path_package, "scripts", "check-poc-feature.sh")
+            dst = os.path.join(self.args.output, "check-poc-feature.sh")
+            shutil.copyfile(src, dst)
+            extra_cmd += "chmod +x ./check-poc-feature.sh && ./check-poc-feature.sh {}\n".format(feature)
         if len(re['missing_module']) > 0:
             cmd = []
             for each in re['missing_module']:
                 cmd.append("modprobe {}".format(each))
-            poc_script.format(" && ".join(cmd))
-        else:
-            poc_script.format("")
-        f = open(self.args.output+'/run.sh', 'w')
+            extra_cmd += " && ".join(cmd) + '\n'
+        poc_script = poc_script.format(extra_cmd)
+
+        f = open(self.args.output+'/run_poc.sh', 'w')
         f.writelines(poc_script)
         f.close()
     
@@ -73,7 +86,6 @@ done
         insert_line = []
         main_func = ""
 
-        skip_funcs = [r"setup_usb\(\);", r"setup_leak\(\);", r"setup_cgroups\(\);", r"initialize_cgroups\(\);", r"setup_cgroups_loop\(\);"]
         data = []
         code = text.split('\n')
         if text.find("int main") != -1:
@@ -89,8 +101,8 @@ done
             data.append(code[i])
             if re['namespace']:
                 if regx_match(main_func, line):
-                    data.insert(len(data)-1, "#include \"sandbox.h\"\n")
-                    insert_line.append([i+2, "setup_sandbox();\n"])
+                    data.insert(len(data)-1, "#include \"sandbox.h\"")
+                    insert_line.append([i+2, "setup_sandbox();"])
 
             for each in re['skip_funcs']:
                 if regx_match(each, line):
@@ -104,24 +116,24 @@ done
                 re['interface_tuning'].remove('usb')
 
             if 'setup_loop_device' in line:
-                feature |= self.FEATURE_LOOP_DEVICE
-                self.results['device_tuning'].append('loop')
-                re['interface_tuning'].remove('loop')
+                if not (feature & self.FEATURE_LOOP_DEVICE):
+                    feature |= self.FEATURE_LOOP_DEVICE
+                    re['device_tuning'].remove('loop')
 
         f = open(self.args.output+'/poc.c', 'w')
         if data != []:
-            f.writelines(data)
+            f.writelines("\n".join(data))
             f.close()
-            if not root:
-                path_package = os.getcwd() + '/syzmorph'
-                src = os.path.join(path_package, "plugins/bug_reproduce/sandbox.h")
+            if re['namespace']:
+                src = os.path.join(self.path_package, "plugins/bug_reproduce/sandbox.h")
                 dst = os.path.join(self.args.output, "sandbox.h")
                 shutil.copyfile(src, dst)
         else:
             self.logger.error("Cannot find real PoC function")
         self._compile_poc(root)
-        if check_results(re):
+        if self.check_results(re):
             self.logger.error("PoC didn't follow the results.json")
+        return feature
     
     def check_results(self, re):
         if len(re['skip_funcs']) != 0:
