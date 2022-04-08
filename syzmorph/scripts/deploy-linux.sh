@@ -60,6 +60,9 @@ function build_linux_folder {
     if [ $KERNEL == "bpf" ]; then
       git clone https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf.git/ $LINUX_FOLDER
     fi
+    if [ $KERNEL == "kmsan" ]; then
+      git clone https://github.com/google/kmsan.git $LINUX_FOLDER
+    fi
   else
     cp -rp $LINUX0 $LINUX_FOLDER
   fi
