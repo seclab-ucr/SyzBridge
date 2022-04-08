@@ -6,7 +6,7 @@ from modules.reproducer import Reproducer
 
 class Vendor():
     def __init__(self, cfg, index=0):
-        self.keys_must_have = ["distro_image", "ssh_port", "ssh_key", "distro_name", "distro_code_name", "distro_version", "distro_src", "type"]
+        self.keys_must_have = ["distro_image", "ssh_port", "ssh_key", "distro_name", "distro_code_name", "type"]
         self.default_modules = {}
         self.optional_modules = {}
         self.blacklist_modules = {}

@@ -62,7 +62,7 @@ class Network:
         ret_queue.put(exitcode, block=False)
         return exitcode
     
-    def _ssh(self, ip, user, port, key, command, ret_queue, timeout=3*60):
+    def _ssh(self, ip, user, port, key, command, ret_queue, timeout=None):
         cmd = ["ssh", "-F", "/dev/null", "-o", "UserKnownHostsFile=/dev/null", 
         "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=no", 
         "-i", key, 
@@ -94,8 +94,8 @@ class Network:
                     continue
                 logger.info(line)
                 self.pipe_output.append(line)
-                if debug:
-                    print(line)
+                #if debug:
+                    #print(line)
         except ValueError:
             if pipe.close:
                 return

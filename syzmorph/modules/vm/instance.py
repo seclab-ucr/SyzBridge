@@ -55,9 +55,9 @@ class VMInstance(Network):
     def setup(self, cfg, **kwargs):
         self.cfg = cfg
         if cfg.type == VMInstance.DISTROS:
-            self._setup_distros(**kwargs)
+            self.setup_distros(**kwargs)
         if cfg.type == VMInstance.UPSTREAM:
-            self._setup_upstream(**kwargs)
+            self.setup_upstream(**kwargs)
         return
         
     def run(self, alternative_func=None, alternative_func_output=None, args=()):
@@ -79,9 +79,8 @@ class VMInstance(Network):
         if self.alternative_func != None and alternative_func_output == None:
             self.alternative_func_output = queue.Queue()
 
-        if self.timeout != None:
-            x = threading.Thread(target=self.monitor_execution, name="{} qemu killer".format(self.tag))
-            x.start()
+        x = threading.Thread(target=self.monitor_execution, name="{} qemu killer".format(self.tag))
+        x.start()
         x1 = threading.Thread(target=self.__log_qemu, args=(p.stdout,), name="{} qemu logger".format(self.tag))
         x2 = threading.Thread(target=self._new_output_timer, name="{} qemu output timer".format(self.tag))
         x1.start()
@@ -90,6 +89,7 @@ class VMInstance(Network):
         return p, self.alternative_func_output
 
     def kill_vm(self):
+        self.qemu_ready = False
         self.logger.info('Kill VM pid: {}'.format(self.instance.pid))
         try:
             self.instance.kill()
@@ -118,7 +118,7 @@ class VMInstance(Network):
         ret = self.scp("localhost", user, self.port, self.key, src, dst, False, wait)
         return ret
 
-    def command(self, cmds, user, wait: bool, timeout=3*60):
+    def command(self, cmds, user, wait: bool, timeout=None):
         ret = self.ssh("localhost", user, self.port, self.key, cmds, wait, timeout)
         return ret
 
@@ -126,7 +126,7 @@ class VMInstance(Network):
         qemu_failed = False
         count = 0
         run_alternative_func = False
-        while (count <self.timeout):
+        while self.timeout == None or count <self.timeout:
             if self.kill_qemu:
                 self.case_logger.info('Signal kill qemu received.')
                 self.kill_vm()
@@ -205,7 +205,7 @@ class VMInstance(Network):
             return False
         return False
     
-    def _setup_distros(self, port, image, linux, key, mem="2G", cpu="2", gdb_port=None, mon_port=None, timeout=None, kasan_multi_shot=0, snapshot=True):
+    def setup_distros(self, port, image, linux, key, mem="2G", cpu="2", gdb_port=None, mon_port=None, timeout=None, kasan_multi_shot=0, snapshot=True):
         #self.qemu_ready_bar = r'(\w+ login:)|(Ubuntu \d+\.\d+\.\d+ LTS ubuntu20 ttyS0)'
         self.port = port
         self.image = image
@@ -223,7 +223,7 @@ class VMInstance(Network):
                     "-drive", "file={},format=qcow2,cache=writeback,l2-cache-size=6553600,cache-clean-interval=900".format(self.image)])
         self.write_cmd_to_script(self.cmd_launch, "launch_{}.sh".format(self.cfg.distro_name))
     
-    def _setup_upstream(self, port, image, linux, mem="2G", cpu="2", key=None, gdb_port=None, mon_port=None, opts=None, timeout=None, kasan_multi_shot=0, snapshot=True):
+    def setup_upstream(self, port, image, linux, mem="2G", cpu="2", key=None, gdb_port=None, mon_port=None, opts=None, timeout=None, kasan_multi_shot=0, snapshot=True):
         #self.qemu_ready_bar = r'Debian GNU\/Linux \d+ syzkaller ttyS\d+'
         cur_opts = ["root=/dev/sda", "console=ttyS0"]
         def_opts = ["earlyprintk=serial", \

@@ -27,16 +27,29 @@ class RawBugReproduce(AnalysisModule):
         self.report = []
         self.path_case_plugin = None
         self.bug_title = ''
+        self.root_user = None
+        self.normal_user = None
         self.distro_lock = threading.Lock()
         
     def prepare(self):
         if not self.manager.has_c_repro:
             self.logger.info("Case does not have c reproducer")
             return False
-        return self.prepare_on_demand()
+        try:
+            plugin = self.cfg.get_plugin(self.NAME)
+            if plugin == None:
+                self.logger.error("No such plugin {}".format(self.NAME))
+            root_user = plugin.root_user
+            normal_user = plugin.normal_user
+        except AttributeError:
+            self.logger.error("Failed to get user name")
+            return False
+        return self.prepare_on_demand(root_user, normal_user)
     
-    def prepare_on_demand(self):
+    def prepare_on_demand(self, root_user, normal_user):
         self._prepared = True
+        self.root_user = root_user
+        self.normal_user = normal_user
         return True
     
     def check(func):
@@ -212,7 +225,7 @@ class RawBugReproduce(AnalysisModule):
         call(["gcc", "-pthread", "-static", "-o", "poc", poc_file], cwd=self.path_case_plugin)
 
     def _kernel_config_pre_check(self, qemu, config):
-        out = qemu.command(cmds="grep {} /boot/config-`uname -r`".format(config), user="root", wait=True)
+        out = qemu.command(cmds="grep {} /boot/config-`uname -r`".format(config), user=self.root_user, wait=True)
         for line in out:
             line = line.strip()
             if line == config:
@@ -222,9 +235,9 @@ class RawBugReproduce(AnalysisModule):
 
     def _run_poc(self, qemu, poc_path, root, poc_feature):
         if root:
-            user = "root"
+            user = self.root_user
         else:
-            user = "etenal"
+            user = self.normal_user
         qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
         qemu.logger.info("running PoC")
         script = os.path.join(self.path_package, "scripts/run-script.sh")
@@ -240,7 +253,7 @@ class RawBugReproduce(AnalysisModule):
         if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
             self.logger.fatal("KASAN is not enabled in kernel!")
             raise KASANDoesNotEnabled
-        qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user="root", wait=True)
+        qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user=self.root_user, wait=True)
         qemu.command(cmds="chmod +x run.sh && ./run.sh", user=user, wait=False)
         return
     

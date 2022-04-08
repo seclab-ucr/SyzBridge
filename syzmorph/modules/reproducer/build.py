@@ -15,6 +15,8 @@ class Build():
         self.path_syzmorph = manager.path_syzmorph
         self.path_linux = manager.path_linux
         self.index = manager.index
+        self.root_user = None
+        self.normal_user = None
         self._ssh_port = None
         self._mon_port = None
         self._gdb_port = None
@@ -32,6 +34,8 @@ class Build():
             self.symlink(self.cfg.ssh_key, os.path.join(path_image, "stretch.img.key"))
     
     def setup(self):
+        self.normal_user = self.cfg.normal_user
+        self.root_user = self.cfg.root_user
         self.vmtype = self.cfg.type
         self.ssh_port = self.cfg.ssh_port
         if self.cfg.gdb_port != None:

@@ -6,6 +6,7 @@ from plugins import AnalysisModule
 from modules.vm import VMInstance
 from infra.tool_box import *
 from infra.strings import *
+from infra.config.vendor import Vendor
 from subprocess import Popen, STDOUT, PIPE, call
 from plugins.modules_analysis import ModulesAnalysis
 from .error import *
@@ -18,7 +19,7 @@ class BugReproduce(AnalysisModule):
     REPORT_START = "======================BugReproduce Report======================"
     REPORT_END =   "==================================================================="
     REPORT_NAME = "Report_BugReproduce"
-    DEPENDENCY_PLUGINS = ["ModulesAnalysis"]
+    DEPENDENCY_PLUGINS = ["ModulesAnalysis", "CapabilityCheck"]
 
     FEATURE_LOOP_DEVICE = 1 << 0
 
@@ -28,6 +29,8 @@ class BugReproduce(AnalysisModule):
         self.path_case_plugin = None
         self.bug_title = ''
         self.results = {}
+        self.root_user = None
+        self.normal_user = None
         self.distro_lock = threading.Lock()
         
     def prepare(self):
@@ -165,7 +168,7 @@ class BugReproduce(AnalysisModule):
                 return essential_modules
         return None
 
-    def reproduce(self, distro, root: bool, func, func_args=(), log_prefix= "qemu", **kwargs):
+    def reproduce(self, distro: Vendor, root: bool, func, func_args=(), log_prefix= "qemu", **kwargs):
         self.distro_lock.acquire()
         poc_feature = self.tune_poc(root)
         self.distro_lock.release()
@@ -175,6 +178,8 @@ class BugReproduce(AnalysisModule):
             log_name = "{}-{}-normal".format(log_prefix, distro.distro_name)
         func_args += (poc_feature,)
         distro.repro.init_logger(self.logger)
+        self.root_user = distro.repro.root_user
+        self.normal_user = distro.repro.normal_user
         report, triggered, t = distro.repro.reproduce(func=func, func_args=func_args, root=root, work_dir=self.path_case_plugin, vm_tag=distro.distro_name, c_hash=self.case_hash, log_name=log_name, **kwargs)
         if triggered:
             title = self._BugChecker(report)
@@ -219,6 +224,10 @@ class BugReproduce(AnalysisModule):
 
     def tune_poc(self, root: bool):
         feature = 0
+        need_namespace = False
+
+        if self.check_poc_capability():
+            need_namespace = True
 
         skip_funcs = [r"setup_usb\(\);", r"setup_leak\(\);", r"setup_cgroups\(\);", r"initialize_cgroups\(\);", r"setup_cgroups_loop\(\);"]
         data = []
@@ -250,7 +259,7 @@ class BugReproduce(AnalysisModule):
                         data.append(t[1])
                         insert_line.remove(t)
             data.append(code[i])
-            if not root:
+            if not need_namespace:
                 if regx_match(main_func, line):
                     data.insert(len(data)-1, "#include \"sandbox.h\"\n")
                     insert_line.append([i+2, "setup_sandbox();\n"])
@@ -276,7 +285,7 @@ class BugReproduce(AnalysisModule):
         if data != []:
             fdst.writelines(data)
             fdst.close()
-            if not root:
+            if not need_namespace:
                 src = os.path.join(self.path_package, "plugins/bug_reproduce/sandbox.h")
                 dst = os.path.join(self.path_case_plugin, "sandbox.h")
                 shutil.copyfile(src, dst)
@@ -284,6 +293,19 @@ class BugReproduce(AnalysisModule):
             self.logger.error("Cannot find real PoC function")
         self._compile_poc(root)
         return feature
+    
+    def check_poc_capability(self):
+        regx = r'([A-Z_]+) seems to be bypassable'
+        cap_report = os.path.join(self.path_case, "CapabilityCheck", "Report_CapabilityCheck")
+        if not os.path.exists(cap_report):
+            return False
+        with open(cap_report, "r") as f:
+            data = f.readlines()
+            for line in data:
+                if regx_match(regx, line):
+                    self.results['namespace'] = True
+                    return True
+        return False
     
     def success(self):
         return self._move_to_success
@@ -370,16 +392,16 @@ class BugReproduce(AnalysisModule):
     
     def _execute_poc(self, root, qemu, poc_path, poc_feature):
         if root:
-            user = "root"
+            user = self.root_user
         else:
-            user = "etenal"
+            user = self.normal_user
         if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
             self.logger.fatal("KASAN is not enabled in kernel!")
             raise KASANDoesNotEnabled
-        qemu.command(cmds="killall poc", user="root", wait=True)
+        qemu.command(cmds="killall poc", user=self.root_user, wait=True)
         qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
         qemu.logger.info("running PoC")
-        qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user="root", wait=True)
+        qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user=self.root_user, wait=True)
         self._check_poc_feature(poc_feature, qemu, user)
         qemu.command(cmds="rm -rf ./tmp && mkdir ./tmp && mv ./poc ./tmp && cd ./tmp && chmod +x poc && ./poc", user=user, wait=True, timeout=BUG_REPRODUCE_TIMEOUT)
                 
@@ -421,7 +443,7 @@ class BugReproduce(AnalysisModule):
 
     def _enable_missing_modules(self, qemu, manual_enable_modules):
         for each in manual_enable_modules:
-            qemu.command(cmds="modprobe {}".format(each), user="root", wait=True)
+            qemu.command(cmds="modprobe {}".format(each), user=self.root_user, wait=True)
     
     def _compile_poc(self, root: bool):
         if root:
@@ -439,7 +461,7 @@ class BugReproduce(AnalysisModule):
         qemu.command(cmds="chmod +x check-poc-feature.sh && ./check-poc-feature.sh {}".format(poc_feature), user=user, wait=True)
 
     def _kernel_config_pre_check(self, qemu, config):
-        out = qemu.command(cmds="grep {} /boot/config-`uname -r`".format(config), user="root", wait=True)
+        out = qemu.command(cmds="grep {} /boot/config-`uname -r`".format(config), user=self.root_user, wait=True)
         for line in out:
             line = line.strip()
             if line == config:
@@ -452,16 +474,16 @@ class BugReproduce(AnalysisModule):
         self.results['skip_funcs'] = []
         self.results['device_tuning'] = []
         self.results['interface_tuning'] = []
-        self.results['namespace'] = True
+        self.results['namespace'] = False
         self.results['root'] = None
         self.results['hash'] = self.case['hash']
         self.results['trigger'] = False
 
     def _run_poc(self, qemu, poc_path, root, poc_feature):
         if root:
-            user = "root"
+            user = self.root_user
         else:
-            user = "etenal"
+            user = self.normal_user
         qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
         qemu.logger.info("running PoC")
         script = os.path.join(self.path_package, "scripts/run-script.sh")
@@ -477,7 +499,7 @@ class BugReproduce(AnalysisModule):
         if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
             self.logger.fatal("KASAN is not enabled in kernel!")
             raise KASANDoesNotEnabled
-        qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user="root", wait=True)
+        qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user=self.root_user, wait=True)
         self._check_poc_feature(poc_feature, qemu, user)
         qemu.command(cmds="chmod +x run.sh && ./run.sh", user=user, wait=False)
         return

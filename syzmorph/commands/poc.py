@@ -60,7 +60,7 @@ function solve_feature() {{
         while read -r line; do \\
             DEV_NAME=${{line//:/ }}; \\
             echo "free loop device $DEV_NAME"; \\
-            umount $DEV_NAME > /dev/null 2>&1; \\
+            umount $DEV_NAME > /dev/null 2>&1 || true; \\
         done
     fi
 }}
@@ -85,7 +85,7 @@ done
         print("generating poc.c")
         feature = self.tune_poc(re, c_prog_text)
         if feature != 0:
-            extra_cmd += "solve_feature {}\n".format(feature)
+            extra_cmd += "solve_feature {} || true\n".format(feature)
         if len(re['missing_module']) > 0:
             cmd = []
             for each in re['missing_module']:

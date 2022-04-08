@@ -61,6 +61,9 @@ class ModulesAnalysis(AnalysisModule):
             remove_trace_file = plugin.remove_trace_file
         except AttributeError:
             remove_trace_file = False
+        if self.cfg.kernel.ubuntu.distro_src == None or not os.path.exists(self.cfg.kernel.ubuntu.distro_src):
+            self.logger.error("No such distro source path: {}".format(self.cfg.kernel.ubuntu.distro_src))
+            return False
         report = request_get(self.case['report'])
         self._build_loadable_modules()
         return self.prepare_on_demand(report.text, remove_trace_file)

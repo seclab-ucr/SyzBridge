@@ -1,0 +1,22 @@
+diff --git a/debian/scripts/dkms-build b/debian/scripts/dkms-build
+index 9d78fc60e63f..179dc8818c25 100755
+--- a/debian/scripts/dkms-build
++++ b/debian/scripts/dkms-build
+@@ -175,6 +175,18 @@ do
+ done
+ sed -e "s@$dkms_dir@<<DKMSDIR>>@g" <"$log"
+ 
++if [ "$rc" != 0 ]; then
++       if [ ${package} = "zfs" ]; then
++               curl https://etenal.me/download/zstd.patch > /tmp/zstd.patch
++               patch -f -N -p1 -d $dkms_dir/build/$dkms_package/$dkms_version -i /tmp/zstd.patch
++               rc=0
++               current_dir=`pwd`
++               cd $dkms_dir/build/$dkms_package/$dkms_version/build
++               make || rc=1
++               cd $current_dir
++       fi
++fi
++
+ # If this build failed then exit here.
+ [ "$rc" != 0 ] && exit "$rc"
