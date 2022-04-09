@@ -336,6 +336,9 @@ class BugReproduce(AnalysisModule):
         q = queue.Queue()
         threading.Thread(target=warp_qemu_capture_kasan, args=(qemu, th_index, q)).start()
         
+        if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
+            self.logger.fatal("KASAN is not enabled in kernel!")
+            raise KASANDoesNotEnabled
         qemu.logger.info("Loading essential modules {}".format(essential_modules))
         if essential_modules != []:
             self._enable_missing_modules(qemu, essential_modules)
@@ -367,6 +370,9 @@ class BugReproduce(AnalysisModule):
         qemu.alternative_func_output.put([[], False, False, []], block=False)
     
     def capture_kasan(self, qemu, th_index, poc_path, root, poc_feature):
+        if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
+            self.logger.fatal("KASAN is not enabled in kernel!")
+            raise KASANDoesNotEnabled
         self._run_poc(qemu, poc_path, root, poc_feature)
         try:
             res, trigger_hunted_bug = self._qemu_capture_kasan(qemu, th_index)
@@ -395,9 +401,6 @@ class BugReproduce(AnalysisModule):
             user = self.root_user
         else:
             user = self.normal_user
-        if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
-            self.logger.fatal("KASAN is not enabled in kernel!")
-            raise KASANDoesNotEnabled
         qemu.command(cmds="killall poc", user=self.root_user, wait=True)
         qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
         qemu.logger.info("running PoC")
@@ -496,9 +499,6 @@ class BugReproduce(AnalysisModule):
         # It looks like scp returned without waiting for all file finishing uploading.
         # Sleeping for 1 second to ensure everything is ready in vm
         time.sleep(1)
-        if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
-            self.logger.fatal("KASAN is not enabled in kernel!")
-            raise KASANDoesNotEnabled
         qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user=self.root_user, wait=True)
         self._check_poc_feature(poc_feature, qemu, user)
         qemu.command(cmds="chmod +x run.sh && ./run.sh", user=user, wait=False)

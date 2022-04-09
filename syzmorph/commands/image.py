@@ -23,6 +23,8 @@ class ImageCommand(Command):
         self.commit = None
         self.cfg = None
         self.logger = None
+        self.kernel_version = None
+        self.kernel_package_version = None
 
     def add_arguments(self, parser):
         super().add_arguments(parser)
@@ -160,10 +162,13 @@ class ImageCommand(Command):
         out = qemu.command(user=self.ssh_user, cmds="cd ubuntu-{} && ls -l *.ddeb".format(self.code_name), wait=True)
         
         had_ddeb = False
+        ddeb_regx = r'(linux-image-(.+)-dbgsym_(.+)_amd64\.ddeb)'
         for line in out:
-            if regx_match(r'linux.+.ddeb', line):
+            if regx_match(ddeb_regx, line):
                 had_ddeb = True
-                ddeb_pacage = regx_get(r'(linux.+.ddeb)', line, 0)
+                ddeb_pacage = regx_get(ddeb_regx, line, 0)
+                self.kernel_version = regx_get(ddeb_regx, line, 1)
+                self.kernel_package_version = regx_get(ddeb_regx, line, 2)
                 qemu.download(user=self.ssh_user, src=["~/ubuntu-{}/{}".format(self.code_name, ddeb_pacage)], dst=self.build_dir, wait=True)
 
         if not had_ddeb:
@@ -171,7 +176,65 @@ class ImageCommand(Command):
             qemu.kill_vm()
             qemu.alternative_func_output.put(False)
             return
-        qemu.command(user=self.ssh_user, cmds="cd ubuntu-{} && dpkg -i linux*.deb".format(self.code_name), wait=True)
-        qemu.kill_vm()
+        qemu.download(user=self.ssh_user, src=["/boot/grub/grub.cfg"], dst=self.build_dir, wait=True)
+
+        if os.path.exists(os.path.join(self.build_dir, "grub.cfg")):
+            grub_str = self.grub_order(os.path.join(self.build_dir, "grub.cfg"))
+            if grub_str != None:
+                qemu.command(user=self.ssh_user, cmds="sed -i s/GRUB_DEFAULT=\"\"/GRUB_DEFAULT=\"{}\" && update-grub && shutdown -h now".format(grub_str), wait=True)
+        #qemu.kill_vm()
         qemu.alternative_func_output.put(True)
         return
+    
+    def grub_order(self, grub_path):
+        with open(grub_path, 'r') as f:
+            texts = f.readlines()
+            trees, _ = self._generate_tree(texts)
+            grub_str = self._find_leaf(trees, self.kernel_version, "")
+        if grub_str == None:
+            self.logger.error("Failed to find grub.cfg")
+            return None
+        return grub_str[1:]
+    
+    def _find_leaf(self, tree, version, grub_str):
+        for i in range(0, len(tree)):
+            if type(tree[i]) == dict:
+                if tree[i]['kernel'] == version:
+                    grub_str += ">{}".format(i)
+                    return grub_str
+            if type(tree[i]) == list:
+                leaf = self._find_leaf(tree[i], version, ">{}".format(i) + grub_str)
+                if leaf != None:
+                    return leaf
+        return None
+
+    def _generate_tree(self, text):
+        first_entry = False
+        tree = []
+        i = 0
+        bracket = 0
+        menu_regx = r'^(\t+)?menuentry \'(.+)\''
+        kernel_regx = r'linux\t\/vmlinuz-([0-9\.\-a-zA-Z]+)'
+        while i < len(text):
+            line = text[i]
+            if regx_match(menu_regx, line):
+                if not first_entry:
+                    bracket = 0
+                    first_entry = True
+                bracket += 1
+                tree.append({'name': regx_get(menu_regx, line, 1)})
+            if not first_entry:
+                i += 1
+                continue
+            if regx_match(r'^((\t)+)?}', line):
+                bracket -= 1
+                if bracket < 0:
+                    return tree, i
+            if regx_match(kernel_regx, line):
+                tree[-1]['kernel'] = regx_get(kernel_regx, line, 0)
+            if 'submenu' in line:
+                t, k = self._generate_tree(text[i+1:])
+                tree.append(t)
+                i += k + 1
+            i += 1
+        return tree, len(text)
