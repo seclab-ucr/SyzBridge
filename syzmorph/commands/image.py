@@ -83,9 +83,13 @@ class ImageCommand(Command):
         if config == None:
             return
         try:
-            cfg = json.load(open(config, 'r+w'))
+            cfg = json.load(open(config, 'r'))
         except json.decoder.JSONDecodeError:
             cfg = {}
+        if 'kernel' not in cfg:
+            cfg['kernel'] = {}
+        cfg['kernel'][self.distro] = self.cfg
+        json.dump(cfg, open(config, 'w'), indent=4)
 
     def check_options(self):
         self.ssh_port = int(self.args.ssh_port[0])

@@ -73,14 +73,10 @@ class BugReproduce(AnalysisModule):
         output = queue.Queue()
         for distro in self.cfg.get_distros():
             self.logger.info("start reproducing bugs on {}".format(distro.distro_name))
-            try:
-                x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="reproduce_async-{}".format(distro.distro_name))
-                x.start()
-                if self.debug:
-                    x.join()
-            except KASANDoesNotEnabled:
-                self.logger.error("case {} has distro {} with KASAN disabled".format(self.case['hash'], distro.distro_name))
-                break
+            x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="reproduce_async-{}".format(distro.distro_name))
+            x.start()
+            if self.debug:
+                x.join()
 
         for _ in self.cfg.get_distros():
             [distro_name, m] = output.get(block=True)
@@ -396,7 +392,7 @@ class BugReproduce(AnalysisModule):
         else:
             user = self.normal_user
         if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
-            self.logger.fatal("KASAN is not enabled in kernel!")
+            self.logger.fatal("{} KASAN is not enabled in kernel!".format(self.case_hash))
             raise KASANDoesNotEnabled
         qemu.command(cmds="killall poc", user=self.root_user, wait=True)
         qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
@@ -497,7 +493,7 @@ class BugReproduce(AnalysisModule):
         # Sleeping for 1 second to ensure everything is ready in vm
         time.sleep(1)
         if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
-            self.logger.fatal("KASAN is not enabled in kernel!")
+            self.logger.fatal("{} KASAN is not enabled in kernel!".format(self.case_hash))
             raise KASANDoesNotEnabled
         qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user=self.root_user, wait=True)
         self._check_poc_feature(poc_feature, qemu, user)
