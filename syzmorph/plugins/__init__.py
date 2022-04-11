@@ -115,7 +115,7 @@ class AnalysisModule:
         pass
     
     def _check_dependencies_finished(self):
-        plugin = self.cfg.get_plugin(self.NAME)
+        plugin = self.cfg.get_plugin(self.analyzor.NAME)
         if plugin != None:
             if plugin.dependency == "weak":
                 return True

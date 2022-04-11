@@ -1,0 +1,23 @@
+#!/usr/bin/python3
+
+import sys
+
+src = sys.argv[1]
+dst = sys.argv[2]
+
+skip = -1
+new_text = []
+with open(src, "r") as f:
+    texts = f.readlines()
+    for line in texts:
+        if "module-check-%: install-%" in line or \
+                "config-prepare-check-%: $(stampdir)/stamp-prepare-tree-%" in line:
+            skip = 2
+        if line == "\n":
+            skip = -1
+        if skip != 0:
+            new_text.append(line)
+            skip -= 1
+
+with open(dst, "w") as f:
+    f.writelines(new_text)
