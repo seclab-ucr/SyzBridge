@@ -22,6 +22,36 @@ function config_disable() {
   sed -i "s/$key=y/# $key is not set/g" ${config}
 }
 
+function prepare_script() {
+    cat << EOF > replace-check-mk
+#!/usr/bin/python3
+
+import sys
+
+src = sys.argv[1]
+dst = sys.argv[2]
+
+skip = -1
+new_text = []
+with open(src, "r") as f:
+    texts = f.readlines()
+    for line in texts:
+        if "module-check-%: install-%" in line or \
+                "config-prepare-check-%: $(stampdir)/stamp-prepare-tree-%" in line:
+            skip = 2
+        if line == "\n":
+            skip = -1
+        if skip != 0:
+            new_text.append(line)
+            skip -= 1
+
+with open(dst, "w") as f:
+    f.writelines(new_text)
+EOF
+
+    chmod +x replace-check-mk
+}
+
 function change_grub() {
     sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT=""/GRUB_CMDLINE_LINUX_DEFAULT="maybe-ubiquity loglevel=6"/' /etc/default/grub
     sed -i 's/GRUB_CMDLINE_LINUX=""/GRUB_CMDLINE_LINUX="console=ttyS0 earlyprintk=serial"/' /etc/default/grub
@@ -42,7 +72,7 @@ EOF
 }
 
 function clone_ubuntu() {
-    mkdir ubuntu-${code_name}
+    mkdir ubuntu-${code_name} || (rm -rf ubuntu-${code_name} && mkdir ubuntu-${code_name})
     cd ubuntu-${code_name}
     git clone https://git.launchpad.net/~ubuntu-kernel/ubuntu/+source/linux/+git/${code_name} kernel
     cd ..
@@ -61,21 +91,19 @@ function compile_ubuntu() {
     chmod a+x debian/scripts/misc/*
     LANG=C fakeroot debian/rules clean
 
-    sed -i '/@perl -f \$(DROOT)\/scripts\/module-check "\$\*" \\/d' debian/rules.d/4-checks.mk
-    sed -i '/"\$(prev_abidir)" "\$(abidir)" \$(skipmodule)/d' debian/rules.d/4-checks.mk
-    sed -i '/@perl -f \$(DROOT)\/scripts\/config-check \\/d' debian/rules.d/4-checks.mk
-    sed -i '/\$(builddir)\/build-\$\*\/\.config "\$(arch)" "\$\*" "\$(commonconfdir)" "\$(skipconfig)"/d' debian/rules.d/4-checks.mk
+    rm debian/rules.d/4-checks-new.mk || true
+    
+    ~/replace-check-mk debian/rules.d/4-checks.mk debian/rules.d/4-checks-new.mk
 
-    # for newer kernel
-    sed -i '/\$(builddir)\/build-\$\*\/\.config "\$(arch)" "\$\*" "\$(commonconfdir)" \\/d' debian/rules.d/4-checks.mk
-    sed -i '/"\$(skipconfig)" "\$(do_enforce_all)"/d' debian/rules.d/4-checks.mk
+    mv debian/rules.d/4-checks.mk debian/rules.d/4-checks-new-old.mk
+    mv debian/rules.d/4-checks-new.mk debian/rules.d/4-checks.mk
 
     sed -i 's/if \[ "\$fail" != 0 \]; then/if \[ "\$fail" != -1 \]; then/' debian/scripts/misc/kernelconfig
 
-    printf '#!'"/usr/bin/perl\nexit 0" > debian/scripts/config-check
-    printf '#!'"/usr/bin/python3\nsys.exit(0)" > debian/scripts/module-check
-    chmod +x debian/scripts/config-check
-    chmod +x debian/scripts/module-check
+    #printf '#!'"/usr/bin/perl\nexit 0" > debian/scripts/config-check
+    #printf '#!'"/usr/bin/python3\nsys.exit(0)" > debian/scripts/module-check
+    #chmod +x debian/scripts/config-check
+    #chmod +x debian/scripts/module-check
 
     patch -p1 -f -i ~/dkms.patch || echo "probably fine"
 
@@ -144,6 +172,8 @@ fi
 kernel_version=`uname -r`
 issue=`cat /etc/issue`
 echo "deploying new image for ${issue} ${kernel_version}"
+
+prepare_script
 
 change_grub
 

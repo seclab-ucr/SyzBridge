@@ -73,14 +73,10 @@ class BugReproduce(AnalysisModule):
         output = queue.Queue()
         for distro in self.cfg.get_distros():
             self.logger.info("start reproducing bugs on {}".format(distro.distro_name))
-            try:
-                x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="reproduce_async-{}".format(distro.distro_name))
-                x.start()
-                if self.debug:
-                    x.join()
-            except KASANDoesNotEnabled:
-                self.main_logger.error("case {} has distro {} with KASAN disabled".format(self.case['hash'], distro.distro_name))
-                break
+            x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="reproduce_async-{}".format(distro.distro_name))
+            x.start()
+            if self.debug:
+                x.join()
 
         for _ in self.cfg.get_distros():
             [distro_name, m] = output.get(block=True)
@@ -339,6 +335,7 @@ class BugReproduce(AnalysisModule):
         if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
             self.logger.fatal("KASAN is not enabled in kernel!")
             raise KASANDoesNotEnabled(self.case_hash)
+
         qemu.logger.info("Loading essential modules {}".format(essential_modules))
         if essential_modules != []:
             self._enable_missing_modules(qemu, essential_modules)

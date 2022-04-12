@@ -85,9 +85,13 @@ class ImageCommand(Command):
         if config == None:
             return
         try:
-            cfg = json.load(open(config, 'r+w'))
-        except json.decoder.JSONDecodeError:
+            cfg = json.load(open(config, 'r'))
+        except:
             cfg = {}
+        if 'kernel' not in cfg:
+            cfg['kernel'] = {}
+        cfg['kernel'][self.distro] = self.cfg
+        json.dump(cfg, open(config, 'w'), indent=4)
 
     def check_options(self):
         self.ssh_port = int(self.args.ssh_port[0])
@@ -138,10 +142,26 @@ class ImageCommand(Command):
 
         _, q = vm.run(alternative_func=self._deploy_image)
         t = q.get(block=True)
+        vm.kill_vm()
         if not t:
             self.logger.error("Image build failed, check the log")
             return False
+        
+        _, q = vm.run(alternative_func=self._check_kernel_version)
+        t = q.get(block=True)
+        if not t:
+            self.logger.error("Kernel version does not match {}, check grub".format(self.kernel_version))
+            return False
         return True
+    
+    def _check_kernel_version(self, qemu: VM):
+        out = qemu.command(user=self.ssh_user, cmds="uname -r", wait=True)
+        for line in out:
+            if line == self.kernel_version:
+                qemu.alternative_func_output.put(True)
+                return
+        qemu.alternative_func_output.put(False)
+        return
     
     def _deploy_image(self, qemu: VM):
         proj_path = os.path.join(os.getcwd(), "syzmorph")
@@ -181,7 +201,7 @@ class ImageCommand(Command):
         if os.path.exists(os.path.join(self.build_dir, "grub.cfg")):
             grub_str = self.grub_order(os.path.join(self.build_dir, "grub.cfg"))
             if grub_str != None:
-                qemu.command(user=self.ssh_user, cmds="sed -i s/GRUB_DEFAULT=\"\"/GRUB_DEFAULT=\"{}\" && update-grub && shutdown -h now".format(grub_str), wait=True)
+                qemu.command(user=self.ssh_user, cmds="sed -i 's/GRUB_DEFAULT=.*/GRUB_DEFAULT=\"{}\"/' /etc/default/grub && update-grub && shutdown -h now".format(grub_str), wait=True)
         #qemu.kill_vm()
         qemu.alternative_func_output.put(True)
         return
