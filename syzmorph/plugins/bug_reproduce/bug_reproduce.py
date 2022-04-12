@@ -79,7 +79,7 @@ class BugReproduce(AnalysisModule):
                 if self.debug:
                     x.join()
             except KASANDoesNotEnabled:
-                self.logger.error("case {} has distro {} with KASAN disabled".format(self.case['hash'], distro.distro_name))
+                self.main_logger.error("case {} has distro {} with KASAN disabled".format(self.case['hash'], distro.distro_name))
                 break
 
         for _ in self.cfg.get_distros():
@@ -338,7 +338,7 @@ class BugReproduce(AnalysisModule):
         
         if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
             self.logger.fatal("KASAN is not enabled in kernel!")
-            raise KASANDoesNotEnabled
+            raise KASANDoesNotEnabled(self.case_hash)
         qemu.logger.info("Loading essential modules {}".format(essential_modules))
         if essential_modules != []:
             self._enable_missing_modules(qemu, essential_modules)
@@ -372,7 +372,7 @@ class BugReproduce(AnalysisModule):
     def capture_kasan(self, qemu, th_index, poc_path, root, poc_feature):
         if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
             self.logger.fatal("KASAN is not enabled in kernel!")
-            raise KASANDoesNotEnabled
+            raise KASANDoesNotEnabled(self.case_hash)
         self._run_poc(qemu, poc_path, root, poc_feature)
         try:
             res, trigger_hunted_bug = self._qemu_capture_kasan(qemu, th_index)
