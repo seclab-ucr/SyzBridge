@@ -89,7 +89,6 @@ class VMInstance(Network):
         return p, self.alternative_func_output
 
     def kill_vm(self):
-        self.qemu_ready = False
         self.logger.info('Kill VM pid: {}'.format(self.instance.pid))
         try:
             self.instance.kill()

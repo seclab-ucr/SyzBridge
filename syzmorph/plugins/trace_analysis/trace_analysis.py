@@ -24,6 +24,7 @@ class TraceAnalysis(AnalysisModule):
         self._prepared = False
         self._move_to_success = False
         self.path_case_plugin = None
+        self.syscall_prefix = '__x64_sys_'
         
     def prepare(self):
         if not self.manager.has_c_repro:
@@ -327,12 +328,22 @@ exit $EXIT_CODE""".format(cmd)
 
         devices_init_func_regx = ['initialize_vhci\(\);', 'initialize_netdevices_init\(\);', 'initialize_devlink_pci\(\);',
             'initialize_tun\(\);', 'initialize_netdevices\(\);', 'initialize_wifi_devices\(\);']
+        
         syscalls = []
-        enabled_syscalls = ['process_one_work', 'do_kern_addr_fault', '__do_softirq', '__x64_sys_exit_group']
         output = qemu.command(cmds="trace-cmd list -f | grep -E  \"^__x64_sys_\"", user="root", wait=True)
         for line in output:
             if line.startswith("__x64_sys_"):
                 syscalls.append(line.strip())
+        if len(syscalls) == 0:
+            # try SyS_ prefix
+            output = qemu.command(cmds="trace-cmd list -f | grep -E  \"^SyS_\"", user="root", wait=True)
+            for line in output:
+                if line.startswith("SyS_"):
+                    syscalls.append(line.strip())
+                    self.syscall_prefix = 'SyS_'
+        enabled_syscalls = ['process_one_work', '__do_softirq', self._syscall_add_prefix('exit_group')]
+        if self.syscall_prefix == '__x64_sys_':
+            enabled_syscalls.append('do_kern_addr_fault')
         
         code = fsrc.readlines()
         fsrc.close()
@@ -412,19 +423,23 @@ exit $EXIT_CODE""".format(cmd)
             else:
                 syscall = each
             
-            if '__x64_sys_' + syscall in syscalls: 
-                syscall = '__x64_sys_' + syscall
+            if self._syscall_add_prefix(syscall) in syscalls: 
+                syscall = self._syscall_add_prefix(syscall)
                 group = [syscall]
-                if syscall == '__x64_sys_recv':
-                    group = ['__x64_sys_recv', '__x64_sys_recvfrom']
-                if syscall == '__x64_sys_send':
-                    group = ['__x64_sys_send', '__x64_sys_sendto']
+                if syscall == self._syscall_add_prefix('recv'):
+                    group = [self._syscall_add_prefix('recv'), self._syscall_add_prefix('recvfrom')]
+                if syscall == self._syscall_add_prefix('send'):
+                    group = [self._syscall_add_prefix('send'), self._syscall_add_prefix('sendto')]
                 if syscall not in enabled_syscalls:
                     enabled_syscalls.extend(group)
             if syscall.startswith("syz_"):
                 if syscall in self.syzcall2syscall:
-                    enabled_syscalls.extend(self.syzcall2syscall[syscall])
+                    for each in self.syzcall2syscall[syscall]:
+                        enabled_syscalls.append(self._syscall_add_prefix(each))
         return unique(enabled_syscalls)
+    
+    def _syscall_add_prefix(self, syscall):
+        return self.syscall_prefix+syscall
     
     def _extract_syscall_from_template(self, testcase):
         res = []

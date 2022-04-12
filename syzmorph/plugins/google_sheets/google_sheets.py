@@ -10,7 +10,7 @@ class GoogleSheets(AnalysisModule):
     REPORT_START = "======================GoogleSheets Report======================"
     REPORT_END =   "==================================================================="
     REPORT_NAME = "Report_GoogleSheets"
-    DEPENDENCY_PLUGINS = ["BugReproduce", "CapabilityCheck", "ModulesAnalysis", "Syzscope", "Fuzzing"]
+    DEPENDENCY_PLUGINS = ["RawBugReproduce", "BugReproduce", "CapabilityCheck", "ModulesAnalysis", "Syzscope", "Fuzzing"]
 
     def __init__(self):
         super().__init__()
@@ -81,6 +81,7 @@ class GoogleSheets(AnalysisModule):
             wks.update_value('H1', 'capability_check')
             wks.update_value('I1', 'syzscope')
             wks.update_value('J1', 'fuzzing')
+            wks.update_value('K1', 'raw_bug_reproduce')
     
     def generate_report(self):
         final_report = "\n".join(self.report)
@@ -181,6 +182,39 @@ class GoogleSheets(AnalysisModule):
                 t = ''.join(report)
                 wks.update_value('J2', t)
                 self.data['fuzzing'] = t
+    
+    def _write_reproducable(self, wks: pygsheets.Worksheet):
+        self.data['reproduce-by-normal'] = ""
+        self.data['reproduce-by-root'] = ""
+        self.data['failed-on'] = ""
+        reproducable_regx = r'(debian|fedora|ubuntu) triggers a (Kasan )?bug: ([A-Za-z0-9_: -/]+) (by normal user|by root user)'
+        failed_regx = r'(.+) fail to trigger the bug'
+        path_report = os.path.join(self.path_case, "RawBugReproduce", "Report_RawBugReproduce")
+        normal_text = ''
+        root_text = ''
+        fail_text = ''
+        if os.path.exists(path_report):
+            with open(path_report, "r") as f:
+                report = f.readlines()
+                for line in report:
+                    if regx_match(reproducable_regx, line):
+                        distro = regx_get(reproducable_regx, line, 0)
+                        bug_title = regx_get(reproducable_regx, line, 2)
+                        privilege = regx_get(reproducable_regx, line, 3)
+                        if privilege == 'by normal user':
+                            normal_text += "{}-{}\n".format(distro, bug_title)
+                            self.data['reproduce-by-normal'] += "{} ".format(distro)
+                        if privilege == 'by root user':
+                            root_text += "{}-{}\n".format(distro, bug_title)
+                            self.data['reproduce-by-root'] += "{} ".format(distro)
+                    if regx_match(failed_regx, line):
+                        distros = regx_get(failed_regx, line, 0)
+                        fail_text += "{}\n".format(distros)
+                        self.data['failed-on'] += "{} ".format(distros)
+        if root_text != '':
+            wks.update_value('K2', root_text)
+        if normal_text != '':
+            wks.update_value('K2', normal_text)
 
     def _write_to(self, content, name):
         file_path = "{}/{}".format(self.path_case_plugin, name)

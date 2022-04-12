@@ -14,8 +14,8 @@ num_of_elements = 8
 class Crawler:
     def __init__(self,
                  url="https://syzkaller.appspot.com/upstream/fixed",
-                 keyword=[], max_retrieve=99999, filter_by_reported=-1, log_path = ".",
-                 filter_by_closed=-1, filter_by_c_prog=-1, filter_by_kernel=[], include_high_risk=True, debug=False):
+                 keyword=[], max_retrieve=99999, filter_by_reported="", log_path = ".",
+                 filter_by_closed="", filter_by_c_prog=-1, filter_by_kernel=[], include_high_risk=True, debug=False):
         self.url = url
         if type(keyword) == list:
             self.keyword = keyword
@@ -26,8 +26,28 @@ class Crawler:
         self.patches = {}
         self.include_high_risk = include_high_risk
         self.logger = init_logger(log_path + "/syzbot.log", debug = debug, propagate=True)
-        self.filter_by_reported = filter_by_reported
-        self.filter_by_closed = filter_by_closed
+        self.filter_by_reported = [-1, -1]
+        self.filter_by_closed = [-1, -1]
+        if filter_by_reported != "":
+            n = filter_by_reported.split('-')
+            n[0] = int(n[0])
+            n[1] = int(n[1])
+            if n[0] > n[1]:
+                self.filter_by_reported[0] = n[1]
+                self.filter_by_reported[1] = n[0]
+            else:
+                self.filter_by_reported[0] = n[0]
+                self.filter_by_reported[1] = n[1]
+        if filter_by_closed != "":
+            n = filter_by_closed.split('-')
+            n[0] = int(n[0])
+            n[1] = int(n[1])
+            if n[0] > n[1]:
+                self.filter_by_closed[0] = n[1]
+                self.filter_by_closed[1] = n[0]
+            else:
+                self.filter_by_closed[0] = n[0]
+                self.filter_by_closed[1] = n[1]
         self.filter_by_c_prog = filter_by_c_prog
         self.filter_by_kernel = filter_by_kernel
 
@@ -101,6 +121,8 @@ class Crawler:
                         continue
                     if self.keyword == []:
                         crash = self.retrieve_crash(case, title)
+                        if crash == None:
+                            continue
                         self.logger.debug("[{}] Fetch {}".format(count, crash['Hash']))
                         res.append(crash)
                         count += 1
@@ -136,14 +158,17 @@ class Crawler:
         crash['Bisected'] = stats[1].text
         crash['Count'] = stats[2].text
         crash['Last'] = stats[3].text
+        self.logger.debug(title.text)
         try:
             crash['Reported'] = stats[4].text
-            if self.filter_by_reported > -1 and int(crash['Reported'][:-1]) > self.filter_by_reported:
+            if (self.filter_by_reported[1] > -1 and int(crash['Reported'][:-1]) > self.filter_by_reported[1]) or \
+                (self.filter_by_reported[0] > -1 and int(crash['Reported'][:-1]) < self.filter_by_reported[0]):
                 return None
             patch_url = commit_list.contents[1].contents[1].attrs['href']
             crash['Patch'] = patch_url
             crash['Closed'] = stats[4].text
-            if self.filter_by_closed > -1 and int(crash['Closed'][:-1]) > self.filter_by_closed:
+            if (self.filter_by_closed[1] > -1 and int(crash['Closed'][:-1]) > self.filter_by_closed[1]) or \
+                (self.filter_by_closed[0] > -1 and int(crash['Closed'][:-1]) < self.filter_by_closed[0]):
                 return None
         except:
             # patch only works on fixed cases

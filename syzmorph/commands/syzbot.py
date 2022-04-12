@@ -28,11 +28,11 @@ class SyzbotCommand(Command):
                             help='[string] The maximum of cases for retrieval\n'
                                 '(By default all the cases will be retrieved)')
         parser.add_argument('--filter-by-reported', nargs='?',
-                            default='-1',
-                            help='[string] filter by bug reported days (0-X days)\n')
+                            default='',
+                            help='[string] filter by bug reported days (X1-X2 days)\n')
         parser.add_argument('--filter-by-closed', nargs='?',
-                            default='-1',
-                            help='[string] filter by bug closed days (0-X days) \n')
+                            default='',
+                            help='[string] filter by bug closed days (X1-X2 days) \n')
         parser.add_argument('--filter-by-kernel', action='append', default=['upstream'],
                             help='[list] filter by targeting kernel. By default it is \'upstream\'.\n\
                             e.g., --filter-by-kernel=upstream --filter-by-kernel=linux-next')
@@ -59,7 +59,7 @@ class SyzbotCommand(Command):
         from syzmorph.modules.syzbot import Crawler
 
         crawler = Crawler(url=self.args.url, keyword=self.args.key, max_retrieve=int(self.args.max_retrieval), 
-            filter_by_reported=int(self.args.filter_by_reported), filter_by_closed=int(self.args.filter_by_closed), 
+            filter_by_reported=self.args.filter_by_reported, filter_by_closed=self.args.filter_by_closed, 
             filter_by_c_prog=int(self.args.filter_by_c_prog), filter_by_kernel=self.args.filter_by_kernel,
             debug=self.args.debug, log_path = self.proj_dir)
         

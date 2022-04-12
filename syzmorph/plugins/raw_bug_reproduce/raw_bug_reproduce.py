@@ -35,21 +35,10 @@ class RawBugReproduce(AnalysisModule):
         if not self.manager.has_c_repro:
             self.logger.info("Case does not have c reproducer")
             return False
-        try:
-            plugin = self.cfg.get_plugin(self.NAME)
-            if plugin == None:
-                self.logger.error("No such plugin {}".format(self.NAME))
-            root_user = plugin.root_user
-            normal_user = plugin.normal_user
-        except AttributeError:
-            self.logger.error("Failed to get user name")
-            return False
-        return self.prepare_on_demand(root_user, normal_user)
+        return self.prepare_on_demand()
     
-    def prepare_on_demand(self, root_user, normal_user):
+    def prepare_on_demand(self):
         self._prepared = True
-        self.root_user = root_user
-        self.normal_user = normal_user
         return True
     
     def check(func):
@@ -123,6 +112,8 @@ class RawBugReproduce(AnalysisModule):
             log_name = "{}-{}-normal".format(log_prefix, distro.distro_name)
         func_args += (poc_feature,)
         distro.repro.init_logger(self.logger)
+        self.root_user = distro.repro.root_user
+        self.normal_user = distro.repro.normal_user
         report, triggered, t = distro.repro.reproduce(func=func, func_args=func_args, root=root, work_dir=self.path_case_plugin, vm_tag=distro.distro_name, c_hash=self.case_hash, log_name=log_name, **kwargs)
         if triggered:
             title = self._BugChecker(report)
