@@ -139,9 +139,12 @@ class TraceAnalysis(AnalysisModule):
         image = "stretch"
         gcc_version = set_compiler_version(time_parser.parse(self.case["time"]), self.case["config"])
         script = os.path.join(self.path_package, "scripts/deploy-linux.sh")
+        kernel = self.case["kernel"]
+        if len(self.case["kernel"].split(" ") == 2):
+            kernel = self.case["kernel"].split(" ")[0]
         chmodX(script)
         p = Popen([script, gcc_version, self.path_case, str(self.args.parallel_max), self.case["commit"], self.case["config"], 
-            image, "", "", str(self.index), self.case["kernel"], ""],
+            image, "", "", str(self.index), kernel, ""],
             stderr=STDOUT,
             stdout=PIPE)
         with p.stdout:
@@ -186,17 +189,14 @@ class TraceAnalysis(AnalysisModule):
         qemu.upload(user="root", src=[trace_poc_path], dst="/root", wait=True)
         qemu.command(cmds="chmod +x trace-poc.sh && ./trace-poc.sh\n", user="root", wait=True)
         qemu.command(cmds="trace-cmd report > trace.report", user="root", wait=True)
-        if qemu.download(user="root", src=["/root/trace.report"], dst="{}/{}.report".format(self.path_case_plugin, trace_filename), wait=True) != 0:
-            if not qemu.is_qemu_ready():
-                self.logger.error("qemu paniced, restoring raw ftrace")
-                self._save_dumped_ftrace(qemu, "{}/raw-{}.report".format(self.path_case_plugin, trace_filename))
+        qemu.download(user="root", src=["/root/trace.report"], dst="{}/{}.report".format(self.path_case_plugin, trace_filename), wait=True)
+        if qemu.dumped_ftrace:
+            self.logger.error("qemu paniced, restoring raw ftrace")
+            if self._save_dumped_ftrace(qemu, "{}/raw-{}.report".format(self.path_case_plugin, trace_filename)):
                 self._convert_raw_ftrace("{}/raw-{}.report".format(self.path_case_plugin, trace_filename),
                     "{}/{}.report".format(self.path_case_plugin, trace_filename), syscalls)
                 qemu.alternative_func_output.put(True)
                 return
-            self.logger.error("Failed to download trace report from qemu")
-            qemu.alternative_func_output.put(False)
-            return
         qemu.alternative_func_output.put(True)
     
     def prepare_syzkaller(self):
@@ -228,11 +228,11 @@ class TraceAnalysis(AnalysisModule):
                         continue
                     if separate_line:
                         res.append(line+"\n")
-                    else:
+                    elif len(res) > 0:
                         break
         with open(save_to, 'w') as f:
             f.writelines(res)
-        return
+        return len(res)
     
     def _convert_raw_ftrace(self, src, dst, entry_functions):
         trace = Trace()
@@ -316,7 +316,8 @@ exit $EXIT_CODE""".format(cmd)
     
     def _tune_poc(self, qemu):
         insert_exit_line = -1
-        poc_c_text = ""
+        common_entries = ['process_one_work', '__do_softirq', 'do_kern_addr_fault']
+        enabled_syscalls = []
         skip_funcs = [r"setup_usb\(\);", r"setup_leak\(\);", r"setup_cgroups\(\);", r"initialize_cgroups\(\);", r"setup_cgroups_loop\(\);"]
         data = []
 
@@ -341,9 +342,12 @@ exit $EXIT_CODE""".format(cmd)
                 if line.startswith("SyS_"):
                     syscalls.append(line.strip())
                     self.syscall_prefix = 'SyS_'
-        enabled_syscalls = ['process_one_work', '__do_softirq', self._syscall_add_prefix('exit_group')]
-        if self.syscall_prefix == '__x64_sys_':
-            enabled_syscalls.append('do_kern_addr_fault')
+        common_entries.append(self._syscall_add_prefix('exit_group'))
+        for each in common_entries:
+            output = qemu.command(cmds="trace-cmd list -f | grep -E  \"^{}\"".format(each), user="root", wait=True)
+            for line in output:
+                if line == each:
+                    enabled_syscalls.append(each)
         
         code = fsrc.readlines()
         fsrc.close()

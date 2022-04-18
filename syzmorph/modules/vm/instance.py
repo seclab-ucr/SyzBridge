@@ -32,6 +32,7 @@ class VMInstance(Network):
         self.hash_tag = hash_tag
         self.log_name = log_name
         self.qemu_fail = False
+        self.dumped_ftrace = False
         self.cfg = None
         #self.qemu_ready_bar = ""
         self.alternative_func = None
@@ -262,22 +263,27 @@ class VMInstance(Network):
         return
     
     def _disable_snapshot_in_cmd(self):
+        cmd = []
         lengh = len(self.cmd_launch)
         if lengh == 0:
             return
         for i in range(0, lengh):
             key = self.cmd_launch[i]
-            if key == '-snapshot':
-                self.cmd_launch.pop(i)
+            if key != '-snapshot':
+                cmd.append(key)
+        self.cmd_launch = cmd
     
     def _enable_snapshot_in_cmd(self):
+        cmd = []
         lengh = len(self.cmd_launch)
         if lengh == 0:
             return
         for i in range(0, lengh):
             key = self.cmd_launch[i]
             if key == '-kernel':
-                self.cmd_launch.insert(i, '-snapshot')
+                cmd.append('-snapshot')
+            cmd.append(key)
+        self.cmd_launch = cmd
     
     def _prepare_alternative_func(self):
         try:
@@ -317,6 +323,8 @@ class VMInstance(Network):
                     continue
                 if utilities.regx_match(reboot_regx, line) or utilities.regx_match(port_error_regx, line):
                     self.case_logger.error("Booting qemu-{} failed".format(self.log_name))
+                if 'Dumping ftrace buffer' in line:
+                    self.dumped_ftrace = True
                 self.logger.info(line)
                 self.output.append(line)
         except EOFError:
