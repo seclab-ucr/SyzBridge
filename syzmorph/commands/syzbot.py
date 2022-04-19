@@ -33,8 +33,8 @@ class SyzbotCommand(Command):
         parser.add_argument('--filter-by-closed', nargs='?',
                             default='',
                             help='[string] filter by bug closed days (X1-X2 days) \n')
-        parser.add_argument('--filter-by-kernel', action='append', default=['upstream'],
-                            help='[list] filter by targeting kernel. By default it is \'upstream\'.\n\
+        parser.add_argument('--filter-by-kernel', action='append', default=[],
+                            help='[list] filter by targeting kernel.\n\
                             e.g., --filter-by-kernel=upstream --filter-by-kernel=linux-next')
         parser.add_argument('--filter-by-c-prog', action='store_true',
                             help='[bool] filter bugs do not have a c reproducer\n')
@@ -98,6 +98,10 @@ class SyzbotCommand(Command):
         self.logger.info("[*] url: {}".format(self.args.url))
         self.logger.info("[*] key: {}".format(self.args.key))
         self.logger.info("[*] max_retrieval: {}".format(self.args.max_retrieval))
+        self.logger.info("[*] filter_by_reported: {}".format(self.args.filter_by_reported))
+        self.logger.info("[*] filter_by_closed: {}".format(self.args.filter_by_closed))
+        self.logger.info("[*] filter_by_kernel: {}".format(self.args.filter_by_kernel))
+        self.logger.info("[*] filter_by_c_prog: {}".format(self.args.filter_by_c_prog))
 
     def save_cases(self, cases, name):
         cases_json_path = os.path.join(self.proj_dir, "cases.json")

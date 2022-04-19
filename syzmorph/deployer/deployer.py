@@ -19,8 +19,14 @@ class Deployer(Case, Task):
 
     def __init__(self, index, owner, case_hash, case):
         Case.__init__(self, index, owner, case_hash, case)
+        kernel = self.case["kernel"]
+        try:
+            if self.case["kernel"].startswith("https"):
+                kernel = self.case["kernel"].split('/')[-1].split('.')[0]
+        except:
+            pass
         self.logger = init_logger(__name__+str(self.index), 
-            cus_format='%(asctime)s Thread {}: {} %(message)s'.format(self.index, self.case_hash).format(self.index),
+            cus_format='%(asctime)s Thread {}: {}[{}] %(message)s'.format(self.index, self.case_hash, kernel).format(self.index),
             debug=self.debug, propagate=self.debug, handler_type=STREAM_HANDLER)
         Task.__init__(self, self.args)
         self.analysis = AnalysisModule()

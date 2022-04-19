@@ -202,48 +202,84 @@ class Crawler:
                         count += 1
                         if count < index:
                             continue
+                        
+                        commit = syzkaller = config = syz_repro = log = c_repro = time_str = manager_str = report = offset = size = None
                         try:
                             manager = case.find('td', {"class": "manager"})
                             manager_str = manager.text
+                        except Exception as e:
+                            self.logger.info("Failed to retrieve case \"manager\" {}{}{}".format(syzbot_host_url, syzbot_bug_base_url, hash))
+                            self.logger.debug(e)
+                        
+                        try:
                             time = case.find('td', {"class": "time"})
                             time_str = time.text
+                        except Exception as e:
+                            self.logger.info("Failed to retrieve case \"time\" {}{}{}".format(syzbot_host_url, syzbot_bug_base_url, hash))
+                            self.logger.debug(e)
+                        
+                        try:
                             tags = case.find_all('td', {"class": "tag"})
                             m = re.search(r'id=([0-9a-z]*)', tags[0].next.attrs['href'])
                             if m is None:
                                 m = re.search(r'commits\/([0-9a-z]*)', tags[0].next.attrs['href'])
                             commit = m.groups()[0]
+                        except Exception as e:
+                            self.logger.info("Failed to retrieve case \"commit\" {}{}{}".format(syzbot_host_url, syzbot_bug_base_url, hash))
+                            self.logger.debug(e)
+                            continue
+                            
+                        try:
                             self.logger.debug("Kernel commit: {}".format(commit))
                             m = re.search(r'commits\/([0-9a-z]*)', tags[1].next.attrs['href'])
                             syzkaller = m.groups()[0]
                             self.logger.debug("Syzkaller commit: {}".format(syzkaller))
+                        except Exception as e:
+                            self.logger.info("Failed to retrieve case \"syzkaller\" {}{}{}".format(syzbot_host_url, syzbot_bug_base_url, hash))
+                            self.logger.debug(e)
+                            continue
+
+                        try:
                             config = syzbot_host_url + case.find('td', {"class": "config"}).next.attrs['href']
                             self.logger.debug("Config URL: {}".format(config))
+                        except Exception as e:
+                            self.logger.info("Failed to retrieve case \"config\" {}{}{}".format(syzbot_host_url, syzbot_bug_base_url, hash))
+                            self.logger.debug(e)
+                            continue
+                            
+                        try:
                             repros = case.find_all('td', {"class": "repro"})
                             log = syzbot_host_url + repros[0].next.attrs['href']
                             self.logger.debug("Log URL: {}".format(log))
                             report = syzbot_host_url + repros[1].next.attrs['href']
                             self.logger.debug("Log URL: {}".format(report))
+                        except Exception as e:
+                            self.logger.info("Failed to retrieve case \"report\" {}{}{}".format(syzbot_host_url, syzbot_bug_base_url, hash))
+                            self.logger.debug(e)
+                        
+                        try:
                             r = request_get(report)
                             report_list = r.text.split('\n')
                             offset, size, _ = extract_vul_obj_offset_and_size(report_list)
-                            try:
-                                syz_repro = syzbot_host_url + repros[2].next.attrs['href']
-                                self.logger.debug("Testcase URL: {}".format(syz_repro))
-                            except:
-                                self.logger.debug("[Failed] {} Repro is missing".format(url))
-                                break
-                            try:
-                                c_repro = syzbot_host_url + repros[3].next.attrs['href']
-                                self.logger.debug("C prog URL: {}".format(c_repro))
-                            except:
-                                c_repro = None
-                                self.logger.debug("No c prog found")
-                                if self.filter_by_c_prog:
-                                    continue
                         except Exception as e:
-                            self.logger.info("Failed to retrieve case {}{}{}".format(syzbot_host_url, syzbot_bug_base_url, hash))
+                            self.logger.info("Failed to retrieve case \"offset\" and \"size\" {}{}{}".format(syzbot_host_url, syzbot_bug_base_url, hash))
                             self.logger.debug(e)
-                            continue
+                        
+                        try:
+                            syz_repro = syzbot_host_url + repros[2].next.attrs['href']
+                            self.logger.debug("Testcase URL: {}".format(syz_repro))
+                        except:
+                            self.logger.debug("[Failed] {} Repro is missing".format(url))
+                            break
+                        try:
+                            c_repro = syzbot_host_url + repros[3].next.attrs['href']
+                            self.logger.debug("C prog URL: {}".format(c_repro))
+                        except:
+                            c_repro = None
+                            self.logger.debug("No c prog found")
+                            if self.filter_by_c_prog:
+                                continue
+
                         return [commit, syzkaller, config, syz_repro, log, c_repro, time_str, manager_str, report, offset, size, kernel.text]
                 break
         return []

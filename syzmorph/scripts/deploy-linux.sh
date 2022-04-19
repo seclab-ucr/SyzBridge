@@ -54,7 +54,13 @@ function build_linux_folder {
     if [ $KERNEL == "linux-next" ]; then
       git clone https://git.kernel.org/pub/scm/linux/kernel/git/next/linux-next.git $LINUX_FOLDER
     fi
-    if [ $KERNEL == "bpf-next"]; then
+    if [ $KERNEL == "net" ]; then
+      git clone https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net.git $LINUX_FOLDER
+    fi
+    if [ $KERNEL == "net-next" ]; then
+      git clone https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git $LINUX_FOLDER
+    fi
+    if [ $KERNEL == "bpf-next" ]; then
       git clone https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git/ $LINUX_FOLDER
     fi
     if [ $KERNEL == "bpf" ]; then
@@ -133,7 +139,7 @@ if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
       git stash || echo "it's ok"
       make clean > /dev/null || echo "it's ok"
       git clean -fdx > /dev/null || echo "it's ok"
-      git checkout -f $COMMIT || (git fetch --all > /dev/null && git reset --hard origin/master > /dev/null && git checkout -f $COMMIT)
+      git checkout -f $COMMIT || (git fetch --all --tags > /dev/null && git pull --tags origin master > /dev/null && git reset --hard origin/master > /dev/null && git checkout -f $COMMIT)
     fi
     curl $CONFIG > .config
     # Panic on data corruption may stop the fuzzing session

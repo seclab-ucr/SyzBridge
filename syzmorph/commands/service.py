@@ -58,13 +58,26 @@ class ServiceCommand(Command):
                             '(default port is 36777)')
         parser.add_argument('--ssh-key', nargs=1, action='store',
                             help='The private key for ssh connection')
-        parser.add_argument('--filter-by-c-prog', action='store_true',
-                            help='filter bugs do not have a c reproducer\n')
         parser.add_argument('--skip-today', action='store_true',
                             help='Skip crawling cases today\n')
         parser.add_argument('--linux', nargs=1, action='store',
                             help='Linux repo index specified')
-    
+
+        parser.add_argument('--max-retrieval', nargs='?', action='store',
+                            default='9999',
+                            help='[string] The maximum of cases for retrieval\n'
+                                '(By default all the cases will be retrieved)')
+        parser.add_argument('--filter-by-reported', nargs='?',
+                            default='',
+                            help='[string] filter by bug reported days (X1-X2 days)\n')
+        parser.add_argument('--filter-by-closed', nargs='?',
+                            default='',
+                            help='[string] filter by bug closed days (X1-X2 days) \n')
+        parser.add_argument('--filter-by-kernel', action='append', default=[],
+                            help='[list] filter by targeting kernel.\n\
+                            e.g., --filter-by-kernel=upstream --filter-by-kernel=linux-next')
+        parser.add_argument('--filter-by-c-prog', action='store_true',
+                            help='[bool] filter bugs do not have a c reproducer\n')
     def add_arguments_for_plugins(self, parser):
         proj_dir = os.path.join(os.getcwd(), "syzmorph")
         modules_dir = os.path.join(proj_dir, "plugins")
@@ -132,6 +145,9 @@ class ServiceCommand(Command):
             with open(cases_json_path, 'r') as f:
                 cases = json.load(f)
                 f.close()
+        else:
+            print("No proj {} found".format(name))
+            return None
         return cases
 
     def save_cases(self, cases, name):
@@ -145,8 +161,10 @@ class ServiceCommand(Command):
         self.cases = self.read_cases(self.args.proj)
         bk_cases = self.cases.copy()
         if not self.args.skip_today or self.skiped:
-            crawler = Crawler(url=self.args.url, keyword=self.args.key,  
-                filter_by_c_prog=int(self.args.filter_by_c_prog), debug=self.args.debug, log_path = self.proj_dir)
+            crawler = Crawler(url=self.args.url, keyword=self.args.key, max_retrieve=int(self.args.max_retrieval), 
+                filter_by_reported=self.args.filter_by_reported, filter_by_closed=self.args.filter_by_closed, 
+                filter_by_c_prog=int(self.args.filter_by_c_prog), filter_by_kernel=self.args.filter_by_kernel,
+                debug=self.args.debug, log_path = self.proj_dir)
 
             crawler.run()
             tmp_cases = crawler.cases.copy()

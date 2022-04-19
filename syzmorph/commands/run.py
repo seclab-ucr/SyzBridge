@@ -81,6 +81,9 @@ class RunCommand(Command):
             with open(cases_json_path, 'r') as f:
                 cases = json.load(f)
                 f.close()
+        else:
+            print("No proj {} found".format(name))
+            return None
         return cases
 
     def deploy_one_case(self, index, hash_val):
