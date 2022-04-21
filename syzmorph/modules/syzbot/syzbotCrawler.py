@@ -3,7 +3,7 @@ import logging
 import os
 import re
 
-from syzmorph.infra.tool_box import init_logger, request_get, extract_vul_obj_offset_and_size
+from syzmorph.infra.tool_box import init_logger, regx_get, request_get, extract_vul_obj_offset_and_size
 from bs4 import BeautifulSoup
 from bs4 import element
 
@@ -160,15 +160,15 @@ class Crawler:
         crash['Last'] = stats[3].text
         self.logger.debug(title.text)
         try:
-            crash['Reported'] = stats[4].text
-            if (self.filter_by_reported[1] > -1 and int(crash['Reported'][:-1]) > self.filter_by_reported[1]) or \
-                (self.filter_by_reported[0] > -1 and int(crash['Reported'][:-1]) < self.filter_by_reported[0]):
+            crash['Reported'] = regx_get(r'(\d+)d', stats[3].text, 0)
+            if (self.filter_by_reported[1] > -1 and int(crash['Reported']) > self.filter_by_reported[1]) or \
+                (self.filter_by_reported[0] > -1 and int(crash['Reported']) < self.filter_by_reported[0]):
                 return None
             patch_url = commit_list.contents[1].contents[1].attrs['href']
             crash['Patch'] = patch_url
-            crash['Closed'] = stats[4].text
-            if (self.filter_by_closed[1] > -1 and int(crash['Closed'][:-1]) > self.filter_by_closed[1]) or \
-                (self.filter_by_closed[0] > -1 and int(crash['Closed'][:-1]) < self.filter_by_closed[0]):
+            crash['Closed'] = regx_get(r'(\d+)d', stats[4].text, 0)
+            if (self.filter_by_closed[1] > -1 and int(crash['Closed']) > self.filter_by_closed[1]) or \
+                (self.filter_by_closed[0] > -1 and int(crash['Closed']) < self.filter_by_closed[0]):
                 return None
         except:
             # patch only works on fixed cases
