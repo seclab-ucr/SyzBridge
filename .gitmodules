@@ -1,3 +1,6 @@
 [submodule "syzmorph/infra/ftraceparser"]
 	path = syzmorph/infra/ftraceparser
 	url = https://github.com/plummm/ftraceparser.git
+[submodule "syzmorph/infra/SmartPatch"]
+	path = syzmorph/infra/SmartPatch
+	url = https://github.com/plummm/SmartPatch.git

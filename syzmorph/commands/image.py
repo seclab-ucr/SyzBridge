@@ -1,10 +1,12 @@
 import os, sys, re, psutil
+import shutil
 import logging, json
 from secrets import choice
 
 from commands import Command
 from modules.vm import VM
 from infra.config.vendor import Vendor
+from subprocess import call
 from infra.tool_box import regx_match, regx_get, init_logger
 
 class ImageCommand(Command):
@@ -90,7 +92,19 @@ class ImageCommand(Command):
             cfg = {}
         if 'kernel' not in cfg:
             cfg['kernel'] = {}
-        cfg['kernel'][self.distro] = self.cfg
+        distro_cfg = {}
+        distro_cfg['distro_image'] = self.cfg.distro_image
+        distro_cfg['distro_src'] = os.path.join(self.build_dir, "ubuntu-{}".format(self.code_name))
+        distro_cfg['distro_name'] = self.cfg.distro_name
+        distro_cfg['distro_code_name'] = self.cfg.distro_code_name
+        distro_cfg['distro_version'] = self.kernel_package_version
+        distro_cfg['ssh_key'] = self.cfg.ssh_key
+        distro_cfg['ssh_port'] = self.cfg.ssh_port
+        distro_cfg['type'] = self.cfg.type
+        distro_cfg['root_user'] = self.cfg.root_user
+        distro_cfg['normal_user'] = 'syzmorph'
+        cfg['kernel'][self.distro] = distro_cfg
+
         json.dump(cfg, open(config, 'w'), indent=4)
 
     def check_options(self):
@@ -152,6 +166,15 @@ class ImageCommand(Command):
         if not t:
             self.logger.error("Kernel version does not match {}, check grub".format(self.kernel_version))
             return False
+        
+        if os.path.exists(os.path.join(self.build_dir, "ubuntu.tar.gz")):
+            src = os.path.join(self.build_dir, "ubuntu.tar.gz")
+            dst = os.path.join(self.build_dir, "ubuntu-{}".format(self.code_name))
+            os.makedirs(dst)
+            shutil.move(src, dst)
+            call(args=['tar', 'xf', './ubuntu.tar.gz'], cwd=dst)
+            os.remove(os.path.join(dst, './ubuntu.tar.gz'))
+
         return True
     
     def _check_kernel_version(self, qemu: VM):
@@ -189,7 +212,8 @@ class ImageCommand(Command):
                 ddeb_pacage = regx_get(ddeb_regx, line, 0)
                 self.kernel_version = regx_get(ddeb_regx, line, 1)
                 self.kernel_package_version = regx_get(ddeb_regx, line, 2)
-                qemu.download(user=self.ssh_user, src=["~/ubuntu-{}/{}".format(self.code_name, ddeb_pacage)], dst=self.build_dir, wait=True)
+
+        qemu.download(user=self.ssh_user, src=["/tmp/ubuntu.tar.gz"], dst=self.build_dir, wait=True)
 
         if not had_ddeb:
             qemu.logger.error("Failed to build image, check the log")
@@ -203,6 +227,7 @@ class ImageCommand(Command):
             if grub_str != None:
                 qemu.command(user=self.ssh_user, cmds="sed -i 's/GRUB_DEFAULT=.*/GRUB_DEFAULT=\"{}\"/' /etc/default/grub && update-grub && shutdown -h now".format(grub_str), wait=True)
         #qemu.kill_vm()
+
         qemu.alternative_func_output.put(True)
         return
     

@@ -140,7 +140,7 @@ class TraceAnalysis(AnalysisModule):
         gcc_version = set_compiler_version(time_parser.parse(self.case["time"]), self.case["config"])
         script = os.path.join(self.path_package, "scripts/deploy-linux.sh")
         kernel = self.case["kernel"]
-        if len(self.case["kernel"].split(" ") == 2):
+        if len(self.case["kernel"].split(" ")) == 2:
             kernel = self.case["kernel"].split(" ")[0]
         chmodX(script)
         p = Popen([script, gcc_version, self.path_case, str(self.args.parallel_max), self.case["commit"], self.case["config"], 

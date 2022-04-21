@@ -1,0 +1,60 @@
+diff --git a/include/linux/monitor_helper.h b/include/linux/monitor_helper.h
+new file mode 100644
+index 000000000000..c6004546c1ae
+--- /dev/null
++++ b/include/linux/monitor_helper.h
+@@ -0,0 +1,54 @@
++#pragma once
++#include <linux/errno.h>
++#include <linux/uaccess.h>
++#include <linux/types.h>
++#include <linux/sched.h>
++#include <linux/list.h>
++
++static DEFINE_MUTEX(cap_mutex);
++
++extern int print_stack_debug;
++
++struct monitor_pid_struct {
++    struct list_head list;
++    int pid;
++};
++
++extern struct list_head pid_list;
++
++static void cap_lock(void)
++{
++	mutex_lock(&cap_mutex);
++}
++
++static void cap_unlock(void)
++{
++	mutex_unlock(&cap_mutex);
++}
++
++static void append_capable_pid(unsigned long arg) {
++    struct monitor_pid_struct *mon_pid;
++    int pid = current->pid;
++    void __user *argp = (void __user *)(unsigned long)(arg);
++
++    copy_from_user(&print_stack_debug, argp, sizeof(int));
++    printk(KERN_DEBUG "add pid %d to monitoring list", pid);
++
++    mon_pid = (struct monitor_pid_struct *)kmalloc(sizeof(struct monitor_pid_struct), GFP_KERNEL);
++    mon_pid->pid = pid;
++    list_add(&mon_pid->list, &pid_list);
++}
++
++static int under_monitor(int pid) {
++    struct monitor_pid_struct *mon_pid;
++    list_for_each_entry(mon_pid, &pid_list, list) {
++		if (mon_pid->pid == pid) {
++			return 1;
++		}
++	}
++    return 0;
++}
++
++static bool monitor_debug(void) {
++    return print_stack_debug != 0;
++}

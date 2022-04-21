@@ -4,6 +4,7 @@ import shutil
 from subprocess import Popen, PIPE, STDOUT, call
 from dateutil import parser as time_parser
 from infra.tool_box import *
+from infra.SmartPath import Patch
 from modules.vm import VMInstance
 from plugins import AnalysisModule
 from plugins.syzkaller_interface import SyzkallerInterface
