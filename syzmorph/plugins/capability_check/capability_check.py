@@ -153,16 +153,15 @@ class CapabilityCheck(AnalysisModule):
         except:
             pass
 
-        for i in range(0, 2):
-            patch = os.path.join(self.path_package, "plugins/capability_check/capability_check-{}.patch".format(i))
-            p = Popen([script, gcc_version, self.path_case, str(self.args.parallel_max), self.case["commit"], self.case["config"], 
-                image, "", "", str(self.index), kernel, patch],
-                stderr=STDOUT,
-                stdout=PIPE)
-            with p.stdout:
-                self._log_subprocess_output(p.stdout)
-            exitcode = p.wait()
-            self.logger.info("script/deploy.sh is done with exitcode {}".format(exitcode))
+        patch = os.path.join(self.path_package, "plugins/capability_check/capability.patch")
+        p = Popen([script, gcc_version, self.path_case, str(self.args.parallel_max), self.case["commit"], self.case["config"], 
+            image, "", "", str(self.index), kernel, patch],
+            stderr=STDOUT,
+            stdout=PIPE)
+        with p.stdout:
+            self._log_subprocess_output(p.stdout)
+        exitcode = p.wait()
+        self.logger.info("script/deploy.sh is done with exitcode {}".format(exitcode))
         return exitcode
     
     def generate_report(self):

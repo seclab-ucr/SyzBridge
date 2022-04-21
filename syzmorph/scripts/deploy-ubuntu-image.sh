@@ -36,8 +36,8 @@ new_text = []
 with open(src, "r") as f:
     texts = f.readlines()
     for line in texts:
-        if "module-check-%: install-%" in line or \
-                "config-prepare-check-%: $(stampdir)/stamp-prepare-tree-%" in line:
+        if "module-check-%: install-%" in line or \\
+                "config-prepare-check-%: \$(stampdir)/stamp-prepare-tree-%" in line:
             skip = 2
         if line == "\n":
             skip = -1
@@ -69,6 +69,8 @@ EOF
     apt-get build-dep -y linux linux-image-$(uname -r)
     apt-get install -y git trace-cmd fakeroot libncurses-dev gawk flex bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev libiberty-dev autoconf
     apt-get install -y linux-cloud-tools-common linux-tools-common || true
+
+    useradd -m syzmorph
 }
 
 function clone_ubuntu() {
@@ -79,12 +81,13 @@ function clone_ubuntu() {
 }
 
 function compile_ubuntu() {
-    cd ubuntu-${code_name}/kernel
+    cd ~/ubuntu-${code_name}/kernel
     
     if [ -z "${commit}" ]; then
         commit=`git log --since="'${version_since}'" --until="'${version_until}'" -n 1 --pretty=oneline | awk '{{print $1}}'`
     fi
-    git checkout ${commit}
+    tag=`git describe ${commit}`
+    git checkout ${tag}
 
     chmod a+x debian/rules
     chmod a+x debian/scripts/*
@@ -144,10 +147,27 @@ function compile_ubuntu() {
     dpkg -i linux*.deb
 }
 
+function archive_kernel() {
+    cd ~/ubuntu-${code_name}/
+    ddeb_pkg=`ls linux*.ddeb`
+    dpkg -x ${ddeb_pkg} ./
+    cp usr/lib/debug/boot/vmlinux* kernel/vmlinux
+
+    cd kernel
+    git config --global user.email "xzou017@ucr.edu"
+    git config --global user.name "etenal"
+    git add -f vmlinux
+    git commit -m "add vmlinux"
+    git archive --format=tar -o /tmp/ubuntu.tar.gz HEAD
+}
+
 if [ $# -ne 3 ] && [ $# -ne 2 ] && [ $# -ne 1 ] ; then
   echo "Usage ./deploy-ubuntu-image.sh code_name [version_since version_until | commit]"
   exit 1
 fi
+
+kernel_version=`uname -r`
+issue=`cat /etc/issue`
 
 if [ $# -eq 1 ]; then
     func=$1
@@ -169,8 +189,6 @@ if [ $# -eq 2 ]; then
     version_until=''
 fi
 
-kernel_version=`uname -r`
-issue=`cat /etc/issue`
 echo "deploying new image for ${issue} ${kernel_version}"
 
 prepare_script
@@ -182,3 +200,5 @@ install_necessary_packages
 clone_ubuntu
 
 compile_ubuntu
+
+archive_kernel

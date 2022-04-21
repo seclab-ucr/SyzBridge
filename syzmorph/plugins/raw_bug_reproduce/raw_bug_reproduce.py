@@ -92,7 +92,8 @@ class RawBugReproduce(AnalysisModule):
             res["triggered"] = True
             res["bug_title"] = self.bug_title
             res["root"] = True
-            if self.reproduce(distro, func=self.capture_kasan, root=False):
+            success, _ = self.reproduce(distro, func=self.capture_kasan, root=False)
+            if success:
                 res["triggered"] = True
                 res["bug_title"] = self.bug_title
                 res["root"] = False

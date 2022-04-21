@@ -81,6 +81,7 @@ class Kernel:
     ADDRESS = 1
 
     def __init__(self, vmlinux, addr_bytes, proj_path, log_suffix="", debug=False):
+        self.proj = None
         try:
             self.proj = angr.Project(vmlinux,
                                     load_options={"auto_load_libs": False})

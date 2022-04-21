@@ -12,6 +12,10 @@ class GoogleSheets(AnalysisModule):
     REPORT_NAME = "Report_GoogleSheets"
     DEPENDENCY_PLUGINS = ["RawBugReproduce", "BugReproduce", "CapabilityCheck", "ModulesAnalysis", "Syzscope", "Fuzzing"]
 
+    TYPE_FAILED = (1,1,1,1)
+    TYPE_SUCCEED = (0.63,0.76,0.78,1.0) # rgba(162, 196, 201, 1)
+    TYPE_SUCCEED_NEED_ADAPTATION = (0.27,0.5,0.55,1.0) # rgba(69, 129, 142, 1)
+
     def __init__(self):
         super().__init__()
         self.report = ''
@@ -19,6 +23,7 @@ class GoogleSheets(AnalysisModule):
         self.path_case_plugin = ''
         self._move_to_success = False
         self.sh = None
+        self.case_type = self.TYPE_FAILED
         
     def prepare(self):
         try:
@@ -59,6 +64,8 @@ class GoogleSheets(AnalysisModule):
         self._write_capability_check(wks)
         self._write_syzscope(wks)
         self._write_fuzzing(wks)
+        self._write_raw_reproducable(wks)
+        self._render_coloer(wks)
         try:
             if self.manager.module_capable("SlackBot") and \
                     (self.data['reproduce-by-normal'] != "" or self.data['reproduce-by-root'] != ""):
@@ -132,8 +139,14 @@ class GoogleSheets(AnalysisModule):
                         distros = regx_get(failed_regx, line, 0)
                         fail_text += "{}\n".format(distros)
                         self.data['failed-on'] += "{} ".format(distros)
-        wks.update_value('D2', normal_text)
-        wks.update_value('E2', root_text)
+        path_result = os.path.join(self.path_case, "BugReproduce", "results.json")
+        if os.path.exists(path_result):
+            result_json = json.load(open(path_result, "r"))
+            if result_json['trigger']:
+                self.case_type = self.TYPE_SUCCEED
+
+        wks.update_value('D2', normal_text+"\n"+json.dumps(result_json))
+        wks.update_value('E2', root_text+"\n"+json.dumps(result_json))
         wks.update_value('F2', fail_text)
 
     def _write_module_analysis(self, wks: pygsheets.Worksheet):
@@ -183,7 +196,7 @@ class GoogleSheets(AnalysisModule):
                 wks.update_value('J2', t)
                 self.data['fuzzing'] = t
     
-    def _write_reproducable(self, wks: pygsheets.Worksheet):
+    def _write_raw_reproducable(self, wks: pygsheets.Worksheet):
         self.data['reproduce-by-normal'] = ""
         self.data['reproduce-by-root'] = ""
         self.data['failed-on'] = ""
@@ -193,6 +206,7 @@ class GoogleSheets(AnalysisModule):
         normal_text = ''
         root_text = ''
         fail_text = ''
+        triggered = False
         if os.path.exists(path_report):
             with open(path_report, "r") as f:
                 report = f.readlines()
@@ -202,11 +216,13 @@ class GoogleSheets(AnalysisModule):
                         bug_title = regx_get(reproducable_regx, line, 2)
                         privilege = regx_get(reproducable_regx, line, 3)
                         if privilege == 'by normal user':
-                            normal_text += "{}-{}\n".format(distro, bug_title)
+                            normal_text += "{}-{} by normal user\n".format(distro, bug_title)
                             self.data['reproduce-by-normal'] += "{} ".format(distro)
+                            triggered = True
                         if privilege == 'by root user':
-                            root_text += "{}-{}\n".format(distro, bug_title)
+                            root_text += "{}-{} by root user\n".format(distro, bug_title)
                             self.data['reproduce-by-root'] += "{} ".format(distro)
+                            triggered = True
                     if regx_match(failed_regx, line):
                         distros = regx_get(failed_regx, line, 0)
                         fail_text += "{}\n".format(distros)
@@ -215,6 +231,15 @@ class GoogleSheets(AnalysisModule):
             wks.update_value('K2', root_text)
         if normal_text != '':
             wks.update_value('K2', normal_text)
+        if self.case_type == self.TYPE_SUCCEED:
+            if not triggered:
+                self.case_type = self.TYPE_SUCCEED_NEED_ADAPTATION
+    
+    def _render_coloer(self, wks: pygsheets.Worksheet):
+        for i in range(0, 26):
+            ch = chr(ord('A') + i)
+            cell = wks.cell(ch+'2')
+            cell.color = self.case_type
 
     def _write_to(self, content, name):
         file_path = "{}/{}".format(self.path_case_plugin, name)

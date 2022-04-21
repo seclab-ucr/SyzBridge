@@ -26,11 +26,23 @@ class VMInstance(Network):
         self.case_logger = None
         self.debug = debug
         self.logger = None
-        self.qemu_ready = False
-        self.kill_qemu = False
         self.tag = hash_tag
         self.hash_tag = hash_tag
         self.log_name = log_name
+        log_name += log_suffix
+        self.reset()
+        self.logger = utilities.init_logger(os.path.join(work_path, log_name), debug=debug, propagate=debug)
+        self.case_logger = self.logger
+        if logger != None:
+            self.case_logger = logger
+        if tag != '':
+            self.tag = tag
+        self.instance = None
+        Network.__init__(self, self.case_logger, self.debug, self.debug)
+    
+    def reset(self):
+        self.qemu_ready = False
+        self.kill_qemu = False
         self.qemu_fail = False
         self.dumped_ftrace = False
         self.cfg = None
@@ -43,15 +55,6 @@ class VMInstance(Network):
         self._output_lock = threading.Lock()
         self._reboot_once = False
         self.lock = threading.Lock()
-        log_name += log_suffix
-        self.logger = utilities.init_logger(os.path.join(work_path, log_name), debug=debug, propagate=debug)
-        self.case_logger = self.logger
-        if logger != None:
-            self.case_logger = logger
-        if tag != '':
-            self.tag = tag
-        self.instance = None
-        Network.__init__(self, self.case_logger, self.debug, self.debug)
 
     def setup(self, cfg, **kwargs):
         self.cfg = cfg
@@ -150,6 +153,8 @@ class VMInstance(Network):
                         break
                     self.qemu_fail = True
                     self.alternative_func_output.put([False])
+                self._output_lock.release()
+                self.reset()
                 return
             if not self.qemu_ready and self.is_qemu_ready():
                 self.qemu_ready = True
