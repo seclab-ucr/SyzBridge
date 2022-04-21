@@ -124,11 +124,17 @@ class BugReproduce(AnalysisModule):
             essential_modules = self.minimize_modules(distro, tested_modules, [tested_modules[::-1][0]])
             if essential_modules == None:
                 self.logger.error("{} trigger the bug, but essential modules are not stable, fail to minimize".format(distro.distro_name))
+                self.report.append("{} trigger the bug, but essential modules are not stable, fail to minimize".format(distro.distro_name))
+                self.report.append("{} requires loading [{}] to trigger the bug".format(distro.distro_name, ",".join(tested_modules)))
+                self.results['missing_module'] = tested_modules
+                self.results['minimized'] = False
+                self.results['root'] = res['root']
             else:
                 if self.check_module_priviledge(essential_modules):
                     res["root"] = False
                 self.report.append("{} requires loading [{}] to trigger the bug".format(distro.distro_name, ",".join(essential_modules)))
                 self.results['missing_module'] = essential_modules
+                self.results['minimized'] = True
                 self.results['root'] = res['root']
 
         q.put([distro.distro_name, res])
@@ -255,7 +261,7 @@ class BugReproduce(AnalysisModule):
                         data.append(t[1])
                         insert_line.remove(t)
             data.append(code[i])
-            if not need_namespace:
+            if need_namespace:
                 if regx_match(main_func, line):
                     data.insert(len(data)-1, "#include \"sandbox.h\"\n")
                     insert_line.append([i+2, "setup_sandbox();\n"])
@@ -352,7 +358,8 @@ class BugReproduce(AnalysisModule):
 
         for module in missing_modules:
             qemu.logger.info("Loading missing module {}".format(module))
-            self._enable_missing_modules(qemu, [module])
+            if not self._enable_missing_modules(qemu, [module]):
+                continue
             tested_modules.append(module)
             self._execute_poc(root, qemu, poc_path, poc_feature)
             while True:
@@ -442,8 +449,13 @@ class BugReproduce(AnalysisModule):
         return res, trigger_hunted_bug
 
     def _enable_missing_modules(self, qemu, manual_enable_modules):
+        failed = 0
         for each in manual_enable_modules:
-            qemu.command(cmds="modprobe {}".format(each), user=self.root_user, wait=True)
+            out = qemu.command(cmds="modprobe {}".format(each), user=self.root_user, wait=True)
+            for line in out:
+                if 'modprobe: FATAL:' in line:
+                    failed += 1
+        return failed != len(manual_enable_modules)
     
     def _compile_poc(self, root: bool):
         if root:
@@ -476,6 +488,7 @@ class BugReproduce(AnalysisModule):
         self.results['interface_tuning'] = []
         self.results['namespace'] = False
         self.results['root'] = None
+        self.results['minimized'] = False
         self.results['hash'] = self.case['hash']
         self.results['trigger'] = False
 

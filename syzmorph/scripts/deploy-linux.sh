@@ -240,6 +240,10 @@ if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
     echo $PATCH 
     if [ "$PATCH" != "" ]; then
       patch -p1 -i $PATCH || exit 2
+      CWD=`pwd`
+      cd $PROJECT_PATH/syzmorph/infra/SmartPatch
+      python3 SmartPatch -linux $CWD -patch ./capability_patch.json || exit 2
+      cd $CWD
     fi
     make -j$N_CORES CC=$COMPILER > make.log 2>&1 || PATCH_TCP_CONG=1
     if [ $PATCH_TCP_CONG == 1 ]; then
