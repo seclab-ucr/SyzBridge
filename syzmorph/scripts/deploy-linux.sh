@@ -101,6 +101,9 @@ if [ ! -d "compiler" ]; then
 fi
 cd compiler
 if [ ! -L "$CASE_PATH/compiler/compiler" ]; then
+  if [ $KERNEL == "kmsan" ]; then
+    COMPILER=$PROJECT_PATH/tools/clang-11-ca2dcbd030e/bin/clang
+  fi
   ln -s $COMPILER ./compiler
 fi
 
