@@ -1,6 +1,6 @@
 import os, sys, re, psutil
 import shutil
-import logging, json
+import time, json
 from secrets import choice
 
 from commands import Command
@@ -161,6 +161,7 @@ class ImageCommand(Command):
             self.logger.error("Image build failed, check the log")
             return False
         
+        time.sleep(3)
         _, q = vm.run(alternative_func=self._check_kernel_version)
         t = q.get(block=True)
         if not t:
@@ -205,13 +206,13 @@ class ImageCommand(Command):
         out = qemu.command(user=self.ssh_user, cmds="cd ubuntu-{} && ls -l *.ddeb".format(self.code_name), wait=True)
         
         had_ddeb = False
-        ddeb_regx = r'(linux-image-(.+)-dbgsym_(.+)_amd64\.ddeb)'
+        ddeb_regx = r'(linux-image-(unsigned-)?(.+)-dbgsym_(.+)_amd64\.ddeb)'
         for line in out:
             if regx_match(ddeb_regx, line):
                 had_ddeb = True
-                ddeb_pacage = regx_get(ddeb_regx, line, 0)
-                self.kernel_version = regx_get(ddeb_regx, line, 1)
-                self.kernel_package_version = regx_get(ddeb_regx, line, 2)
+                ddeb_pacage = regx_get(ddeb_regx, line, 1)
+                self.kernel_version = regx_get(ddeb_regx, line, 2)
+                self.kernel_package_version = regx_get(ddeb_regx, line, 3)
 
         qemu.download(user=self.ssh_user, src=["/tmp/ubuntu.tar.gz"], dst=self.build_dir, wait=True)
 
