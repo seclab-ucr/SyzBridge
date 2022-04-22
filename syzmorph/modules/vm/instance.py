@@ -153,7 +153,8 @@ class VMInstance(Network):
                         break
                     self.qemu_fail = True
                     self.alternative_func_output.put([False])
-                self._output_lock.release()
+                if self._output_lock.locked():
+                    self._output_lock.release()
                 self.reset()
                 return
             if not self.qemu_ready and self.is_qemu_ready():
