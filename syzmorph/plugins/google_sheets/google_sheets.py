@@ -197,9 +197,9 @@ class GoogleSheets(AnalysisModule):
                 self.data['fuzzing'] = t
     
     def _write_raw_reproducable(self, wks: pygsheets.Worksheet):
-        self.data['reproduce-by-normal'] = ""
-        self.data['reproduce-by-root'] = ""
-        self.data['failed-on'] = ""
+        self.data['raw-reproduce-by-normal'] = ""
+        self.data['raw-reproduce-by-root'] = ""
+        self.data['raw-failed-on'] = ""
         reproducable_regx = r'(debian|fedora|ubuntu) triggers a (Kasan )?bug: ([A-Za-z0-9_: -/]+) (by normal user|by root user)'
         failed_regx = r'(.+) fail to trigger the bug'
         path_report = os.path.join(self.path_case, "RawBugReproduce", "Report_RawBugReproduce")
@@ -217,16 +217,16 @@ class GoogleSheets(AnalysisModule):
                         privilege = regx_get(reproducable_regx, line, 3)
                         if privilege == 'by normal user':
                             normal_text += "{}-{} by normal user\n".format(distro, bug_title)
-                            self.data['reproduce-by-normal'] += "{} ".format(distro)
+                            self.data['raw-reproduce-by-normal'] += "{} ".format(distro)
                             triggered = True
                         if privilege == 'by root user':
                             root_text += "{}-{} by root user\n".format(distro, bug_title)
-                            self.data['reproduce-by-root'] += "{} ".format(distro)
+                            self.data['raw-reproduce-by-root'] += "{} ".format(distro)
                             triggered = True
                     if regx_match(failed_regx, line):
                         distros = regx_get(failed_regx, line, 0)
                         fail_text += "{}\n".format(distros)
-                        self.data['failed-on'] += "{} ".format(distros)
+                        self.data['raw-failed-on'] += "{} ".format(distros)
         if root_text != '':
             wks.update_value('K2', root_text)
         if normal_text != '':

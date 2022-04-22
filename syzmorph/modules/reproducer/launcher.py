@@ -55,12 +55,13 @@ class Launcher(Build):
             x.join()
             
             t = self.queue.get(block=True)
-            crashes = t[0]
-            high_risk = t[1] 
-            qemu_fail = t[2]
-            if len(t) > 3:
-                remain = t[3:]
-            self.log("Reproducing done, crashes: {}, high_risk {}, qemu_fail {}".format(crashes, high_risk, qemu_fail))
+            if len(t) >= 3:
+                crashes = t[0]
+                high_risk = t[1] 
+                qemu_fail = t[2]
+                if len(t) > 3:
+                    remain = t[3:]
+                self.log("Reproducing done, crashes: {}, high_risk {}, qemu_fail {}".format(crashes, high_risk, qemu_fail))
             if qemu_fail:
                 continue
             i += 1
