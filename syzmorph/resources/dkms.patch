@@ -2,6 +2,17 @@ diff --git a/debian/scripts/dkms-build b/debian/scripts/dkms-build
 index 9d78fc60e63f..179dc8818c25 100755
 --- a/debian/scripts/dkms-build
 +++ b/debian/scripts/dkms-build
+@@ -52,7 +52,7 @@ do
+                        if [ -f "$lpackage_path" ]; then
+                                break
+                        fi
+-                       url="$pool/$package_path"
++                       url="https://launchpad.net/ubuntu/+archive/primary/+files//$(basename $package_path)"
+                        wget "$url" && break || true
+                        # No components in PPAs.
+                        url=$(echo "$url" | sed -e 's@/pool/[^/]*/@/pool/main/@')
+--- a/debian/scripts/dkms-build
++++ b/debian/scripts/dkms-build
 @@ -175,6 +175,18 @@ do
  done
  sed -e "s@$dkms_dir@<<DKMSDIR>>@g" <"$log"

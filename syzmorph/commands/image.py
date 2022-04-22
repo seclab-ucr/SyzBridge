@@ -70,6 +70,8 @@ class ImageCommand(Command):
         if not self.build_distro_image():
             return
         self.write2config()
+        self.logger.info("Image {}-{} is ready at {}".format(self.distro, self.kernel_version, self.build_dir))
+        return
     
     def build_vendor_cfg(self):
         cfg = {}
@@ -164,6 +166,7 @@ class ImageCommand(Command):
         time.sleep(3)
         _, q = vm.run(alternative_func=self._check_kernel_version)
         t = q.get(block=True)
+        vm.kill_vm()
         if not t:
             self.logger.error("Kernel version does not match {}, check grub".format(self.kernel_version))
             return False
@@ -236,6 +239,7 @@ class ImageCommand(Command):
         with open(grub_path, 'r') as f:
             texts = f.readlines()
             trees, _ = self._generate_tree(texts)
+            self.logger.debug("finding {} in grub trees:\n{}".format(self.kernel_version, trees))
             grub_str = self._find_leaf(trees, self.kernel_version, "")
         if grub_str == None:
             self.logger.error("Failed to find grub.cfg")

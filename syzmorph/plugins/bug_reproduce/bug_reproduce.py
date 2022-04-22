@@ -102,8 +102,8 @@ class BugReproduce(AnalysisModule):
                 res["triggered"] = True
                 res["bug_title"] = self.bug_title
                 res["root"] = False
-            self.results['root'] = res['root']
-            self.results['trigger'] = True
+            self.results[distro.distro_name]['root'] = res['root']
+            self.results[distro.distro_name]['trigger'] = True
             q.put([distro.distro_name, res])
             return
         
@@ -112,7 +112,7 @@ class BugReproduce(AnalysisModule):
         missing_modules = [e['name'] for e in m ]
         success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, [], ), root=True, log_prefix='missing-modules', timeout=MAX_BUG_REPRODUCE_TIMEOUT)
         if success:
-            self.results['trigger'] = True
+            self.results[distro.distro_name]['trigger'] = True
             tested_modules = t[0]
             res["triggered"] = True
             res["bug_title"] = self.bug_title
@@ -126,16 +126,16 @@ class BugReproduce(AnalysisModule):
                 self.logger.error("{} trigger the bug, but essential modules are not stable, fail to minimize".format(distro.distro_name))
                 self.report.append("{} trigger the bug, but essential modules are not stable, fail to minimize".format(distro.distro_name))
                 self.report.append("{} requires loading [{}] to trigger the bug".format(distro.distro_name, ",".join(tested_modules)))
-                self.results['missing_module'] = tested_modules
-                self.results['minimized'] = False
-                self.results['root'] = res['root']
+                self.results[distro.distro_name]['missing_module'] = tested_modules
+                self.results[distro.distro_name]['minimized'] = False
+                self.results[distro.distro_name]['root'] = res['root']
             else:
                 if self.check_module_priviledge(essential_modules):
                     res["root"] = False
                 self.report.append("{} requires loading [{}] to trigger the bug".format(distro.distro_name, ",".join(essential_modules)))
-                self.results['missing_module'] = essential_modules
-                self.results['minimized'] = True
-                self.results['root'] = res['root']
+                self.results[distro.distro_name]['missing_module'] = essential_modules
+                self.results[distro.distro_name]['minimized'] = True
+                self.results[distro.distro_name]['root'] = res['root']
 
         q.put([distro.distro_name, res])
         return
@@ -172,7 +172,7 @@ class BugReproduce(AnalysisModule):
 
     def reproduce(self, distro: Vendor, root: bool, func, func_args=(), log_prefix= "qemu", **kwargs):
         self.distro_lock.acquire()
-        poc_feature = self.tune_poc(root)
+        poc_feature = self.tune_poc(root, distro)
         self.distro_lock.release()
         if root:
             log_name = "{}-{}-root".format(log_prefix, distro.distro_name)
@@ -224,12 +224,13 @@ class BugReproduce(AnalysisModule):
             raise Exception("[{}] failed to sort missing modules {}".format(self.case_hash, res))
         return res
 
-    def tune_poc(self, root: bool):
+    def tune_poc(self, root: bool, distro):
         feature = 0
         need_namespace = False
 
         if self.check_poc_capability():
             need_namespace = True
+            self.results[distro.distro_name]['namespace'] = True
 
         skip_funcs = [r"setup_usb\(\);", r"setup_leak\(\);", r"setup_cgroups\(\);", r"initialize_cgroups\(\);", r"setup_cgroups_loop\(\);"]
         data = []
@@ -269,20 +270,20 @@ class BugReproduce(AnalysisModule):
             for each in skip_funcs:
                 if regx_match(each, line):
                     data.pop()
-                    self.results['skip_funcs'].append(each)
+                    self.results[distro.distro_name]['skip_funcs'].append(each)
 
             # We dont have too much devices to connect, limit the number to 1
             if '*hash = \'0\' + (char)(a1 % 10);' in line:
                 data.pop()
                 data.append('*hash = \'0\' + (char)(a1 % 2);\n')
-                if 'use' not in self.results['device_tuning']:
-                    self.results['device_tuning'].append('usb')
+                if 'use' not in self.results[distro.distro_name]['device_tuning']:
+                    self.results[distro.distro_name]['device_tuning'].append('usb')
 
             if 'setup_loop_device' in line:
                 if not (feature & self.FEATURE_LOOP_DEVICE):
                     feature |= self.FEATURE_LOOP_DEVICE
-                    if 'loop' not in self.results['device_tuning']:
-                        self.results['device_tuning'].append('loop')
+                    if 'loop' not in self.results[distro.distro_name]['device_tuning']:
+                        self.results[distro.distro_name]['device_tuning'].append('loop')
 
         if data != []:
             fdst.writelines(data)
@@ -305,7 +306,6 @@ class BugReproduce(AnalysisModule):
             data = f.readlines()
             for line in data:
                 if regx_match(regx, line):
-                    self.results['namespace'] = True
                     return True
         return False
     
@@ -482,15 +482,19 @@ class BugReproduce(AnalysisModule):
         return False
     
     def _init_results(self):
-        self.results['missing_module'] = []
-        self.results['skip_funcs'] = []
-        self.results['device_tuning'] = []
-        self.results['interface_tuning'] = []
-        self.results['namespace'] = False
-        self.results['root'] = None
-        self.results['minimized'] = False
-        self.results['hash'] = self.case['hash']
-        self.results['trigger'] = False
+        for distro in self.cfg.get_distros():
+            distro_result = {}
+
+            distro_result['missing_module'] = []
+            distro_result['skip_funcs'] = []
+            distro_result['device_tuning'] = []
+            distro_result['interface_tuning'] = []
+            distro_result['namespace'] = False
+            distro_result['root'] = None
+            distro_result['minimized'] = False
+            distro_result['hash'] = self.case['hash']
+            distro_result['trigger'] = False
+            self.results[distro.distro_name] = distro_result
 
     def _run_poc(self, qemu, poc_path, root, poc_feature):
         if root:

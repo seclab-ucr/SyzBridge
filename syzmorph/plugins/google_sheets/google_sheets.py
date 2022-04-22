@@ -4,6 +4,7 @@ import pygsheets
 from infra.tool_box import *
 from plugins import AnalysisModule
 from plugins.slack_bot import SlackBot
+from .error import CriticalModuleNotFinish
 
 class GoogleSheets(AnalysisModule):
     NAME = "GoogleSheets"
@@ -144,6 +145,8 @@ class GoogleSheets(AnalysisModule):
             result_json = json.load(open(path_result, "r"))
             if result_json['trigger']:
                 self.case_type = self.TYPE_SUCCEED
+        else:
+            raise CriticalModuleNotFinish("BugReproduce")
 
         wks.update_value('D2', normal_text+"\n"+json.dumps(result_json))
         wks.update_value('E2', root_text+"\n"+json.dumps(result_json))
