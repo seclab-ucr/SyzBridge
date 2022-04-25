@@ -16,6 +16,8 @@ class PocCommand(Command):
         super().add_arguments(parser)
         parser.add_argument('--build',  nargs='?', action='store',
                             help='[string] Build PoC from a results.json file')
+        parser.add_argument('--distro',  nargs='?', action='store',
+                            help='[string] Specify a distro')
         parser.add_argument('--output', '-o',  nargs='?', action='store',
                             help='[string] Write the PoC to the specified path')
 
@@ -28,6 +30,8 @@ class PocCommand(Command):
             print("Missing results.json file")
         if self.args.output == None:
             print("Missing output path")
+        if self.args.distro == None:
+            print("Missing distro version")
 
         if not os.path.exists(self.args.build):
             print("Can not find {}".format(self.args.build))
@@ -35,10 +39,12 @@ class PocCommand(Command):
             print("Path {} doesn't exist".format(self.args.output))
         
         results = json.load(open(self.args.build, 'r'))
-        if not results['trigger']:
+        if self.args.distro not in results:
+            print("Can not find {} in results.json".format(self.args.distro))
+        if not results[self.args.distro]['trigger']:
             print("Bug cannot be triggered")
             return
-        self.build_poc(results)
+        self.build_poc(results[self.args.distro])
     
     def build_poc(self, re):
         extra_cmd = ""

@@ -17,7 +17,7 @@ class Kernel():
 
 class Plugin():
     def __init__(self):
-        pass
+        self.results = {}
 
 class Config:
     def __init__(self):
@@ -80,7 +80,7 @@ class Config:
             return distro
         return None
 
-    def get_distros(self):
+    def get_distros(self)-> Vendor:
         res = []
         for name in self.kernel.__dict__:
             distro = getattr(self.kernel, name)
@@ -88,14 +88,14 @@ class Config:
                 res.append(distro)
         return res
     
-    def get_upstream(self):
+    def get_upstream(self)-> Vendor:
         for name in self.kernel.__dict__:
             distro = getattr(self.kernel, name)
             if distro.type == VMInstance.UPSTREAM:
                 return distro
         return None
     
-    def get_plugin(self, name):
+    def get_plugin(self, name)-> Plugin:
         try:
             plugin = getattr(self.plugin, name)
         except:

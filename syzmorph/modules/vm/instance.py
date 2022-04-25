@@ -29,6 +29,9 @@ class VMInstance(Network):
         self.tag = hash_tag
         self.hash_tag = hash_tag
         self.log_name = log_name
+        self.alternative_func = None
+        self.alternative_func_args = None
+        self.alternative_func_output = None
         log_name += log_suffix
         self.reset()
         self.logger = utilities.init_logger(os.path.join(work_path, log_name), debug=debug, propagate=debug)
@@ -46,9 +49,6 @@ class VMInstance(Network):
         self.qemu_fail = False
         self.dumped_ftrace = False
         #self.qemu_ready_bar = ""
-        self.alternative_func = None
-        self.alternative_func_args = None
-        self.alternative_func_output = None
         self.output = []
         self._output_timer = default_output_timer
         self._output_lock = threading.Lock()

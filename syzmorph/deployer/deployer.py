@@ -52,6 +52,8 @@ class Deployer(Case, Task):
             if self.analysis.run():
                 self.analysis.generate_report()
                 self.analysis.create_stamp()
+            else:
+                self.analysis.null_results()
             if not self._success:
                 self._success = self.analysis.success()
         return 0
