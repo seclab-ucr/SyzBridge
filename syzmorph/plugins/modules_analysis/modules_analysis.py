@@ -29,19 +29,14 @@ class ModulesAnalysis(AnalysisModule):
         super().__init__()
         self.kasan_report = None
         self.config_cache = {}
-        self._prepared = False
-        self._move_to_success = False
         self._remove_trace_file = False
 
         self.vul_module = None
         self.cfg = None
-        self.path_case_plugin = None
-        self.report = []
         self._cur_distro = None
         self.config_cache['vendor_config_path'] = ''
         self._loadable_modules = {}
         self._ftrace_functions = {}
-        self._missing_modules = {}
     
     def check(func):
         def inner(self):
@@ -96,7 +91,6 @@ class ModulesAnalysis(AnalysisModule):
             self.main_logger.error("[Modules analysis] {}".format(e))
                 
         self.report.append(ModulesAnalysis.REPORT_END)
-        self.dump_missing_modules()
         if self._remove_trace_file:
             self.remove_trace_file()
         return True
@@ -154,8 +148,8 @@ class ModulesAnalysis(AnalysisModule):
                         self.logger.info("[Modules analysis] Module {} in {} {}".format(self.vul_module, distro.distro_name, ret))
                         if ret == None or ret == self.MODULE_ENABLED:
                             continue
-                        if self.vul_module not in self._missing_modules:
-                            self._missing_modules[self.vul_module] = {'name': self.vul_module, 'src_file': src_file, 'hook': hook_end_node != None, 'missing': {}}
+                        if self.vul_module not in self.results:
+                            self.results[self.vul_module] = {'name': self.vul_module, 'src_file': src_file, 'hook': hook_end_node != None, 'missing': {}}
                         miss_info = {'distro_name': distro.distro_name, 'distro_version': distro.distro_version}
                         if ret == self.MODULE_DISABLED:
                             miss_info['type'] = self.MODULE_DISABLED, 
@@ -178,7 +172,7 @@ class ModulesAnalysis(AnalysisModule):
                             miss_info['missing_reason'] = 'Module in blacklist'
                             self.report.append(begin_node.text)
                             self.report.append("[Blacklist] Module {} from {} need root to be loaded".format(self.vul_module, src_file))
-                        self._missing_modules[self.vul_module]['missing'][distro.distro_name] = miss_info
+                        self.results[self.vul_module]['missing'][distro.distro_name] = miss_info
             begin_node = begin_node.next_node
             if hook_end_node == begin_node:
                 hook_end_node = None
@@ -189,10 +183,6 @@ class ModulesAnalysis(AnalysisModule):
         if 'hook' in node.function_name:
             return node.scope_end_node
         return None
-    
-    def dump_missing_modules(self):
-        cache_file = os.path.join(self.path_case_plugin, "missing_modules.json")
-        json.dump(self._missing_modules, open(cache_file, "w"))
 
     def _prepare_gdb(self):
         linux = os.path.join(self.path_case, "linux")
@@ -312,7 +302,7 @@ class ModulesAnalysis(AnalysisModule):
         except CannotFindConfigForObject:
             return 'n'
 
-        vendor_config_path = os.path.join(self._cur_distro.distro_src, ".config")
+        vendor_config_path = os.path.join(self.path_case, "config")
         if not os.path.exists(vendor_config_path):
             raise CannotFindKernelConfig
         if self._cur_distro.distro_name not in self.config_cache:

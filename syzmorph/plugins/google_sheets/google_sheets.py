@@ -19,10 +19,6 @@ class GoogleSheets(AnalysisModule):
 
     def __init__(self):
         super().__init__()
-        self.report = ''
-        self._prepared = False
-        self.path_case_plugin = ''
-        self._move_to_success = False
         self.sh = None
         self.case_type = self.TYPE_FAILED
         
@@ -141,12 +137,8 @@ class GoogleSheets(AnalysisModule):
                         fail_text += "{}\n".format(distros)
                         self.data['failed-on'] += "{} ".format(distros)
         path_result = os.path.join(self.path_case, "BugReproduce", "results.json")
-        if os.path.exists(path_result):
-            result_json = json.load(open(path_result, "r"))
-            if result_json['trigger']:
-                self.case_type = self.TYPE_SUCCEED
-        else:
-            raise CriticalModuleNotFinish("BugReproduce")
+        if normal_text != '' or root_text != '':
+            self.case_type = self.TYPE_SUCCEED
 
         wks.update_value('D2', normal_text+"\n"+json.dumps(result_json))
         wks.update_value('E2', root_text+"\n"+json.dumps(result_json))

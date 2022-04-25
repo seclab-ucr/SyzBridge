@@ -12,10 +12,6 @@ class Template(AnalysisModule):
 
     def __init__(self):
         super().__init__()
-        self.report = []
-        self._prepared = False
-        self.path_case_plugin = ''
-        self._move_to_success = False
         
     def prepare(self):
         return self.prepare_on_demand()

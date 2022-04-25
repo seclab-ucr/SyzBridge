@@ -24,14 +24,13 @@ class RawBugReproduce(AnalysisModule):
 
     def __init__(self):
         super().__init__()
-        self.report = []
-        self.path_case_plugin = None
         self.bug_title = ''
         self.root_user = None
         self.normal_user = None
         self.distro_lock = threading.Lock()
         
     def prepare(self):
+        self._init_results()
         if not self.manager.has_c_repro:
             self.logger.info("Case does not have c reproducer")
             return False
@@ -97,6 +96,8 @@ class RawBugReproduce(AnalysisModule):
                 res["triggered"] = True
                 res["bug_title"] = self.bug_title
                 res["root"] = False
+            self.results[distro.distro_name]['root'] = res['root']
+            self.results[distro.distro_name]['trigger'] = True
             q.put([distro.distro_name, res])
             return
         
@@ -249,6 +250,21 @@ class RawBugReproduce(AnalysisModule):
         qemu.command(cmds="chmod +x run.sh && ./run.sh", user=user, wait=False)
         return
     
+    def _init_results(self):
+        for distro in self.cfg.get_distros():
+            distro_result = {}
+
+            distro_result['missing_module'] = []
+            distro_result['skip_funcs'] = []
+            distro_result['device_tuning'] = []
+            distro_result['interface_tuning'] = []
+            distro_result['namespace'] = False
+            distro_result['root'] = None
+            distro_result['minimized'] = False
+            distro_result['hash'] = self.case['hash']
+            distro_result['trigger'] = False
+            self.results[distro.distro_name] = distro_result
+
     def _BugChecker(self, report):
         title = None
         flag_double_free = False

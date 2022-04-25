@@ -25,8 +25,6 @@ class BugReproduce(AnalysisModule):
 
     def __init__(self):
         super().__init__()
-        self.report = []
-        self.path_case_plugin = None
         self.bug_title = ''
         self.results = {}
         self.root_user = None
@@ -82,7 +80,6 @@ class BugReproduce(AnalysisModule):
             [distro_name, m] = output.get(block=True)
             res[distro_name] = m
         
-        json.dump(self.results, open(os.path.join(self.path_case_plugin, "results.json"), 'w'))
         return res
     
     def reproduce_async(self, distro, q):
@@ -107,6 +104,9 @@ class BugReproduce(AnalysisModule):
             q.put([distro.distro_name, res])
             return
         
+        if not self.plugin_finished("ModulesAnalysis"):
+            self.logger.info("BugReproduce will not locate missing modules due to incorrectly results from ModulesAnslysis")
+            return
         self.logger.info("{} does not trigger any bugs, try to enable missing modules".format(distro.distro_name))
         m = self.get_missing_modules(distro.distro_name)
         missing_modules = [e['name'] for e in m ]
@@ -228,7 +228,7 @@ class BugReproduce(AnalysisModule):
         feature = 0
         need_namespace = False
 
-        if self.check_poc_capability():
+        if self.check_poc_capability() and not root:
             need_namespace = True
             self.results[distro.distro_name]['namespace'] = True
 
@@ -262,7 +262,7 @@ class BugReproduce(AnalysisModule):
                         data.append(t[1])
                         insert_line.remove(t)
             data.append(code[i])
-            if need_namespace:
+            if need_namespace and not root:
                 if regx_match(main_func, line):
                     data.insert(len(data)-1, "#include \"sandbox.h\"\n")
                     insert_line.append([i+2, "setup_sandbox();\n"])
@@ -300,6 +300,8 @@ class BugReproduce(AnalysisModule):
     def check_poc_capability(self):
         regx = r'([A-Z_]+) seems to be bypassable'
         cap_report = os.path.join(self.path_case, "CapabilityCheck", "Report_CapabilityCheck")
+        if not self.plugin_finished("CapabilityCheck"):
+            return True
         if not os.path.exists(cap_report):
             return False
         with open(cap_report, "r") as f:

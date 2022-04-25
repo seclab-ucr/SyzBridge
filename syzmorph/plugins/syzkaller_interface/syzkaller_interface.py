@@ -35,10 +35,6 @@ class SyzkallerInterface(AnalysisModule):
 
     def __init__(self):
         super().__init__()
-        self.report = ''
-        self._prepared = False
-        self.path_case_plugin = ''
-        self._move_to_success = False
         self.syzkaller_path = ''
         
     def prepare(self):

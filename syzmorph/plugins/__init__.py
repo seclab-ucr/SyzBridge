@@ -1,7 +1,9 @@
 import logging
 import os, shutil
+import json
 
 from subprocess import call
+from infra.config.config import Config
 from deployer.case import Case
 from .error import *
 
@@ -12,10 +14,15 @@ class AnalysisModule:
 
     def __init__(self):
         self.logger = logger
+        self.results = {}
+        self.report = []
+        self.path_case_plugin = ''
+        self._prepared = False
+        self._move_to_success = False
         self._move_to_success = False
         self._analyzor = None
 
-    def setup(self, manager):
+    def setup(self, manager: Case):
         if not isinstance(manager, Case):
             raise AnalysisModuleError("setup() requires class Case")
 
@@ -25,7 +32,7 @@ class AnalysisModule:
         self.case_hash = manager.case_hash
         self.case_logger = manager.case_logger
         self.main_logger = manager.logger
-        self.cfg = manager.cfg
+        self.cfg: Config = manager.cfg
         self.path_case = manager.path_case
         self.path_project = manager.path_project
         self.path_package = manager.path_package
@@ -42,6 +49,7 @@ class AnalysisModule:
         if not isinstance(analyzor, AnalysisModule):
             raise AnalysisModuleError("install_analyzor() requires class AnalysisModule")
         self.analyzor = analyzor
+        self._get_analyzor_results_offline()
     
     @property
     def name(self):
@@ -60,14 +68,14 @@ class AnalysisModule:
     def check(func):
         def inner(self):
             if self.analyzor == None:
-                return AnalysisModuleError("Can not run analyzor when it is still NULL")
+                raise AnalysisModuleError("Can not run analyzor when it is still NULL")
             try:
                 ret = func(self)
             except Exception as e:
                 logging.exception("Case {} caught exception in plugin {}".format(self.case_hash, self.NAME))
                 self.case_logger.error("[{}] Exception happens: {}".format(self.analyzor.NAME, e))
                 self.main_logger.error("[{}] Exception happens: {}".format(self.analyzor.NAME, e))
-                return None
+                return False
             return ret
         return inner
     
@@ -75,6 +83,8 @@ class AnalysisModule:
     def run(self):
         self.main_logger.info("Running {}".format(self.analyzor.NAME))
         ret = self.analyzor.run()
+        self.analyzor.dump_results()
+        self._get_analyzor_results_online(ret)
         self.analyzor.cleanup()
         return ret
     
@@ -111,9 +121,47 @@ class AnalysisModule:
         self.main_logger.info("Finish {}".format(self.analyzor.NAME))
         return self._create_stamp(stamp)
     
+    def null_results(self):
+        plugin = self.cfg.get_plugin(self.analyzor.NAME)
+        plugin.results = None
+        plugin.finish = False
+    
+    def plugin_finished(self, plugin_name):
+        plugin = self.cfg.get_plugin(plugin_name)
+        return plugin.finish
+
     def cleanup(self):
         pass
+
+    def dump_results(self):
+        json.dump(self.results, open(os.path.join(self.path_case_plugin, "results.json"), 'w'))
+
+    def _get_analyzor_results_offline(self):
+        plugin = self.cfg.get_plugin(self.analyzor.NAME)
+        res = self._read_analyzor_results()
+        if res == None:
+            plugin.finish = False
+        else:
+            plugin.finish = True
+        plugin.results = res
+        return
     
+    def _get_analyzor_results_online(self, ret):
+        plugin = self.cfg.get_plugin(self.analyzor.NAME)
+        plugin.results = self.analyzor.results
+        plugin.finish = ret
+    
+    def _read_analyzor_results(self):
+        plugin_path = os.path.join(self.path_case, self.analyzor.NAME)
+        results_path = os.path.join(plugin_path, "results.json")
+        if not os.path.exists(results_path):
+            return None
+        try:
+            res = json.load(open(results_path, 'r'))
+        except:
+            return None
+        return res
+
     def _check_dependencies_finished(self):
         plugin = self.cfg.get_plugin(self.analyzor.NAME)
         if plugin != None:

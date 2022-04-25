@@ -19,11 +19,7 @@ class Syzscope(AnalysisModule):
 
     def __init__(self):
         super().__init__()
-        self.report = []
-        self._prepared = False
-        self.path_case_plugin = ''
         self.syz = None
-        self._move_to_success = False
         self.timeout = None
         self.gdb_port = None
         self.ssh_port = None

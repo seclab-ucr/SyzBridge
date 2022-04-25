@@ -19,11 +19,7 @@ class TraceAnalysis(AnalysisModule):
 
     def __init__(self):
         super().__init__()
-        self.report = ''
         self.syzcall2syscall = {}
-        self._prepared = False
-        self._move_to_success = False
-        self.path_case_plugin = None
         self.syscall_prefix = '__x64_sys_'
         
     def prepare(self):
@@ -68,6 +64,7 @@ class TraceAnalysis(AnalysisModule):
         
         for distro in self.cfg.get_distros():
             for _ in range(0,3):
+                self.results[distro.distro_name] = False
                 self.logger.info("Starting retrieving trace from {}".format(distro.distro_name))
                 trace_vendor = self._get_trace(distro)
                 if trace_vendor is None:
@@ -75,6 +72,7 @@ class TraceAnalysis(AnalysisModule):
                     continue
                 if self._is_trace_empty(trace_vendor):
                     continue
+                self.results[distro.distro_name] = True
                 break
 
         #ret = self.analyze_trace(trace_vendor, trace_upstream)

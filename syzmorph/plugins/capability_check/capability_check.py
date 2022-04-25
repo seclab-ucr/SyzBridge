@@ -19,10 +19,6 @@ class CapabilityCheck(AnalysisModule):
     def __init__(self):
         super().__init__()
         self.syz = None
-        self.report = []
-        self._prepared = False
-        self.path_case_plugin = ''
-        self._move_to_success = False
         self._regx_cap = r'thread \d+ request ([A-Z0-9_]+):'
         
     def prepare(self):
@@ -60,11 +56,17 @@ class CapabilityCheck(AnalysisModule):
         return report
     
     def parse_report(self, reports):
+        cap_num = {}
         res = True
         for each_report in reports:
             inspect_next = False
             cap_name = each_report['cap_name']
             trace = each_report['trace']
+            if cap_name not in cap_num:
+                cap_num[cap_name] = 1
+            else:
+                cap_num[cap_name] += 1
+            key_name = '{}-{}'.format(cap_name, cap_num[cap_name])
             for line in trace:
                 func, src_file = parse_one_trace(line)
                 if func == None or src_file == None:
@@ -73,6 +75,7 @@ class CapabilityCheck(AnalysisModule):
                     self.logger.error("{} is not a valid trace".format(line))
                     continue
                 if func == "capable":
+                    self.results[key_name] = False
                     self.report.append("{} is checked by capable(), can not be ignored by user namespace".format(cap_name))
                     self.report.append("".join(trace))
                     res = False
@@ -80,6 +83,7 @@ class CapabilityCheck(AnalysisModule):
                 if inspect_next:
                     inspect_next = False
                     if self._check_cap_in_file(src_file):
+                        self.results[key_name] = False
                         self.report.append("{} is checked by capable(), can not be ignored by user namespace".format(cap_name))
                         self.report.append("".join(trace))
                         res = False
@@ -88,9 +92,11 @@ class CapabilityCheck(AnalysisModule):
                 if func == 'ns_capable' or func == 'ns_capable_noaudit' or func == 'ns_capable_setid' \
                     or func == 'file_ns_capable' or func == 'has_capability' or func == 'has_capability_noaudit':
                         inspect_next = True
-                
-            self.report.append("{} seems to be bypassable".format(cap_name))
-            self.report.append("".join(trace))
+            
+            if key_name not in self.results:
+                self.results[key_name] = True
+                self.report.append("{} seems to be bypassable".format(cap_name))
+                self.report.append("".join(trace))
         return res
     
     def tune_poc(self, debug=True):
@@ -232,7 +238,7 @@ killall poc || true
                 return False
         return True
 
-    def _build_syz_logparser(self, syz):
+    def _build_syz_logparser(self, syz: SyzkallerInterface):
         patch = os.path.join(self.path_package, "plugins/capability_check/syz_logparser.patch")
         if syz.check_binary(binary_name="syz-logparser"):
             return True
