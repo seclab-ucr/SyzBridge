@@ -56,12 +56,18 @@ class GoogleSheets(AnalysisModule):
         self._write_hash(wks)
         self._write_title(wks)
         self._write_url(wks)
-        self._write_reproducable(wks)
-        self._write_module_analysis(wks)
-        self._write_capability_check(wks)
-        self._write_syzscope(wks)
-        self._write_fuzzing(wks)
-        self._write_raw_reproducable(wks)
+        if self.plugin_finished("BugReproduce"):
+            self._write_reproducable(wks)
+        if self.plugin_finished("ModulesAnalysis"):
+            self._write_module_analysis(wks)
+        if self.plugin_finished("CapabilityCheck"):
+            self._write_capability_check(wks)
+        if self.plugin_finished("SyzScope"):
+            self._write_syzscope(wks)
+        if self.plugin_finished("Fuzzing"):
+            self._write_fuzzing(wks)
+        if self.plugin_finished("RawBugReproduce"):
+            self._write_raw_reproducable(wks)
         self._render_coloer(wks)
         try:
             if self.manager.module_capable("SlackBot") and \

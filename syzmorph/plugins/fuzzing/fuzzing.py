@@ -37,7 +37,7 @@ class Fuzzing(AnalysisModule):
     REPORT_START = "======================Fuzzing Report======================"
     REPORT_END =   "==================================================================="
     REPORT_NAME = "Report_Fuzzing"
-    DEPENDENCY_PLUGINS = ['BugReproduce']
+    DEPENDENCY_PLUGINS = []
 
     def __init__(self):
         super().__init__()

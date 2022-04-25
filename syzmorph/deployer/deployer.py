@@ -108,7 +108,9 @@ class Deployer(Case, Task):
                 self._build_dependency_module(task_id, A)
                 self.build_task_class(task_id, A)
     
-    def _build_dependency_module(self, task_id, module):
+    def _build_dependency_module(self, task_id, module: AnalysisModule):
+        if self.cfg.get_plugin(module.NAME).dependency == "weak":
+            return
         dst_node = set()
         if task_id not in self.ts:
             self.ts[task_id] = set()

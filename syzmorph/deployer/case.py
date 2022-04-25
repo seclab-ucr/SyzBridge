@@ -6,11 +6,12 @@ from subprocess import Popen, call, PIPE, STDOUT
 from infra.tool_box import *
 from .error import *
 from modules.reproducer import *
+from infra.config.config import Config
 
 reserve_port = 7
 class Case:
     def __init__(self, index, owner, case_hash, case):
-        self.cfg = owner.cfg
+        self.cfg: Config = owner.cfg
         self.args = owner.args
         self.index = index
         self.debug = self.args.debug
