@@ -109,20 +109,20 @@ class Deployer(Case, Task):
                 self.build_task_class(task_id, A)
     
     def _build_dependency_module(self, task_id, module: AnalysisModule):
-        if self.cfg.get_plugin(module.NAME).dependency == "weak":
-            return
         dst_node = set()
         if task_id not in self.ts:
             self.ts[task_id] = set()
         else:
             return
         for dependency in module.DEPENDENCY_PLUGINS:
-            depend_cap_text = self.module_name_to_task(dependency)
-            plugin_name = self.task_to_module_name(depend_cap_text)
-            A = self._get_plugin_by_name(plugin_name)
-            dst_node.add(getattr(Task, depend_cap_text))
-            self._build_dependency_module(getattr(Task, depend_cap_text), A)
-            self.build_task_class(getattr(Task, depend_cap_text), A)
+            if self.cfg.get_plugin(module.NAME).dependency == "strong" or \
+                    (self.cfg.get_plugin(module.NAME).dependency == "weak" and self.module_capable(dependency)):
+                depend_cap_text = self.module_name_to_task(dependency)
+                plugin_name = self.task_to_module_name(depend_cap_text)
+                A = self._get_plugin_by_name(plugin_name)
+                dst_node.add(getattr(Task, depend_cap_text))
+                self._build_dependency_module(getattr(Task, depend_cap_text), A)
+                self.build_task_class(getattr(Task, depend_cap_text), A)
         self.ts[task_id] = dst_node
 
     def _get_plugin_by_name(self, name):

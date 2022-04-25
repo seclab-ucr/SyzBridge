@@ -128,7 +128,11 @@ class AnalysisModule:
     
     def plugin_finished(self, plugin_name):
         plugin = self.cfg.get_plugin(plugin_name)
-        return plugin.finish
+        try:
+            res = getattr(plugin, "finish")
+        except:
+            return False
+        return res
 
     def cleanup(self):
         pass
