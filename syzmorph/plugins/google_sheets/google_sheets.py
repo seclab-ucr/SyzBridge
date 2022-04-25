@@ -124,6 +124,8 @@ class GoogleSheets(AnalysisModule):
         normal_text = ''
         root_text = ''
         fail_text = ''
+        path_result = os.path.join(self.path_case, "BugReproduce", "results.json")
+        result_json = json.load(open(path_result, 'r'))
         if os.path.exists(path_report):
             with open(path_report, "r") as f:
                 report = f.readlines()
@@ -133,21 +135,20 @@ class GoogleSheets(AnalysisModule):
                         bug_title = regx_get(reproducable_regx, line, 2)
                         privilege = regx_get(reproducable_regx, line, 3)
                         if privilege == 'by normal user':
-                            normal_text += "{}-{}\n".format(distro, bug_title)
+                            normal_text += "{}-{} {}\n".format(distro, bug_title, json.dumps(result_json[distro]))
                             self.data['reproduce-by-normal'] += "{} ".format(distro)
                         if privilege == 'by root user':
-                            root_text += "{}-{}\n".format(distro, bug_title)
+                            root_text += "{}-{} {}\n".format(distro, bug_title, json.dumps(result_json[distro]))
                             self.data['reproduce-by-root'] += "{} ".format(distro)
                     if regx_match(failed_regx, line):
                         distros = regx_get(failed_regx, line, 0)
                         fail_text += "{}\n".format(distros)
                         self.data['failed-on'] += "{} ".format(distros)
-        path_result = os.path.join(self.path_case, "BugReproduce", "results.json")
         if normal_text != '' or root_text != '':
             self.case_type = self.TYPE_SUCCEED
 
-        wks.update_value('D2', normal_text+"\n"+json.dumps(result_json))
-        wks.update_value('E2', root_text+"\n"+json.dumps(result_json))
+        wks.update_value('D2', normal_text)
+        wks.update_value('E2', root_text)
         wks.update_value('F2', fail_text)
 
     def _write_module_analysis(self, wks: pygsheets.Worksheet):
