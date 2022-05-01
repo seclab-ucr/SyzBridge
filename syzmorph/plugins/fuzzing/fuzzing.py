@@ -56,21 +56,16 @@ class Fuzzing(AnalysisModule):
             plugin = self.cfg.get_plugin(self.NAME)
             if plugin == None:
                 self.logger.error("No such plugin {}".format(self.NAME))
-            path_kernel = plugin.kernel
             time_limit = int(plugin.time)
         except AttributeError:
             self.logger.error("Failed to get timeout or gdb_port or qemu_monitor_port or max_round")
             return False
         return self.prepare_on_demand(path_kernel, time_limit)
     
-    def prepare_on_demand(self, path_kernel, time_limit):
+    def prepare_on_demand(self, time_limit):
+        self.time_limit = time_limit
         if regx_match(r'386', self.case["manager"]):
             self.arch = "386"
-        self.path_image = self.cfg.kernel.ubuntu.distro_image
-        self.port = self.cfg.kernel.ubuntu.repro.ssh_port
-        self.path_kernel = path_kernel
-        self.time_limit = time_limit
-        self.ssh_key = self.cfg.kernel.ubuntu.ssh_key
         self._prepared = True
         return True
     
@@ -82,11 +77,16 @@ class Fuzzing(AnalysisModule):
             self.logger.error("Failed to prepare syzkaller, stop fuzzing.")
             return False
         self.find_support_syscalls()
-        self.prepare_config()
-        if self.run_syzkaller() != 0:
-            self.main_logger.error("Failed to run syzkaller")
-            return False
-        self.check_output()
+        for distro in self.cfg.get_distros():
+            self.path_image = distro.distro_image
+            self.port = distro.repro.ssh_port
+            self.path_kernel = distro.distro_src
+            self.ssh_key = distro.ssh_key
+            self.prepare_config()
+            if self.run_syzkaller() != 0:
+                self.main_logger.error("Failed to run syzkaller")
+                return False
+            self.check_output()
         return True
     
     def find_support_syscalls(self):
@@ -243,7 +243,7 @@ class Fuzzing(AnalysisModule):
         super()._write_to(content, file_path)
     
     def _ubuntu_reproducible(self):
-        reproducable_regx = r'(debian|fedora|ubuntu) triggers a (Kasan )?bug: ([A-Za-z0-9_: -/]+) (by normal user|by root user)'
+        reproducable_regx = r'(.*) triggers a (Kasan )?bug: ([A-Za-z0-9_: -/]+) (by normal user|by root user)'
         failed_regx = r'(.+) fail to trigger the bug'
         path_report = os.path.join(self.path_case, "BugReproduce", "Report_BugReproduce")
         if os.path.exists(path_report):
