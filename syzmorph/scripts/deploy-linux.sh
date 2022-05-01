@@ -123,7 +123,7 @@ cd ..
 
 echo "[+] Building kernel"
 OLD_INDEX=`ls -l linux | rev | cut -d'-' -f 1`
-if [ "$OLD_INDEX" != "$INDEX" ]; then
+if [ "$OLD_INDEX" != "$INDEX" ] | [ ! -e ./linux ]; then
   rm -rf "./linux" || echo "No linux repo"
   LINUX0=$PROJECT_PATH/tools/linux-$KERNEL-0
   ls $LINUX0 || LINUX0="LINUX0"

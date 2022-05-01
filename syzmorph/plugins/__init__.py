@@ -84,7 +84,7 @@ class AnalysisModule:
         self.main_logger.info("Running {}".format(self.analyzor.NAME))
         ret = self.analyzor.run()
         self.analyzor.dump_results()
-        self._get_analyzor_results_online(ret)
+        self._set_plugin_status(ret)
         self.analyzor.cleanup()
         return ret
     
@@ -123,7 +123,7 @@ class AnalysisModule:
     
     def null_results(self):
         plugin = self.cfg.get_plugin(self.analyzor.NAME)
-        plugin.results = None
+        plugin.instance.results = None
         plugin.finish = False
     
     def plugin_finished(self, plugin_name):
@@ -147,12 +147,11 @@ class AnalysisModule:
             plugin.finish = False
         else:
             plugin.finish = True
-        plugin.results = res
+            plugin.instance.results = res
         return
     
-    def _get_analyzor_results_online(self, ret):
+    def _set_plugin_status(self, ret):
         plugin = self.cfg.get_plugin(self.analyzor.NAME)
-        plugin.results = self.analyzor.results
         plugin.finish = ret
     
     def _read_analyzor_results(self):

@@ -56,19 +56,18 @@ class Fuzzing(AnalysisModule):
             plugin = self.cfg.get_plugin(self.NAME)
             if plugin == None:
                 self.logger.error("No such plugin {}".format(self.NAME))
-            path_kernel = plugin.kernel
             time_limit = int(plugin.time)
         except AttributeError:
             self.logger.error("Failed to get timeout or gdb_port or qemu_monitor_port or max_round")
             return False
-        return self.prepare_on_demand(path_kernel, time_limit)
+        return self.prepare_on_demand(time_limit)
     
-    def prepare_on_demand(self, path_kernel, time_limit):
+    def prepare_on_demand(self, time_limit):
         if regx_match(r'386', self.case["manager"]):
             self.arch = "386"
         self.path_image = self.cfg.kernel.ubuntu.distro_image
         self.port = self.cfg.kernel.ubuntu.repro.ssh_port
-        self.path_kernel = path_kernel
+        self.path_kernel = self.cfg.kernel.ubuntu.distro_src
         self.time_limit = time_limit
         self.ssh_key = self.cfg.kernel.ubuntu.ssh_key
         self._prepared = True

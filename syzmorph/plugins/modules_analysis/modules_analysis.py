@@ -9,6 +9,8 @@ from plugins.error import *
 from plugins.trace_analysis import TraceAnalysis
 from infra.ftraceparser.ftraceparser.trace import Trace
 from modules.vm import VM, VMInstance
+from syzmorph.infra.config.config import Config
+from syzmorph.infra.config.vendor import Vendor
 
 class TraceAnalysisError(Exception):
     pass
@@ -33,7 +35,7 @@ class ModulesAnalysis(AnalysisModule):
 
         self.vul_module = None
         self.cfg = None
-        self._cur_distro = None
+        self._cur_distro: Vendor = None
         self.config_cache['vendor_config_path'] = ''
         self._loadable_modules = {}
         self._ftrace_functions = {}
@@ -56,9 +58,6 @@ class ModulesAnalysis(AnalysisModule):
             remove_trace_file = plugin.remove_trace_file
         except AttributeError:
             remove_trace_file = False
-        if self.cfg.kernel.ubuntu.distro_src == None or not os.path.exists(self.cfg.kernel.ubuntu.distro_src):
-            self.logger.error("No such distro source path: {}".format(self.cfg.kernel.ubuntu.distro_src))
-            return False
         report = request_get(self.case['report'])
         self._build_loadable_modules()
         return self.prepare_on_demand(report.text, remove_trace_file)
@@ -120,7 +119,7 @@ class ModulesAnalysis(AnalysisModule):
             if begin_node.parent is None and begin_node.is_function and not trace.is_filtered(begin_node):
                 if all_distros == []:
                     return False
-                self.logger.info("[Modules analysis] Starting from node {}".format(begin_node.info))
+                self.logger.info("Starting from node {}".format(begin_node.info))
                 if not self.check_modules_in_trace(begin_node, vm, check_map, all_distros):
                     return False
             begin_node = begin_node.next_node_by_time
@@ -130,49 +129,52 @@ class ModulesAnalysis(AnalysisModule):
         end_node = begin_node.scope_end_node
         hook_end_node = None
         while begin_node != end_node:
-            if begin_node.is_function:
-                src_file, procceed = self.get_src_file_from_function(begin_node, vm)
-                if hook_end_node == None:
-                    hook_end_node = self.is_hook_func(begin_node)
-                if src_file == None:
-                    self.logger.info("[Modules analysis] Function {} doesn't have symbol file".format(begin_node.function_name))
-                if procceed:
-                    for distro in all_distros:
-                        self._cur_distro = distro
-                        if src_file in check_map[distro.distro_name]:
-                            continue
-                        if self._is_generic_module(src_file):
-                            continue
-                        check_map[distro.distro_name][src_file] = True
-                        ret = self.module_check(distro, src_file)
-                        self.logger.info("[Modules analysis] Module {} in {} {}".format(self.vul_module, distro.distro_name, ret))
-                        if ret == None or ret == self.MODULE_ENABLED:
-                            continue
-                        if self.vul_module not in self.results:
-                            self.results[self.vul_module] = {'name': self.vul_module, 'src_file': src_file, 'hook': hook_end_node != None, 'missing': {}}
-                        miss_info = {'distro_name': distro.distro_name, 'distro_version': distro.distro_version}
-                        if ret == self.MODULE_DISABLED:
-                            miss_info['type'] = self.MODULE_DISABLED, 
-                            miss_info['missing_reason'] = 'Module disabled'
-                            self.report.append(begin_node.text)
-                            self.logger.info("Vendor {0} does not have {1} module enabled".format(distro.distro_name, self.vul_module))
-                            self.report.append("[Disabled] Module {} from {} is not enabled in {}".format(self.vul_module, src_file, distro.distro_name))
-                        if ret == self.MODULE_REQUIRED_LOADING:
-                            miss_info['type'] = self.MODULE_REQUIRED_LOADING_BY_ROOT, 
-                            miss_info['missing_reason'] = 'need loading by root'
-                            self.report.append(begin_node.text)
-                            user = 'root'
-                            if self.check_module_privilege(self.vul_module):
-                                miss_info['type'] = self.MODULE_REQUIRED_LOADING_BY_NON_ROOT, 
-                                miss_info['missing_reason'] = 'need loading by normal user'
-                                user = 'normal user'
-                            self.report.append("[{}] Module {} from {} need to be loaded in {} ".format(user, self.vul_module, src_file, distro.distro_name))
-                        if ret == self.MODULE_IN_BLACKLIST:
-                            miss_info['type'] = self.MODULE_IN_BLACKLIST, 
-                            miss_info['missing_reason'] = 'Module in blacklist'
-                            self.report.append(begin_node.text)
-                            self.report.append("[Blacklist] Module {} from {} need root to be loaded".format(self.vul_module, src_file))
-                        self.results[self.vul_module]['missing'][distro.distro_name] = miss_info
+            # To matain a one time loop, we can procceed to next node by 'break'
+            # next node will be found after the loop
+            for _ in range(0, 1):
+                if begin_node.is_function:
+                    src_file, procceed = self.get_src_file_from_function(begin_node, vm)
+                    if hook_end_node == None:
+                        hook_end_node = self.is_hook_func(begin_node)
+                    if src_file == None:
+                        break
+                    if procceed:
+                        for distro in all_distros:
+                            self._cur_distro = distro
+                            if src_file in check_map[distro.distro_name]:
+                                continue
+                            if self._is_generic_module(src_file):
+                                continue
+                            check_map[distro.distro_name][src_file] = True
+                            ret = self.module_check(distro, src_file)
+                            self.logger.info("Module {} in {} {}".format(self.vul_module, distro.distro_name, ret))
+                            if ret == None or ret == self.MODULE_ENABLED:
+                                continue
+                            if self.vul_module not in self.results:
+                                self.results[self.vul_module] = {'name': self.vul_module, 'src_file': src_file, 'hook': hook_end_node != None, 'missing': {}}
+                            miss_info = {'distro_name': distro.distro_name, 'distro_version': distro.distro_version}
+                            if ret == self.MODULE_DISABLED:
+                                miss_info['type'] = self.MODULE_DISABLED, 
+                                miss_info['missing_reason'] = 'Module disabled'
+                                self.report.append(begin_node.text)
+                                self.logger.info("Vendor {0} does not have {1} module enabled".format(distro.distro_name, self.vul_module))
+                                self.report.append("[Disabled] Module {} from {} is not enabled in {}".format(self.vul_module, src_file, distro.distro_name))
+                            if ret == self.MODULE_REQUIRED_LOADING:
+                                miss_info['type'] = self.MODULE_REQUIRED_LOADING_BY_ROOT, 
+                                miss_info['missing_reason'] = 'need loading by root'
+                                self.report.append(begin_node.text)
+                                user = 'root'
+                                if self.check_module_privilege(self.vul_module):
+                                    miss_info['type'] = self.MODULE_REQUIRED_LOADING_BY_NON_ROOT, 
+                                    miss_info['missing_reason'] = 'need loading by normal user'
+                                    user = 'normal user'
+                                self.report.append("[{}] Module {} from {} need to be loaded in {} ".format(user, self.vul_module, src_file, distro.distro_name))
+                            if ret == self.MODULE_IN_BLACKLIST:
+                                miss_info['type'] = self.MODULE_IN_BLACKLIST, 
+                                miss_info['missing_reason'] = 'Module in blacklist'
+                                self.report.append(begin_node.text)
+                                self.report.append("[Blacklist] Module {} from {} need root to be loaded".format(self.vul_module, src_file))
+                            self.results[self.vul_module]['missing'][distro.distro_name] = miss_info
             begin_node = begin_node.next_node
             if hook_end_node == begin_node:
                 hook_end_node = None
@@ -200,6 +202,7 @@ class ModulesAnalysis(AnalysisModule):
             return self._ftrace_functions[begin_node.function_name], False
         addr = vm.get_func_addr(begin_node.function_name)
         if addr == 0:
+            self.logger.debug("Function {} doesn't have symbol file".format(begin_node.function_name))
             self._ftrace_functions[begin_node.function_name] = None
             return None, False
         file, _ = vm.get_dbg_info(addr)
@@ -302,7 +305,7 @@ class ModulesAnalysis(AnalysisModule):
         except CannotFindConfigForObject:
             return 'n'
 
-        vendor_config_path = os.path.join(self.path_case, "config")
+        vendor_config_path = os.path.join(self._cur_distro.distro_src, "config")
         if not os.path.exists(vendor_config_path):
             raise CannotFindKernelConfig
         if self._cur_distro.distro_name not in self.config_cache:

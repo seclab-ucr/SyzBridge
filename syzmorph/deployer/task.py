@@ -95,7 +95,7 @@ class Task:
     def task_to_module_name(self, task):
         if task.find("_") == -1:
             return ""
-        return task[task.find("_")+1:].lower()
+        return convert_folder_name_to_plugin_name(task[task.find("_")+1:].lower())
     
     def module_capable(self, module_name):
         task = self.module_name_to_task(module_name)

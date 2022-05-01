@@ -197,10 +197,10 @@ class BugReproduce(AnalysisModule):
 
     def get_missing_modules(self, distro_name):
         res = []
-        t = os.path.join(self.path_case, ModulesAnalysis.NAME, "missing_modules.json")
-        if not os.path.exists(t):
-            return res
-        r = json.load(open(t, "r"))
+        module_analysis = self.cfg.get_plugin(ModulesAnalysis.NAME)
+        r = module_analysis.instance.results
+        if r == None:
+            self.logger.error("ModulesAnalysis didn't finish")
         res = []
         for e in r:
             try:

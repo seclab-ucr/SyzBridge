@@ -104,7 +104,7 @@ class Deployer(Case, Task):
             cap_text = "TASK_" + each.upper()
             task_id = getattr(Task, cap_text)
             if self.capable(task_id):
-                A = self._get_plugin_by_name(each)
+                A = self._get_plugin_instance_by_name(convert_folder_name_to_plugin_name(each))
                 self._build_dependency_module(task_id, A)
                 self.build_task_class(task_id, A)
     
@@ -118,19 +118,15 @@ class Deployer(Case, Task):
             if self.cfg.get_plugin(module.NAME).dependency == "strong" or \
                     (self.cfg.get_plugin(module.NAME).dependency == "weak" and self.module_capable(dependency)):
                 depend_cap_text = self.module_name_to_task(dependency)
-                plugin_name = self.task_to_module_name(depend_cap_text)
-                A = self._get_plugin_by_name(plugin_name)
+                A = self._get_plugin_instance_by_name(dependency)
                 dst_node.add(getattr(Task, depend_cap_text))
                 self._build_dependency_module(getattr(Task, depend_cap_text), A)
                 self.build_task_class(getattr(Task, depend_cap_text), A)
         self.ts[task_id] = dst_node
 
-    def _get_plugin_by_name(self, name):
-        class_name = convert_folder_name_to_plugin_name(name)
-        module = getattr(self.cfg.plugin, class_name)
-        new_class = getattr(module, class_name)
-        A = new_class()
-        return A
+    def _get_plugin_instance_by_name(self, name):
+        plugin = self.cfg.get_plugin(name)
+        return plugin.instance
     
     def _write_to(self, hash_val, name):
         with open("{}/{}".format(self.path_project, name), "a+") as f:

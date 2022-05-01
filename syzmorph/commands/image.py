@@ -79,7 +79,7 @@ class ImageCommand(Command):
         cfg['ssh_key'] = self.ssh_key
         cfg['ssh_port'] = self.ssh_port
         cfg['root_user'] = self.ssh_user
-        cfg['distro_code_name'] = self.code_name
+        cfg['distro_code_name'] = "unknown"
         cfg['distro_name'] = self.distro
         cfg['type'] = 'distro'
         self.cfg = Vendor(cfg)
@@ -98,14 +98,14 @@ class ImageCommand(Command):
         distro_cfg['distro_image'] = self.cfg.distro_image
         distro_cfg['distro_src'] = os.path.join(self.build_dir, "ubuntu-{}".format(self.code_name))
         distro_cfg['distro_name'] = self.cfg.distro_name
-        distro_cfg['distro_code_name'] = self.cfg.distro_code_name
+        distro_cfg['distro_code_name'] = self.code_name
         distro_cfg['distro_version'] = self.kernel_package_version
         distro_cfg['ssh_key'] = self.cfg.ssh_key
         distro_cfg['ssh_port'] = self.cfg.ssh_port
         distro_cfg['type'] = self.cfg.type
         distro_cfg['root_user'] = self.cfg.root_user
         distro_cfg['normal_user'] = 'syzmorph'
-        cfg['kernel'][self.distro] = distro_cfg
+        cfg['kernel']["{}-{}".format(self.distro, self.kernel_package_version)] = distro_cfg
 
         json.dump(cfg, open(config, 'w'), indent=4)
 
@@ -115,7 +115,6 @@ class ImageCommand(Command):
         self.build_dir = self.args.build_dir[0]
         self.distro = self.args.distro[0]
         self.image = self.args.image[0]
-        self.code_name = self.args.code_name[0]
         self.version_since = self.args.version_since
         self.version_until = self.args.version_until
         self.commit = self.args.commit
@@ -185,12 +184,18 @@ class ImageCommand(Command):
         out = qemu.command(user=self.ssh_user, cmds="uname -r", wait=True)
         for line in out:
             if line == self.kernel_version:
-                qemu.alternative_func_output.put(True)
+                if self._kernel_config_pre_check(qemu, 'CONFIG_KASAN=y'):
+                    qemu.alternative_func_output.put(True)
+                else:
+                    qemu.alternative_func_output.put(False)
                 return
         qemu.alternative_func_output.put(False)
         return
     
     def _deploy_image(self, qemu: VM):
+        out = qemu.command(user=self.ssh_user, cmds="lsb_release -c | awk  '{print $2}'", wait=True)
+        self.code_name = out[1]
+
         proj_path = os.path.join(os.getcwd(), "syzmorph")
         image_building_script = "deploy-{}-image.sh".format(self.distro)
         image_building_script_path = os.path.join(proj_path, "scripts/{}".format(image_building_script))
@@ -203,8 +208,11 @@ class ImageCommand(Command):
             qemu.alternative_func_output.put(False)
             return
 
-        qemu.command(user=self.ssh_user, cmds="chmod +x {0} && ./{0} {1} '{2}' '{3}'".format(image_building_script, 
-            self.code_name, self.version_since, self.version_until, self.commit), wait=True)
+        if self.commit == '':
+            qemu.command(user=self.ssh_user, cmds="chmod +x {0} && ./{0} '{1}' '{2}'".format(image_building_script, 
+                self.version_since, self.version_until), wait=True)
+        else:
+            qemu.command(user=self.ssh_user, cmds="chmod +x {0} && ./{0} {1}".format(image_building_script, self.commit), wait=True)
 
         out = qemu.command(user=self.ssh_user, cmds="cd ubuntu-{} && ls -l *.ddeb".format(self.code_name), wait=True)
         
@@ -245,6 +253,15 @@ class ImageCommand(Command):
             self.logger.error("Failed to find grub.cfg")
             return None
         return grub_str[1:]
+    
+    def _kernel_config_pre_check(self, qemu, config):
+        out = qemu.command(cmds="grep {} /boot/config-`uname -r`".format(config), user=self.ssh_user, wait=True)
+        for line in out:
+            line = line.strip()
+            if line == config:
+                self.logger.info("{} is enabled".format(config))
+                return True
+        return False
     
     def _find_leaf(self, tree, version, grub_str):
         for i in range(0, len(tree)):
