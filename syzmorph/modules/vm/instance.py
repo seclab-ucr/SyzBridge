@@ -201,7 +201,7 @@ class VMInstance(Network):
         return 'reboot' in self.output[-1]
 
     def is_qemu_ready(self):
-        output = self.command("uname -r", "root", wait=True, timeout=1)
+        output = self.command("uname -r", "root", wait=True, timeout=5)
         if type(output) == list and len(output) > 0:
             for line in output:
                 if utilities.regx_match(r'^\d+\.\d+', line):

@@ -17,3 +17,8 @@ class KernelTypeError(Exception):
     def __init__(self, type_wrong, *args: object) -> None:
         message = "Kernel type must be either \"upstream\" or \"distro\", instead it is ".format(type_wrong)
         super().__init__(message)
+
+class DuplicatedDistro(Exception):
+    def __init__(self, name, *args: object) -> None:
+        message = "Already have a distro named {}. If they are different version, please use different name.".format(name)
+        super().__init__(message)

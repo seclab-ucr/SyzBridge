@@ -17,7 +17,7 @@ class Kernel():
 
 class Plugin():
     def __init__(self):
-        self.results = {}
+        pass
 
 class Config:
     def __init__(self):
@@ -41,10 +41,15 @@ class Config:
     def load(self, cfg):
         i = 0
         kernel_cfg = cfg['kernel']
+        t = {}
         for vendor in kernel_cfg:
             vend_cfg = kernel_cfg[vendor]
             _cfg = Vendor(vend_cfg, i)
-            setattr(self.kernel, vendor.lower(), _cfg)
+            if _cfg.distro_name not in t:
+                setattr(self.kernel, vendor.lower(), _cfg)
+                t[_cfg.distro_name] = True
+            else:
+                raise DuplicatedDistro(_cfg.distro_name)
             i += 1
 
         proj_dir = os.path.join(os.getcwd(), "syzmorph")
@@ -56,6 +61,8 @@ class Config:
                 module = importlib.import_module("plugins.{}".format(module_name))
                 setattr(module, "dependency", "strong")
                 class_name = convert_folder_name_to_plugin_name(module_name)
+                new_class = getattr(module, class_name)
+                setattr(module, 'instance', new_class())
                 setattr(self.plugin, class_name, module)
             except Exception as e:
                 print("Fail to load plugin {}: {}".format(module_name, e))

@@ -60,12 +60,22 @@ class Fuzzing(AnalysisModule):
         except AttributeError:
             self.logger.error("Failed to get timeout or gdb_port or qemu_monitor_port or max_round")
             return False
-        return self.prepare_on_demand(path_kernel, time_limit)
+        return self.prepare_on_demand(time_limit)
     
     def prepare_on_demand(self, time_limit):
+<<<<<<< HEAD
         self.time_limit = time_limit
         if regx_match(r'386', self.case["manager"]):
             self.arch = "386"
+=======
+        if regx_match(r'386', self.case["manager"]):
+            self.arch = "386"
+        self.path_image = self.cfg.kernel.ubuntu.distro_image
+        self.port = self.cfg.kernel.ubuntu.repro.ssh_port
+        self.path_kernel = self.cfg.kernel.ubuntu.distro_src
+        self.time_limit = time_limit
+        self.ssh_key = self.cfg.kernel.ubuntu.ssh_key
+>>>>>>> a8716649dde684904740f44831d2181e9324522c
         self._prepared = True
         return True
     

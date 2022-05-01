@@ -62,7 +62,10 @@ class Launcher(Build):
                 if len(t) > 3:
                     remain = t[3:]
                 self.log("Reproducing done, crashes: {}, high_risk {}, qemu_fail {}".format(crashes, high_risk, qemu_fail))
-            if qemu_fail:
+                if qemu_fail:
+                    continue
+            else:
+                self.log("Reproducing failed, ret {}".format(t))
                 continue
             i += 1
             if not trigger and crashes != []:
