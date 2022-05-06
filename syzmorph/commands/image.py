@@ -42,7 +42,7 @@ class ImageCommand(Command):
                             help='ssh port for distro image')
         parser.add_argument('--ssh-key', nargs='+', action='store',
                             help='ssh key for distro image')
-        parser.add_argument('--ssh-user', nargs='+', action='store', default='root',
+        parser.add_argument('--ssh-user', nargs='?', action='store', default='root',
                             help='ssh key for distro image')
         
         # optional options
@@ -50,8 +50,6 @@ class ImageCommand(Command):
                             help='Write complete image info to config file')
 
         # image building options
-        parser.add_argument('--code-name', nargs='+', action='store',
-                            help='distro code name')
         parser.add_argument('--version-since', nargs='?', action='store', default='',
                             help='pick the first distro kernel version since a date')
         parser.add_argument('--version-until', nargs='?', action='store', default='',
@@ -82,6 +80,11 @@ class ImageCommand(Command):
         cfg['distro_code_name'] = "unknown"
         cfg['distro_name'] = self.distro
         cfg['type'] = 'distro'
+        print("[distro_image]: {}".format(self.image))
+        print("[distro_name]: {}".format(self.distro))
+        print("[ssh_key]: {}".format(self.ssh_key))
+        print("[ssh_port]: {}".format(self.ssh_port))
+        print("[root_user]: {}".format(self.ssh_user))
         self.cfg = Vendor(cfg)
 
     def write2config(self):
@@ -119,7 +122,7 @@ class ImageCommand(Command):
         self.version_until = self.args.version_until
         self.commit = self.args.commit
         if self.args.ssh_user != None:
-            self.ssh_user = self.args.ssh_user[0]
+            self.ssh_user = self.args.ssh_user
         self.logger = init_logger(logger_id=os.path.join(self.build_dir, "build.log") ,debug=True, propagate=False)
     
     def get_mem_free(self):
@@ -236,6 +239,7 @@ class ImageCommand(Command):
 
         if os.path.exists(os.path.join(self.build_dir, "grub.cfg")):
             grub_str = self.grub_order(os.path.join(self.build_dir, "grub.cfg"))
+            self.logger.info("grub command: {}".format(grub_str))
             if grub_str != None:
                 qemu.command(user=self.ssh_user, cmds="sed -i 's/GRUB_DEFAULT=.*/GRUB_DEFAULT=\"{}\"/' /etc/default/grub && update-grub && shutdown -h now".format(grub_str), wait=True)
         #qemu.kill_vm()

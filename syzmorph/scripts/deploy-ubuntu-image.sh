@@ -111,10 +111,28 @@ function compile_ubuntu() {
         cd ~/ubuntu-${code_name}/kernel
         
         if [ -z "${commit}" ]; then
-            commit=`git log --all --since="'${version_since}'" --until="'${version_until}'" -n 1 --pretty=oneline | awk '{{print $1}}'`
+            tag_name=''
+            git log --tags --since="'${version_since}'" --until="'${version_until}'" -n 20 --pretty=oneline --simplify-by-decoration | awk '{{print $3}}' | \
+                ( while read -r line; do \
+                    if [[ "${line}" == "Ubuntu-${kernel_major_version}"* ]]; then \
+                        tag_name=${line}; \
+                        break; \
+                    fi \
+                done
+            commit=`git log --tags --since="'${version_since}'" --until="'${version_until}'" -n 20 --pretty=oneline --simplify-by-decoration | grep ${tag_name} | awk '{{print $1}}'`
+            if [ -z "${commit}" ]; then
+                echo "Cannot find a commit between ${version_since} and ${version_until}"
+                exit 2
+            fi
+            tag=`git describe ${commit}`
+            echo "Switch to tag ${tag}"
+            git checkout ${tag})
+        else
+            tag=`git describe ${commit}`
+
+            echo "Switch to tag ${tag}"
+            git checkout ${tag}
         fi
-        tag=`git describe ${commit}`
-        git checkout ${tag}
 
         chmod a+x debian/rules
         chmod a+x debian/scripts/*
@@ -200,6 +218,8 @@ if [ $# -ne 2 ] && [ $# -ne 1 ] ; then
 fi
 
 kernel_version=`uname -r`
+kernel_major_version=`uname -r | cut -d- -f1`
+kernel_minor_version=`uname -r | cut -d- -f2`
 issue=`cat /etc/issue`
 code_name=$(lsb_release -c | awk  '{print $2}')
 

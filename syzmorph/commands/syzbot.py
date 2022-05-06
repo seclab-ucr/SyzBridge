@@ -38,6 +38,10 @@ class SyzbotCommand(Command):
                             e.g., --filter-by-kernel=upstream --filter-by-kernel=linux-next')
         parser.add_argument('--filter-by-c-prog', action='store_true',
                             help='[bool] filter bugs do not have a c reproducer\n')
+        parser.add_argument('--bug-introduced-before', action='store',
+                            help='[string] This option only works for fixed bugs.\n'
+                                'It checks if the bug was introduced before a specific date\n'
+                                'The patch must have fix tag')
     
     def custom_subparser(self, parser, cmd):
         return parser.add_parser(cmd, help='Get a case by hash or a file contains multiple hashs.')
@@ -61,7 +65,7 @@ class SyzbotCommand(Command):
         crawler = Crawler(url=self.args.url, keyword=self.args.key, max_retrieve=int(self.args.max_retrieval), 
             filter_by_reported=self.args.filter_by_reported, filter_by_closed=self.args.filter_by_closed, 
             filter_by_c_prog=int(self.args.filter_by_c_prog), filter_by_kernel=self.args.filter_by_kernel,
-            debug=self.args.debug, log_path = self.proj_dir)
+            bug_introduced_before=self.args.bug_introduced_before, debug=self.args.debug, log_path = self.proj_dir)
         
         if self.args.get != None:
             if len(self.args.get) == 40:

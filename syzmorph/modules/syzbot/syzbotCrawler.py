@@ -1,11 +1,12 @@
 import requests
-import logging
-import os
+import time
+import pandas as pd
 import re
 
 from syzmorph.infra.tool_box import init_logger, regx_get, request_get, extract_vul_obj_offset_and_size
 from bs4 import BeautifulSoup
 from bs4 import element
+from .error import *
 
 syzbot_bug_base_url = "bug?id="
 syzbot_host_url = "https://syzkaller.appspot.com/"
@@ -14,7 +15,7 @@ num_of_elements = 8
 class Crawler:
     def __init__(self,
                  url="https://syzkaller.appspot.com/upstream/fixed",
-                 keyword=[], max_retrieve=99999, filter_by_reported="", log_path = ".",
+                 keyword=[], max_retrieve=99999, filter_by_reported="", log_path = ".", bug_introduced_before=None,
                  filter_by_closed="", filter_by_c_prog=-1, filter_by_kernel=[], include_high_risk=True, debug=False):
         self.url = url
         if type(keyword) == list:
@@ -50,6 +51,12 @@ class Crawler:
                 self.filter_by_closed[1] = n[1]
         self.filter_by_c_prog = filter_by_c_prog
         self.filter_by_kernel = filter_by_kernel
+        try:
+            if bug_introduced_before != None:
+                self.bug_introduced_before = pd.to_datetime(bug_introduced_before)
+        except:
+            print("{} Cannot be parsed to datetime".format(bug_introduced_before))
+            raise NotValidDate
 
     def run(self):
         cases_hash, high_risk_impacts = self.gather_cases()
@@ -57,15 +64,77 @@ class Crawler:
             if 'Patch' in each:
                 patch_url = each['Patch']
                 if patch_url in self.patches or \
-                    (patch_url in high_risk_impacts and not self.include_high_risk):
+                    (patch_url in high_risk_impacts and not self.include_high_risk) or \
+                    not self.is_bug_introduced(each['Hash'], patch_url):
                     continue
                 self.patches[patch_url] = True
             if self.retreive_case(each['Hash']) != -1:
                 self.cases[each['Hash']]['title'] = each['Title']
 
+    def get_patch_url(self, hash):
+        url = syzbot_host_url + syzbot_bug_base_url + hash
+        req = request_get(url)
+        soup = BeautifulSoup(req.text, "html.parser")
+        try:
+            fix = soup.find('span', {'class': 'mono'})
+            #fix = soup.body.span.contents[1]
+            url = fix.contents[1].attrs['href']
+            res=url
+        except:
+            res=None
+        return res
+    
+    def is_bug_introduced(self, hash_val, patch_url):
+        if self.bug_introduced_before == None:
+            return False
+        req = requests.request(method='GET', url=patch_url)
+        soup = BeautifulSoup(req.text, "html.parser")
+        try:
+            msg = soup.find('div', {'class': 'commit-msg'}).text
+            for line in msg.split('\n'):
+                if line.startswith('Fixes:'):
+                    fix_hash = regx_get(r'Fixes: ([a-z0-9]+)', line, 0)
+                    commit_date = self.get_linux_commit_date_online(fix_hash)
+                    if commit_date == None:
+                        continue
+                    self.logger.debug("Fix tag {}: {}".format(fix_hash, commit_date))
+                    if commit_date > self.bug_introduced_before:
+                        self.logger.info("{} wasn't introduced by {}".format(hash_val, self.bug_introduced_before))
+                        return False
+        except:
+            self.logger.error("Error parsing fix tag for {}".format(hash_val))
+        return True
+
+    def get_linux_commit_date_online(self, hash_val):
+        url = "https://github.com/torvalds/linux/search?q={}&type=commits".format(hash_val)
+        while True:
+            req = requests.request(method='GET', url=url)
+            if req.status_code != 429:
+                break
+            time.sleep(5)
+        soup = BeautifulSoup(req.text, "html.parser")
+        try:
+            search_results = soup.find('div', {'id': 'commit_search_results'}).contents
+        except:
+            raise NoCommitResults
+        for each in search_results:
+            if each == '\n':
+                continue
+            try:
+                msg = each.find('a', {'class': 'message markdown-title js-navigation-open'})
+                patch_url = msg.attrs['href']
+                full_hash_val = regx_get(r'torvalds\/linux\/commit\/([a-z0-9]+)', patch_url, 0)
+                if full_hash_val.startswith(hash_val):
+                    time_stamp = each.find('relative-time', {'class': 'no-wrap'}).contents[0]
+                    return pd.to_datetime(time_stamp)
+            except:
+                pass
+        return None
+
     def run_one_case(self, hash):
         self.logger.info("retreive one case: %s",hash)
-        if self.retreive_case(hash) == -1:
+        patch_url = self.get_patch_url(hash)
+        if not self.is_bug_introduced(hash, patch_url) or self.retreive_case(hash) == -1:
             return
         self.cases[hash]['title'] = self.get_title_of_case(hash)
         return self.cases[hash]

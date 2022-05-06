@@ -109,7 +109,7 @@ class BugReproduce(AnalysisModule):
             return
         self.logger.info("{} does not trigger any bugs, try to enable missing modules".format(distro.distro_name))
         m = self.get_missing_modules(distro.distro_name)
-        missing_modules = [e['name'] for e in m ]
+        missing_modules = [e['name'] for e in m if e['type'][0] != 0 ]
         success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, [], ), root=True, log_prefix='missing-modules', timeout=MAX_BUG_REPRODUCE_TIMEOUT)
         if success:
             self.results[distro.distro_name]['trigger'] = True
@@ -407,12 +407,12 @@ class BugReproduce(AnalysisModule):
             user = self.root_user
         else:
             user = self.normal_user
-        qemu.command(cmds="killall poc", user=self.root_user, wait=True)
         qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
         qemu.logger.info("running PoC")
         qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user=self.root_user, wait=True)
         self._check_poc_feature(poc_feature, qemu, user)
         qemu.command(cmds="rm -rf ./tmp && mkdir ./tmp && mv ./poc ./tmp && cd ./tmp && chmod +x poc && ./poc", user=user, wait=True, timeout=BUG_REPRODUCE_TIMEOUT)
+        qemu.command(cmds="killall poc", user=self.root_user, wait=True)
                 
     def _qemu_capture_kasan(self, qemu, th_index):
         qemu_close = False
