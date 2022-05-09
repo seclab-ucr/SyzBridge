@@ -4,6 +4,7 @@ import requests
 import logging
 import random
 import datetime, json
+from subprocess import call
 
 from .strings import *
 
@@ -484,6 +485,10 @@ def unique(seq):
 
 def kasan_mem_to_shadow(addr):
     return (addr >> 3) + 0xdffffc0000000000
+
+def clone_repo(repo_url, repo_path):
+    ret = call(['git', 'clone', repo_url, repo_path])
+    return ret
 
 if __name__ == '__main__':
     pass
