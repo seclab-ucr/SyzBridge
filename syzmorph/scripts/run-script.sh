@@ -26,7 +26,8 @@ chmod +x ./poc
 set +ex
 while [ 1 ]
 do
-    ./poc
+    rm -rf ./tmp && mkdir ./tmp && cp ./poc ./tmp && cd ./tmp && chmod +x poc && ./poc
+    cd ..
 done
 EOF
 
