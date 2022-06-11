@@ -41,7 +41,7 @@ class SyzbotCommand(Command):
         parser.add_argument('--bug-introduced-before', action='store',
                             help='[string] This option only works for fixed bugs.\n'
                                 'It checks if the bug was introduced before a specific date\n'
-                                'The patch must have fix tag')
+                                'Patch must have fix tag')
     
     def custom_subparser(self, parser, cmd):
         return parser.add_parser(cmd, help='Get a case by hash or a file contains multiple hashs.')

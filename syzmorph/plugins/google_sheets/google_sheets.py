@@ -153,7 +153,10 @@ class GoogleSheets(AnalysisModule):
 
     def _write_module_analysis(self, wks: pygsheets.Worksheet):
         self.data['modules-analysis'] = ""
-        pass
+        path_result = os.path.join(self.path_case, "ModulesAnalysis", "results.json")
+        result_json = json.load(open(path_result, 'r'))
+        v = json.dumps(result_json)
+        wks.update_value('G2', v)
 
     def _write_capability_check(self, wks: pygsheets.Worksheet):
         res = {}
