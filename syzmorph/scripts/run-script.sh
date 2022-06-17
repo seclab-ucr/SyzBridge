@@ -23,10 +23,10 @@ cat << EOF > run.sh
 set -ex
 
 chmod +x ./poc
-set +ex
 while [ 1 ]
 do
     ./poc
+    sleep 1
 done
 EOF
 
