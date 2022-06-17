@@ -155,22 +155,40 @@ function compile_ubuntu() {
 
         patch -p1 -f -i ~/dkms.patch || echo "probably fine"
 
-        CONFIGKEYSENABLE="
-        CONFIG_FAILSLAB
-        CONFIG_FAIL_FUTEX
-        CONFIG_FAIL_IO_TIMEOUT
-        CONFIG_FAIL_MAKE_REQUEST
-        CONFIG_FAIL_MMC_REQUEST
-        CONFIG_FAIL_PAGE_ALLOC
-        CONFIG_FAULT_INJECTION_DEBUG_FS
-        CONFIG_KASAN_INLINE"
+        CONFIGKEYSENABLE=""
+        CONFIGKEYSDISABLE=""
+        CONFIGKEYSSPECIAL=""
+        if [ $((enable_feature%2)) == 1 ]; then
+            config_enable "CONFIG_KASAN" debian.master/config/amd64/config.flavour.generic
+            CONFIGKEYSENABLE="CONFIG_KASAN_INLINE
+            ${CONFIGKEYSENABLE}"
 
-        CONFIGKEYSDISABLE="
-        CONFIG_KASAN_OUTLINE
-        CONFIG_TEST_KASAN"
+            CONFIGKEYSDISABLE="CONFIG_KASAN_OUTLINE
+            CONFIG_TEST_KASAN
+            ${CONFIGKEYSDISABLE}"
 
-        CONFIGKEYSSPECIAL="
-        CONFIG_KASAN_SHADOW_OFFSET=0xdffffc0000000000"
+            CONFIGKEYSSPECIAL="CONFIG_KASAN_SHADOW_OFFSET=0xdffffc0000000000
+            ${CONFIGKEYSSPECIAL}"
+        fi
+        enable_feature=$((enable_feature>>1))
+
+        if [ $((enable_feature%2)) == 1 ]; then
+            config_enable "CONFIG_UBSAN" debian.master/config/amd64/config.flavour.generic
+        fi
+        enable_feature=$((enable_feature>>1))
+
+        if [ $((enable_feature%2)) == 1 ]; then
+            config_enable "CONFIG_FAULT_INJECTION" debian.master/config/amd64/config.flavour.generic
+            CONFIGKEYSENABLE="CONFIG_FAILSLAB
+            CONFIG_FAIL_FUTEX
+            CONFIG_FAIL_IO_TIMEOUT
+            CONFIG_FAIL_MAKE_REQUEST
+            CONFIG_FAIL_MMC_REQUEST
+            CONFIG_FAIL_PAGE_ALLOC
+            CONFIG_FAULT_INJECTION_DEBUG_FS
+            ${CONFIGKEYSENABLE}"
+        fi
+        enable_feature=$((enable_feature>>1))
 
         for key in $CONFIGKEYSENABLE;
         do
@@ -182,9 +200,6 @@ function compile_ubuntu() {
             config_disable $key debian.master/config/config.common.ubuntu
         done
 
-        config_enable "CONFIG_KASAN" debian.master/config/amd64/config.flavour.generic
-        config_enable "CONFIG_FAULT_INJECTION" debian.master/config/amd64/config.flavour.generic
-        config_enable "CONFIG_UBSAN" debian.master/config/amd64/config.flavour.generic
         LANG=C fakeroot debian/rules defaultconfigs || true
         LANG=C fakeroot debian/rules -j`nproc` binary-headers binary-generic binary-perarch skipdbg=false
 
@@ -212,8 +227,8 @@ function archive_kernel() {
     fi
 }
 
-if [ $# -ne 2 ] && [ $# -ne 1 ] ; then
-  echo "Usage ./deploy-ubuntu-image.sh [version_since version_until | commit]"
+if [ $# -ne 3 ] && [ $# -ne 2 ] ; then
+  echo "Usage ./deploy-ubuntu-image.sh [version_since version_until | commit] enable_feature"
   exit 1
 fi
 
@@ -223,14 +238,16 @@ kernel_minor_version=`uname -r | cut -d- -f2`
 issue=`cat /etc/issue`
 code_name=$(lsb_release -c | awk  '{print $2}')
 
-if [ $# -eq 2 ]; then
+if [ $# -eq 3 ]; then
     version_since=$1
     version_until=$2
+    enable_feature=$3
     commit=''
 fi
 
-if [ $# -eq 1 ]; then
+if [ $# -eq 2 ]; then
     commit=$1
+    enable_feature=$2
     version_since=''
     version_until=''
 fi

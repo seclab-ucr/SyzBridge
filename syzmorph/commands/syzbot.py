@@ -41,7 +41,7 @@ class SyzbotCommand(Command):
         parser.add_argument('--bug-introduced-before', action='store',
                             help='[string] This option only works for fixed bugs.\n'
                                 'It checks if the bug was introduced before a specific date\n'
-                                'The patch must have fix tag')
+                                'Patch must have fix tag')
     
     def custom_subparser(self, parser, cmd):
         return parser.add_parser(cmd, help='Get a case by hash or a file contains multiple hashs.')
@@ -67,18 +67,22 @@ class SyzbotCommand(Command):
             filter_by_c_prog=int(self.args.filter_by_c_prog), filter_by_kernel=self.args.filter_by_kernel,
             bug_introduced_before=self.args.bug_introduced_before, debug=self.args.debug, log_path = self.proj_dir)
         
-        if self.args.get != None:
-            if len(self.args.get) == 40:
-                crawler.run_one_case(self.args.get)
+        try:
+            if self.args.get != None:
+                if len(self.args.get) == 40:
+                    crawler.run_one_case(self.args.get)
+                else:
+                    with open(self.args.get, 'r') as f:
+                        text = f.readlines()
+                        for line in text:
+                            line = line.strip('\n')
+                            crawler.run_one_case(line)
             else:
-                with open(self.args.get, 'r') as f:
-                    text = f.readlines()
-                    for line in text:
-                        line = line.strip('\n')
-                        crawler.run_one_case(line)
-        else:
-            crawler.run()
+                crawler.run()
+        except:
+            self.logger.error("Something went wrong in crawler, check the log for more details.")
 
+        self.logger.info("Cases info saved in {}".format(os.path.join(self.proj_dir, "cases.json")))
         self.save_cases(crawler.cases, args.proj) 
     
     def check_essential_args(self):

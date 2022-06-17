@@ -476,7 +476,7 @@ exit $EXIT_CODE""".format(cmd)
     
     def _is_trace_empty(self, trace_path):
         if trace_path == None:
-            return False
+            return True
         if not os.path.exists(trace_path):
             return True
         f = open(trace_path, "r")

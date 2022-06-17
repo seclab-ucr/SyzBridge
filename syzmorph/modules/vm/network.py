@@ -19,9 +19,9 @@ class Network:
             try:
                 exitcode = ret_queue.get(block=False)
             except BrokenPipeError:
-                return None
+                return -1
             return exitcode
-        return None
+        return -1
     
     def ssh(self, ip, user, port, key, command, wait, timeout):
         ret_queue = queue.Queue()
