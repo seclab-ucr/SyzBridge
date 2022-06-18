@@ -90,10 +90,16 @@ class Crawler:
         return res
     
     def is_bug_introduced(self, hash_val, patch_url):
-        self.patch_info = {'url': None, 'fixes':[], 'date':None}
-        self.patch_info['url'] = patch_url
         req = requests.request(method='GET', url=patch_url)
         soup = BeautifulSoup(req.text, "html.parser")
+        self.patch_info = {'url': None, 'fixes':[], 'date':None}
+        self.patch_info['url'] = patch_url
+        patch_hash = patch_url.split("id=")[1]
+        patch_date = self.get_linux_commit_date_offline(patch_hash, soup)
+        if patch_date == None:
+            self.patch_info['date'] = None
+        else:
+            self.patch_info['date'] = patch_date.strftime("%Y-%m-%d")
         try:
             msg = soup.find('div', {'class': 'commit-msg'}).text
             for line in msg.split('\n'):
@@ -116,12 +122,13 @@ class Crawler:
                         return False
         except Exception as e:
             self.logger.error("Error parsing fix tag for {}: {}".format(hash_val, e))
-        if self.bug_introduced_before == None:
-            return False
         return True
     
     def get_linux_commit_date_offline(self, hash_val, soup: BeautifulSoup):
-        repo = soup.find('td', {'class': 'main'}).contents[2]
+        try:
+            repo = soup.find('td', {'class': 'main'}).contents[2]
+        except:
+            self.logger.error("Patch {} doesn't have a valid repo name".format(hash_val))
         repo_url = "https://git.kernel.org/"+repo.attrs['href']
         if repo_url[-1] == '/':
             repo_url = repo_url[:-1]
@@ -134,6 +141,9 @@ class Crawler:
             if ret != 0:
                 self.logger.error("Fail to clone kernel repo {}".format(repo_name))
                 return None
+        return self.get_linux_commit_date_in_repo(repo_path, hash_val)
+    
+    def get_linux_commit_date_in_repo(self, repo_path, hash_val):
         p = Popen(["git", "log", hash_val, "--pretty=format:\"%H %ad\"", "--date=short", "-n", "1"],
             cwd=repo_path,
             stdout=PIPE, 
@@ -144,7 +154,6 @@ class Crawler:
                 time_stamp = regx_get(r'[a-z0-9]{40} (\d{4}-\d{2}-\d{2})', line, 0)
                 return pd.to_datetime(time_stamp)
         return None
-        
 
     def get_linux_commit_date_online(self, hash_val):
         url = "https://github.com/torvalds/linux/search?q={}&type=commits".format(hash_val)

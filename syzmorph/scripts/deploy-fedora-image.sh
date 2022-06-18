@@ -57,16 +57,19 @@ function compile_fedora() {
         cd ~/fedora-${code_name}/________________kernel
         
         if [ -z "${commit}" ]; then
+            hash_val=''
             tag_name=''
-            git log origin/f${code_name} --since="'${version_since}'" --until="'${version_until}'" -n 20 --pretty=oneline | awk '{{print $3}}' | \
+            git log origin/f${code_name} --since="'${version_since}'" --until="'${version_until}'" -n 20 --pretty=oneline | \
                 ( while read -r line; do \
-                    if [[ ${line} =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then \
-                        tag_name=${line}; \
-                        echo "MAGIC!!?${tag_name}"; \
+                    hash_val=`printf "${line}" | awk '{{print $1}}'`
+                    tag_name=`printf "${line}" | awk '{{print $2}}'`
+                    version=`printf "${line}" | awk '{{print $3}}'`
+                    if [[ ${tag_name} == "Linux" ]]; then \
+                        echo "MAGIC!!?${version}"; \
+                        commit=${hash_val}; \
                         break; \
                     fi \
                 done
-            commit=`git log origin/f${code_name} --since="'${version_since}'" --until="'${version_until}'" -n 20 --pretty=oneline | grep "${tag_name}" | awk '{{print $1}}'`
             if [ -z "${commit}" ]; then
                 echo "Cannot find a commit between ${version_since} and ${version_until}"
                 exit 2
@@ -100,9 +103,11 @@ function compile_fedora() {
             echo "CONFIG_FAULT_INJECTION_DEBUG_FS=y" >> kernel-local
         fi
         enable_feature=$((enable_feature>>1))
-        patch -p1 -f -i ~/kernel_spec.patch || echo "probably fine"
+        patch -p1 -f -i ~/kernel_spec.patch || sed -i 's/%define listnewconfig_fail 1/%define listnewconfig_fail 0/' kernel.spec
         dnf -y builddep kernel.spec
-        make release
+
+        # https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/patch/?id=854e55ad289ef8888e7991f0ada85d5846f5afb9
+        # f28 suffers from this bug, patch it in the fly.
         fedpkg local
 
         dnf install -y --nogpgcheck ./x86_64/kernel-*.rpm

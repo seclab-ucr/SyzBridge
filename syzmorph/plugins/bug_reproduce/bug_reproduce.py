@@ -262,8 +262,8 @@ class BugReproduce(AnalysisModule):
                         data.append(t[1])
                         insert_line.remove(t)
             data.append(code[i])
-            if need_namespace and not root:
-                if regx_match(main_func, line):
+            if regx_match(main_func, line):
+                if need_namespace and not root:
                     data.insert(len(data)-1, "#include \"sandbox.h\"\n")
                     insert_line.append([i+2, "setup_sandbox();\n"])
 

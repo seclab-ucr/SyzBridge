@@ -151,6 +151,9 @@ class RawBugReproduce(AnalysisModule):
         self._write_to(final_report, self.REPORT_NAME)
     
     def capture_kasan(self, qemu, th_index, poc_path, root, poc_feature):
+        if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
+            self.logger.fatal("KASAN is not enabled in kernel!")
+            raise KASANDoesNotEnabled(self.case_hash)
         self._run_poc(qemu, poc_path, root, poc_feature)
         try:
             res, trigger_hunted_bug = self._qemu_capture_kasan(qemu, th_index)
@@ -233,21 +236,11 @@ class RawBugReproduce(AnalysisModule):
             user = self.normal_user
         qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
         qemu.logger.info("running PoC")
-        script = os.path.join(self.path_package, "scripts/run-script.sh")
-        chmodX(script)
-        p = Popen([script, str(qemu.port), self.path_case_plugin, qemu.key, user],
-            stderr=STDOUT,
-            stdout=PIPE)
-        with p.stdout:
-            log_anything(p.stdout, self.logger, self.debug)
         # It looks like scp returned without waiting for all file finishing uploading.
         # Sleeping for 1 second to ensure everything is ready in vm
         time.sleep(1)
-        if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
-            self.logger.fatal("KASAN is not enabled in kernel!")
-            raise KASANDoesNotEnabled(self.case_hash)
         qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user=self.root_user, wait=True)
-        qemu.command(cmds="chmod +x run.sh && ./run.sh", user=user, wait=False)
+        qemu.command(cmds="chmod +x poc && ./poc", user=user, wait=False)
         return
     
     def _init_results(self):
