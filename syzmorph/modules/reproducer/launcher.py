@@ -48,7 +48,7 @@ class Launcher(Build):
         
         i = 0
         while i < self.qemu_num:
-            args = {'th_index':i, 'func':func, 'args':func_args, 'root':root, 'work_dir':work_dir, 'vm_tag':vm_tag + str(i), **kwargs}
+            args = {'th_index':i, 'func':func, 'args':func_args, 'root':root, 'work_dir':work_dir, 'vm_tag':vm_tag + '-' + str(i), **kwargs}
             x = multiprocessing.Process(target=self._reproduce, kwargs=args, name="trigger-{}".format(i))
             x.start()
             self.log("Start reproducing {}, args {}".format(vm_tag + str(i), args))
@@ -103,7 +103,7 @@ class Launcher(Build):
         sleep(5)
         return
     
-    def launch_qemu(self, c_hash=0, log_suffix="", log_name=None, timeout=10*60, gdb_port=None, mon_port=None, ssh_port=None, **kwargs):
+    def launch_qemu(self, c_hash=0, log_suffix="", log_name=None, timeout=15*60, gdb_port=None, mon_port=None, ssh_port=None, **kwargs):
         if log_name is None:
             log_name = "qemu-{0}-{1}.log".format(c_hash, self.type_name)
         if ssh_port != None:

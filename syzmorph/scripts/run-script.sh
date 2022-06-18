@@ -23,11 +23,12 @@ cat << EOF > run.sh
 set -ex
 
 chmod +x ./poc
-set +ex
 while [ 1 ]
 do
-    rm -rf ./tmp && mkdir ./tmp && cp ./poc ./tmp && cd ./tmp && chmod +x poc && ./poc
+    rm -rf ./tmp || true
+    mkdir ./tmp && cp ./poc ./tmp && cd ./tmp && chmod +x poc && ./poc
     cd ..
+    sleep 1
 done
 EOF
 
