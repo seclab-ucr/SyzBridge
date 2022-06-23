@@ -91,6 +91,7 @@ class ImageCommand(Command):
         cfg['ssh_port'] = self.ssh_port
         cfg['root_user'] = self.ssh_user
         cfg['distro_code_name'] = "unknown"
+        cfg['distro_version'] = "unknown"
         cfg['distro_name'] = self.distro
         cfg['type'] = 'distro'
         print("[distro_image]: {}".format(self.image))

@@ -1,12 +1,14 @@
 import os, json
 
 from commands import Command
+from infra.error import *
 from infra.tool_box import STREAM_HANDLER, init_logger
 
 class SyzbotCommand(Command):
     def __init__(self):
         super().__init__()
         self.proj_dir = None
+        self.cfg = None
         self.logger = init_logger(__name__, handler_type=STREAM_HANDLER)
 
     def add_arguments(self, parser):
@@ -27,6 +29,8 @@ class SyzbotCommand(Command):
                             default='9999',
                             help='[string] The maximum of cases for retrieval\n'
                                 '(By default all the cases will be retrieved)')
+        parser.add_argument('--config', nargs='?', action='store',
+                            help='config file. Will be overwritten by arguments if conflict.')
         parser.add_argument('--filter-by-reported', nargs='?',
                             default='',
                             help='[string] filter by bug reported days (X1-X2 days)\n')
@@ -37,14 +41,20 @@ class SyzbotCommand(Command):
                             help='[list] filter by targeting kernel.\n\
                             e.g., --filter-by-kernel=upstream --filter-by-kernel=linux-next')
         parser.add_argument('--filter-by-c-prog', action='store_true',
-                            help='[bool] filter bugs do not have a c reproducer\n')
-        parser.add_argument('--bug-introduced-before', action='store',
-                            help='[string] This option only works for fixed bugs.\n'
-                                'It checks if the bug was introduced before a specific date\n'
-                                'Patch must have fix tag')
+                            help='[bool] filter bugs that do not have a c reproducer\n')
+        parser.add_argument('--filter-by-fixes-tag', action='store_true',
+                            help='[bool] filter bugs that do not have fixes tag\n')
     
     def custom_subparser(self, parser, cmd):
         return parser.add_parser(cmd, help='Get a case by hash or a file contains multiple hashs.')
+    
+    def parse_config(self, config):
+        from syzmorph.infra.config.config import Config
+        
+        cfg = Config()
+        cfg.load_from_file(config)
+
+        return cfg
 
     def run(self, args):
         self.args = args
@@ -52,6 +62,19 @@ class SyzbotCommand(Command):
             return
         
         self.print_args_info()
+
+        try:
+            if self.args.config != None:
+                self.cfg = self.parse_config(self.args.config)
+        except TargetFileNotExist as e:
+            self.logger.error(e)
+            return
+        except ParseConfigError as e:
+            self.logger.error(e)
+            return
+        except TargetFormatNotMatch as e:
+            self.logger.error(e)
+            return
 
         if self.args.key == None:
             self.args.key = ['']
@@ -64,8 +87,9 @@ class SyzbotCommand(Command):
 
         crawler = Crawler(url=self.args.url, keyword=self.args.key, max_retrieve=int(self.args.max_retrieval), 
             filter_by_reported=self.args.filter_by_reported, filter_by_closed=self.args.filter_by_closed, 
-            filter_by_c_prog=int(self.args.filter_by_c_prog), filter_by_kernel=self.args.filter_by_kernel,
-            bug_introduced_before=self.args.bug_introduced_before, debug=self.args.debug, log_path = self.proj_dir)
+            filter_by_c_prog=self.args.filter_by_c_prog, filter_by_kernel=self.args.filter_by_kernel,
+            filter_by_fixes_tag=self.args.filter_by_fixes_tag,
+            cfg=self.cfg, debug=self.args.debug, log_path = self.proj_dir)
         
         try:
             if self.args.get != None:
@@ -110,6 +134,7 @@ class SyzbotCommand(Command):
         self.logger.info("[*] filter_by_closed: {}".format(self.args.filter_by_closed))
         self.logger.info("[*] filter_by_kernel: {}".format(self.args.filter_by_kernel))
         self.logger.info("[*] filter_by_c_prog: {}".format(self.args.filter_by_c_prog))
+        self.logger.info("[*] filter_by_fixes_tag: {}".format(self.args.filter_by_fixes_tag))
 
     def save_cases(self, cases, name):
         cases_json_path = os.path.join(self.proj_dir, "cases.json")

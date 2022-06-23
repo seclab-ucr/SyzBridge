@@ -3,8 +3,9 @@ import requests
 import time
 import pandas as pd
 import re, os
+from syzmorph.infra.config.config import Config
 
-from syzmorph.infra.tool_box import clone_repo, init_logger, regx_get, request_get, extract_vul_obj_offset_and_size
+from syzmorph.infra.tool_box import clone_repo, init_logger, regx_get, regx_match, request_get, extract_vul_obj_offset_and_size
 from bs4 import BeautifulSoup
 from bs4 import element
 from .error import *
@@ -16,8 +17,8 @@ num_of_elements = 8
 class Crawler:
     def __init__(self,
                  url="https://syzkaller.appspot.com/upstream/fixed",
-                 keyword=[], max_retrieve=99999, filter_by_reported="", log_path = ".", bug_introduced_before=None,
-                 filter_by_closed="", filter_by_c_prog=-1, filter_by_kernel=[], include_high_risk=True, debug=False):
+                 keyword=[], max_retrieve=99999, filter_by_reported="", log_path = ".", cfg=None,
+                 filter_by_closed="", filter_by_c_prog=False, filter_by_fixes_tag=False, filter_by_kernel=[], include_high_risk=True, debug=False):
         self.url = url
         if type(keyword) == list:
             self.keyword = keyword
@@ -52,15 +53,12 @@ class Crawler:
                 self.filter_by_closed[0] = n[0]
                 self.filter_by_closed[1] = n[1]
         self.filter_by_c_prog = filter_by_c_prog
+        self.filter_by_fixes_tag = filter_by_fixes_tag
         self.filter_by_kernel = filter_by_kernel
-        try:
-            if bug_introduced_before != None:
-                self.bug_introduced_before = pd.to_datetime(bug_introduced_before)
-            else:
-                self.bug_introduced_before = None
-        except:
-            print("{} Cannot be parsed to datetime".format(bug_introduced_before))
-            raise NotValidDate
+        if cfg != None:
+            self.cfg: Config = cfg
+        else:
+            self.cfg = None
 
     def run(self):
         cases_hash, high_risk_impacts = self.gather_cases()
@@ -68,10 +66,13 @@ class Crawler:
             if 'Patch' in each:
                 patch_url = each['Patch']
                 if patch_url in self.patches or \
-                    (patch_url in high_risk_impacts and not self.include_high_risk) or \
-                    not self.is_bug_introduced(each['Hash'], patch_url):
+                    (patch_url in high_risk_impacts and not self.include_high_risk):
                     continue
                 self.patches[patch_url] = True
+            if self.filter_by_fixes_tag:
+                if not self.check_excluded_distro(each['Hash'], patch_url):
+                    self.logger.debug("{} does not have a fixes tag".format(each['Hash']))
+                    continue
             if self.retreive_case(each['Hash']) != -1:
                 self.cases[each['Hash']]['title'] = each['Title']
                 self.cases[each['Hash']]['patch'] = self.patch_info
@@ -89,7 +90,7 @@ class Crawler:
             res=None
         return res
     
-    def is_bug_introduced(self, hash_val, patch_url):
+    def check_excluded_distro(self, hash_val, patch_url):
         req = requests.request(method='GET', url=patch_url)
         soup = BeautifulSoup(req.text, "html.parser")
         self.patch_info = {'url': None, 'fixes':[], 'date':None}
@@ -110,37 +111,59 @@ class Crawler:
                         commit_date = self.get_linux_commit_date_online(fix_hash)
                         if commit_date == None:
                             continue
-                    self.patch_info['fixes'] = {'hash': fix_hash, 'date': commit_date.strftime("%Y-%m-%d")}
+                    self.patch_info['fixes'] = {'hash': fix_hash, 'date': commit_date.strftime("%Y-%m-%d"), 'exclude': []}
                     self.logger.debug("Fix tag {}: {}".format(fix_hash, commit_date))
 
                     # We want to save all fixes tag info
                     # don't return too early
-                    if self.bug_introduced_before == None:
+                    if self.cfg == None:
                         continue
-                    if commit_date > self.bug_introduced_before:
-                        self.logger.info("{} wasn't introduced by {}".format(hash_val, self.bug_introduced_before))
-                        return False
+                    base_version = self.closest_tag(fix_hash, soup)
+                    if base_version == None:
+                        continue
+                    for distro in self.cfg.get_distros():
+                        if not self.is_newer_version(base_version, distro.distro_version):
+                            self.patch_info['fixes']['exclude'].append(distro.distro_name)
         except Exception as e:
             self.logger.error("Error parsing fix tag for {}: {}".format(hash_val, e))
+        return self.patch_info['fixes'] != []
+
+    def closest_tag(self, patch_hash, soup: BeautifulSoup):
+        regx_kernel_version = r'^v(\d+\.\d+)'
+        repo_path = self._clone_target_repo(soup)
+        if repo_path == None:
+            return None
+        p = Popen(["git describe --contains {}".format(patch_hash)],
+            cwd=repo_path,
+            shell=True,
+            stdout=PIPE, 
+            stderr=STDOUT)
+        with p.stdout as pipe:
+            for line in iter(pipe.readline, b''):
+                line = line.strip().decode('utf-8')
+                if regx_match(regx_kernel_version, line):
+                    base_version = regx_get(regx_kernel_version, line, 0)
+                    return base_version
+        return None
+    
+    def is_newer_version(self, old, new):
+        o = old.split('.')
+        n = new.split('.')
+        c = 0
+        while True:
+            if c >= len(o) or c >= len(n):
+                break
+            if int(o[c]) < int(n[c]):
+                return True
+            elif int(o[c]) > int(n[c]):
+                return False
+            c += 1
         return True
     
     def get_linux_commit_date_offline(self, hash_val, soup: BeautifulSoup):
-        try:
-            repo = soup.find('td', {'class': 'main'}).contents[2]
-        except:
-            self.logger.error("Patch {} doesn't have a valid repo name".format(hash_val))
-        repo_url = "https://git.kernel.org/"+repo.attrs['href']
-        if repo_url[-1] == '/':
-            repo_url = repo_url[:-1]
-        repo_name = repo_url.split('/')[-1].split('.')[0]
-        if repo_name == 'linux':
-            repo_name = 'upstream'
-        repo_path = os.getcwd()+"/tools/linux-{}-0".format(repo_name)
-        if not os.path.exists(repo_path):
-            ret = clone_repo(repo_url, repo_path)
-            if ret != 0:
-                self.logger.error("Fail to clone kernel repo {}".format(repo_name))
-                return None
+        repo_path = self._clone_target_repo(soup)
+        if repo_path == None:
+            return None
         return self.get_linux_commit_date_in_repo(repo_path, hash_val)
     
     def get_linux_commit_date_in_repo(self, repo_path, hash_val):
@@ -184,8 +207,12 @@ class Crawler:
     def run_one_case(self, hash):
         self.logger.info("retreive one case: %s",hash)
         patch_url = self.get_patch_url(hash)
-        if not self.is_bug_introduced(hash, patch_url) or self.retreive_case(hash) == -1:
+        if self.retreive_case(hash) == -1:
             return
+        if self.filter_by_fixes_tag:
+            if not self.check_excluded_distro(hash, patch_url):
+                self.logger.error("{} does not have a fixes tag".format(hash))
+                return
         self.cases[hash]['title'] = self.get_title_of_case(hash)
         self.cases[hash]['patch'] = self.patch_info
         return self.cases[hash]
@@ -403,6 +430,26 @@ class Crawler:
                         return [commit, syzkaller, config, syz_repro, log, c_repro, time_str, manager_str, report, offset, size, kernel.text]
                 break
         return []
+    
+    def _clone_target_repo(self, soup: BeautifulSoup):
+        try:
+            repo = soup.find('td', {'class': 'main'}).contents[2]
+        except:
+            self.logger.error("Can't find target repo")
+            return None
+        repo_url = "https://git.kernel.org/"+repo.attrs['href']
+        if repo_url[-1] == '/':
+            repo_url = repo_url[:-1]
+        repo_name = repo_url.split('/')[-1].split('.')[0]
+        if repo_name == 'linux':
+            repo_name = 'upstream'
+        repo_path = os.getcwd()+"/tools/linux-{}-0".format(repo_name)
+        if not os.path.exists(repo_path):
+            ret = clone_repo(repo_url, repo_path)
+            if ret != 0:
+                self.logger.error("Fail to clone kernel repo {}".format(repo_name))
+                return None
+        return repo_path
 
     def __get_table(self, url):
         self.logger.debug("Get table from {}".format(url))

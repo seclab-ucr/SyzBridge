@@ -4,12 +4,11 @@ import json, gc, logging
 
 from commands import Command
 from infra.error import *
+from infra.tool_box import STREAM_HANDLER, init_logger
 from deployer.deployer import Deployer
 
 from queue import Empty
 from subprocess import call
-
-logger = logging.getLogger(__name__)
 class RunCommand(Command):
     def __init__(self):
         super().__init__()
@@ -21,6 +20,7 @@ class RunCommand(Command):
         self.cases = None
         self.proj_dir = None
         self.cfg = None
+        self.logger = init_logger(__name__, handler_type=STREAM_HANDLER)
         
     def add_arguments(self, parser):
         super().add_arguments(parser)
@@ -119,11 +119,11 @@ class RunCommand(Command):
 
     def check_essential_args(self):
         if self.args.proj == None:
-            logger.error("--proj must be specified.")
+            self.logger.error("--proj must be specified.")
             return True
         if self.args.config == None and \
                 (self.args.image == None or self.args.ssh_key == None):
-            logger.error("--image or --ssh-key must be specified or pass --config to import them from a config file.")
+            self.logger.error("--image or --ssh-key must be specified or pass --config to import them from a config file.")
             return True
         return False
 
@@ -155,13 +155,13 @@ class RunCommand(Command):
             if self.args.config != None:
                 self.cfg = self.parse_config(self.args.config)
         except TargetFileNotExist as e:
-            logger.error(e)
+            self.logger.error(e)
             return
         except ParseConfigError as e:
-            logger.error(e)
+            self.logger.error(e)
             return
         except TargetFormatNotMatch as e:
-            logger.error(e)
+            self.logger.error(e)
             return
         
         self.print_args_info()
