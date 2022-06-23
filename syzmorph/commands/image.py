@@ -56,7 +56,7 @@ class ImageCommand(Command):
         parser.add_argument('--enable-kasan', action='store_true',
                             help='Enable CONFIG_KASAN')
         parser.add_argument('--enable-ubsan', action='store_true',
-                            help='Enable CONFIG_UBSAN')
+                            help='Enable CONFIG_UBSAN (Fall 2020)')
         parser.add_argument('--enable-fault-injection', action='store_true',
                             help='Enable CONFIG_FAULT_INJECTION')
 
@@ -237,6 +237,7 @@ class ImageCommand(Command):
                     else:
                         qemu.alternative_func_output.put(False)
                     return
+        self.logger.error("Kernel version does not match {}, check grub".format(self.kernel_version))
         qemu.alternative_func_output.put(False)
         return
     

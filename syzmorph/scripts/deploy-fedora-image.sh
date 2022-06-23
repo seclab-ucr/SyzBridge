@@ -25,7 +25,7 @@ EOF
 
 function change_grub() {
     if [ ! -f ~/.stamp/CHANGE_GRUB ]; then
-        sed -i 's/GRUB_CMDLINE_LINUX="rd.lvm.lv=fedora\/root rd.lvm.lv=fedora\/swap rhgb quiet"/GRUB_CMDLINE_LINUX="rd.lvm.lv=fedora\/root rd.lvm.lv=fedora\/swap rhgb quiet nokaslr console=ttyS0 earlyprintk=serial loglevel=6"/' /etc/default/grub
+        sed -i 's/rhgb quiet/rhgb quiet nokaslr console=ttyS0 earlyprintk=serial loglevel=6/' /etc/default/grub
         grub2-mkconfig -o /boot/grub2/grub.cfg
         touch ~/.stamp/CHANGE_GRUB
     fi
