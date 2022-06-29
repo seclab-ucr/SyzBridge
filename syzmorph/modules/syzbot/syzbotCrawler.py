@@ -69,6 +69,7 @@ class Crawler:
                     (patch_url in high_risk_impacts and not self.include_high_risk):
                     continue
                 self.patches[patch_url] = True
+            self.patch_info = {'url': None, 'fixes':[], 'date':None}
             if self.filter_by_fixes_tag:
                 if not self.check_excluded_distro(each['Hash'], patch_url):
                     self.logger.debug("{} does not have a fixes tag".format(each['Hash']))
@@ -93,7 +94,6 @@ class Crawler:
     def check_excluded_distro(self, hash_val, patch_url):
         req = requests.request(method='GET', url=patch_url)
         soup = BeautifulSoup(req.text, "html.parser")
-        self.patch_info = {'url': None, 'fixes':[], 'date':None}
         self.patch_info['url'] = patch_url
         patch_hash = patch_url.split("id=")[1]
         patch_date = self.get_linux_commit_date_offline(patch_hash, soup)
@@ -209,6 +209,7 @@ class Crawler:
         patch_url = self.get_patch_url(hash)
         if self.retreive_case(hash) == -1:
             return
+        self.patch_info = {'url': None, 'fixes':[], 'date':None}
         if self.filter_by_fixes_tag:
             if not self.check_excluded_distro(hash, patch_url):
                 self.logger.error("{} does not have a fixes tag".format(hash))
