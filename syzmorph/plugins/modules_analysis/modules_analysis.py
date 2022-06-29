@@ -154,23 +154,23 @@ class ModulesAnalysis(AnalysisModule):
                                 self.results[self.vul_module] = {'name': self.vul_module, 'src_file': src_file, 'hook': hook_end_node != None, 'missing': {}}
                             miss_info = {'distro_name': distro.distro_name, 'distro_version': distro.distro_version}
                             if ret == self.MODULE_DISABLED:
-                                miss_info['type'] = self.MODULE_DISABLED, 
+                                miss_info['type'] = self.MODULE_DISABLED
                                 miss_info['missing_reason'] = 'Module disabled'
                                 self.report.append(begin_node.text)
                                 self.logger.info("Vendor {0} does not have {1} module enabled".format(distro.distro_name, self.vul_module))
                                 self.report.append("[Disabled] Module {} from {} is not enabled in {}".format(self.vul_module, src_file, distro.distro_name))
                             if ret == self.MODULE_REQUIRED_LOADING:
-                                miss_info['type'] = self.MODULE_REQUIRED_LOADING_BY_ROOT, 
+                                miss_info['type'] = self.MODULE_REQUIRED_LOADING_BY_ROOT
                                 miss_info['missing_reason'] = 'need loading by root'
                                 self.report.append(begin_node.text)
                                 user = 'root'
                                 if self.check_module_privilege(self.vul_module):
-                                    miss_info['type'] = self.MODULE_REQUIRED_LOADING_BY_NON_ROOT, 
+                                    miss_info['type'] = self.MODULE_REQUIRED_LOADING_BY_NON_ROOT
                                     miss_info['missing_reason'] = 'need loading by normal user'
                                     user = 'normal user'
                                 self.report.append("[{}] Module {} from {} need to be loaded in {} ".format(user, self.vul_module, src_file, distro.distro_name))
                             if ret == self.MODULE_IN_BLACKLIST:
-                                miss_info['type'] = self.MODULE_IN_BLACKLIST, 
+                                miss_info['type'] = self.MODULE_IN_BLACKLIST
                                 miss_info['missing_reason'] = 'Module in blacklist'
                                 self.report.append(begin_node.text)
                                 self.report.append("[Blacklist] Module {} from {} need root to be loaded".format(self.vul_module, src_file))

@@ -1,6 +1,7 @@
 import os
 import queue
 import multiprocessing
+from re import T
 import threading
 from time import sleep
 
@@ -13,6 +14,7 @@ class Launcher(Build):
     def __init__(self, cfg, manager, qemu_num=3):
         Build.__init__(self, cfg, manager)
         self.logger = None
+        self.manager = manager
         self.case_logger = manager.case_logger
         self.qemu_num = qemu_num
         self.debug = manager.debug
@@ -38,6 +40,15 @@ class Launcher(Build):
             self.case_logger.info(message)
             if self.logger != None:
                 self.logger.info(message)
+    
+    def need_repro(self):
+        case = self.manager.case
+        if case['patch']['fixes'] == []:
+            return True
+        fixes = case['patch']['fixes']
+        if self.cfg.distro_name in fixes['exclude']:
+            return False
+        return True
     
     def reproduce(self, func, func_args, root, work_dir, vm_tag, **kwargs):
         self.kill_qemu = False
@@ -86,10 +97,7 @@ class Launcher(Build):
         qemu = self.launch_qemu(tag=vm_tag, log_suffix=str(th_index), work_path=work_dir, **kwargs)
         self.log("Launched qemu {}".format(vm_tag))
         
-        poc_path = os.path.join(work_dir, "poc")
-        if not os.path.exists(poc_path):
-            self.case_logger.error("POC path not found: {}".format(poc_path))
-        self.run_qemu(qemu, func, th_index, poc_path, root, *args)
+        self.run_qemu(qemu, func, th_index, work_dir, root, *args)
         res = qemu.alternative_func_output.get(block=True)
         self.log("Qemu {} exit".format(vm_tag))
         if len(res) == 1 and qemu.qemu_fail:

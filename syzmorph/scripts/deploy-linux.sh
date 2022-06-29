@@ -51,6 +51,9 @@ function build_linux_folder {
     if [ $KERNEL == "upstream" ]; then
       git clone https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/ $LINUX_FOLDER
     fi
+    if [ $KERNEL == "stable" ]; then
+      git clone https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git $LINUX_FOLDER
+    fi
     if [ $KERNEL == "linux-next" ]; then
       git clone https://git.kernel.org/pub/scm/linux/kernel/git/next/linux-next.git $LINUX_FOLDER
     fi
@@ -125,6 +128,9 @@ echo "[+] Building kernel"
 OLD_INDEX=`ls -l linux | rev | cut -d'-' -f 1`
 if [ "$OLD_INDEX" != "$INDEX" ] | [ ! -e ./linux ]; then
   rm -rf "./linux" || echo "No linux repo"
+  if [[ $KERNEL =~ linux-[0-9]+\.[0-9]+\.y$ ]]; then
+    KERNEL="stable"
+  fi
   LINUX0=$PROJECT_PATH/tools/linux-$KERNEL-0
   ls $LINUX0 || LINUX0="LINUX0"
   ls $PROJECT_PATH/tools/linux-$KERNEL-$INDEX || build_linux_folder $PROJECT_PATH/tools/linux-$KERNEL-$INDEX $LINUX0 $KERNEL

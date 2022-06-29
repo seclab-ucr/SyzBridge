@@ -172,14 +172,7 @@ class TraceAnalysis(AnalysisModule):
             trigger_commands = "./poc"
         
         syscalls = self._tune_poc(qemu)
-        p = Popen(["gcc", "-pthread", "-static", "-o", "poc", "poc.c"], cwd=self.path_case_plugin, stdout=PIPE, stderr=PIPE)
-        with p.stdout:
-            log_anything(p.stdout, self.logger, self.debug)
-        exitcode = p.wait()
-        if exitcode != 0:
-            self.logger.error('Failed to compile poc')
-            qemu.alternative_func_output.put(False)
-            return
+        
         cmd = "trace-cmd record -p function_graph "
         for each in syscalls:
             cmd += "-g {} ".format(each)
@@ -190,7 +183,13 @@ class TraceAnalysis(AnalysisModule):
             qemu.upload(user="root", src=[testcase], dst="/root", wait=True)
             qemu.upload(user="root", src=[syz_executor, syz_execprog], dst="/", wait=True)
         else:
+            poc_src = "poc.c"
+            poc_path = os.path.join(self.path_case_plugin, poc_src)
             qemu.upload(user="root", src=[poc_path], dst="/root", wait=True)
+            if '386' in self.case['manager']:
+                qemu.command(cmds="gcc -m32 -pthread -o poc {}".format(poc_src), user="root", wait=True)
+            else:
+                qemu.command(cmds="gcc -pthread -o poc {}".format(poc_src), user="root", wait=True)
 
         qemu.upload(user="root", src=[trace_poc_path], dst="/root", wait=True)
         qemu.command(cmds="chmod +x trace-poc.sh && ./trace-poc.sh\n", user="root", wait=True)
@@ -337,9 +336,11 @@ exit $EXIT_CODE""".format(cmd)
             'initialize_tun\(\);', 'initialize_netdevices\(\);', 'initialize_wifi_devices\(\);']
         
         syscalls = []
-        output = qemu.command(cmds="trace-cmd list -f | grep -E  \"^__x64_sys_\"", user="root", wait=True)
+        if "386" in self.case['manager']:
+            self.syscall_prefix = "__ia32_sys_"
+        output = qemu.command(cmds="trace-cmd list -f | grep -E  \"^{}\"".format(self.syscall_prefix), user="root", wait=True)
         for line in output:
-            if line.startswith("__x64_sys_"):
+            if line.startswith(self.syscall_prefix):
                 syscalls.append(line.strip())
         if len(syscalls) == 0:
             # try SyS_ prefix

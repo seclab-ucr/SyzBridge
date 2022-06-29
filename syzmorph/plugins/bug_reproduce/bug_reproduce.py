@@ -70,13 +70,18 @@ class BugReproduce(AnalysisModule):
         res = {}
         output = queue.Queue()
         for distro in self.cfg.get_distros():
+            if not distro.repro.need_repro():
+                self.logger.debug("{} does not need repro, bug was not introduced".format(distro.distro_name))
+                continue
             self.logger.info("start reproducing bugs on {}".format(distro.distro_name))
             x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="reproduce_async-{}".format(distro.distro_name))
             x.start()
             if self.debug:
                 x.join()
 
-        for _ in self.cfg.get_distros():
+        for distro in self.cfg.get_distros():
+            if not distro.repro.need_repro():
+                continue
             [distro_name, m] = output.get(block=True)
             res[distro_name] = m
         
@@ -109,7 +114,7 @@ class BugReproduce(AnalysisModule):
             return
         self.logger.info("{} does not trigger any bugs, try to enable missing modules".format(distro.distro_name))
         m = self.get_missing_modules(distro.distro_name)
-        missing_modules = [e['name'] for e in m if e['type'][0] != 0 ]
+        missing_modules = [e['name'] for e in m if e['type'] != 0 ]
         success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, [], ), root=True, log_prefix='missing-modules', timeout=MAX_BUG_REPRODUCE_TIMEOUT)
         if success:
             self.results[distro.distro_name]['trigger'] = True
@@ -294,7 +299,6 @@ class BugReproduce(AnalysisModule):
                 shutil.copyfile(src, dst)
         else:
             self.logger.error("Cannot find real PoC function")
-        self._compile_poc(root)
         return feature
     
     def check_poc_capability(self):
@@ -335,7 +339,7 @@ class BugReproduce(AnalysisModule):
             # Will solve this problem if this race happens in real world
             q.put([res, trigger_hunted_bug])
 
-    def tweak_modules(self, qemu: VMInstance, th_index, poc_path, root, missing_modules: list, essential_modules: list, poc_feature: int):
+    def tweak_modules(self, qemu: VMInstance, th_index, work_dir, root, missing_modules: list, essential_modules: list, poc_feature: int):
         tested_modules = []
         vm_tag = "-".join(qemu.tag.split('-')[:-1])
         
@@ -349,12 +353,12 @@ class BugReproduce(AnalysisModule):
         qemu.logger.info("Loading essential modules {}".format(essential_modules))
         if essential_modules != []:
             self._enable_missing_modules(qemu, essential_modules)
-            res, trigger = self._execute_poc(root, qemu, poc_path, poc_feature, q)
+            res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q)
             if trigger:
                 self.results[vm_tag]["repeat"] = False
                 qemu.alternative_func_output.put([res, trigger, qemu.qemu_fail, tested_modules], block=False)
                 return
-            res, trigger = self._execute_poc(root, qemu, poc_path, poc_feature, q, repeat=True)
+            res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q, repeat=True)
             if trigger:
                 self.results[vm_tag]["repeat"] = True
                 qemu.alternative_func_output.put([res, trigger, qemu.qemu_fail, tested_modules], block=False)
@@ -365,19 +369,19 @@ class BugReproduce(AnalysisModule):
             if not self._enable_missing_modules(qemu, [module]):
                 continue
             tested_modules.append(module)
-            res, trigger = self._execute_poc(root, qemu, poc_path, poc_feature, q)
+            res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q)
             if trigger:
                 self.results[vm_tag]["repeat"] = False
                 qemu.alternative_func_output.put([res, trigger, qemu.qemu_fail, tested_modules], block=False)
                 return
-            res, trigger = self._execute_poc(root, qemu, poc_path, poc_feature, q, repeat=True)
+            res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q, repeat=True)
             if trigger:
                 self.results[vm_tag]["repeat"] = True
                 qemu.alternative_func_output.put([res, trigger, qemu.qemu_fail, tested_modules], block=False)
                 return
         qemu.alternative_func_output.put([[], False, False, []], block=False)
     
-    def capture_kasan(self, qemu, th_index, poc_path, root, poc_feature):
+    def capture_kasan(self, qemu, th_index, work_dir, root, poc_feature):
         q = queue.Queue()
         threading.Thread(target=self.warp_qemu_capture_kasan, args=(qemu, th_index, q)).start()
         vm_tag = "-".join(qemu.tag.split('-')[:-1])
@@ -385,29 +389,16 @@ class BugReproduce(AnalysisModule):
         if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
             self.logger.fatal("KASAN is not enabled in kernel!")
             raise KASANDoesNotEnabled(self.case_hash)
-        res, trigger = self._execute_poc(root, qemu, poc_path, poc_feature, q)
+        res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q)
         if trigger:
             self.results[vm_tag]["repeat"] = False
             qemu.alternative_func_output.put([res, trigger, qemu.qemu_fail], block=False)
             return
-        res, trigger = self._execute_poc(root, qemu, poc_path, poc_feature, q, repeat=True)
+        res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q, repeat=True)
         if trigger:
             self.results[vm_tag]["repeat"] = True
         qemu.alternative_func_output.put([res, trigger, qemu.qemu_fail], block=False)
         return
-        
-        """
-        self._run_poc(qemu, poc_path, root, poc_feature)
-        try:
-            res, trigger_hunted_bug = self._qemu_capture_kasan(qemu, th_index)
-        except Exception as e:
-            self.logger.error("Exception occur when reporducing crash: {}".format(e))
-            if qemu.instance.poll() == None:
-                qemu.instance.kill()
-            res = []
-            trigger_hunted_bug = False
-        qemu.alternative_func_output.put([res, trigger_hunted_bug, qemu.qemu_fail], block=False)
-        """
 
     def _crash_start(self, line):
         crash_head = [r'BUG: ', r'WARNING:', r'INFO:', r'Unable to handle kernel', 
@@ -421,11 +412,19 @@ class BugReproduce(AnalysisModule):
                 return True
         return False
     
-    def _execute_poc(self, root, qemu, poc_path, poc_feature, qemu_queue, repeat=False):
+    def _execute_poc(self, root, qemu, work_dir, poc_feature, qemu_queue, repeat=False):
         if root:
             user = self.root_user
+            poc_src = "poc_root.c"
         else:
             user = self.normal_user
+            poc_src = "poc_normal.c"
+        poc_path = os.path.join(work_dir, poc_src)
+        qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
+        if '386' in self.case['manager']:
+            qemu.command(cmds="gcc -m32 -pthread -o poc {}".format(poc_src), user=user, wait=True)
+        else:
+            qemu.command(cmds="gcc -pthread -o poc {}".format(poc_src), user=user, wait=True)
 
         n = 3
         if repeat:
@@ -441,7 +440,6 @@ class BugReproduce(AnalysisModule):
             # Sleeping for 1 second to ensure everything is ready in vm
             time.sleep(1)
         
-        qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
         qemu.logger.info("running PoC")
         qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user=self.root_user, wait=True)
         self._check_poc_feature(poc_feature, qemu, user)
@@ -507,13 +505,6 @@ class BugReproduce(AnalysisModule):
                     failed += 1
         return failed != len(manual_enable_modules)
     
-    def _compile_poc(self, root: bool):
-        if root:
-            poc_file = "poc_root.c"
-        else:
-            poc_file = "poc_normal.c"
-        call(["gcc", "-pthread", "-static", "-o", "poc", poc_file], cwd=self.path_case_plugin)
-    
     def _check_poc_feature(self, poc_feature, qemu, user):
         script_name = "check-poc-feature.sh"
         script = os.path.join(self.path_package, "plugins/bug_reproduce", script_name)
@@ -546,31 +537,6 @@ class BugReproduce(AnalysisModule):
             distro_result['hash'] = self.case['hash']
             distro_result['trigger'] = False
             self.results[distro.distro_name] = distro_result
-
-    def _run_poc(self, qemu, poc_path, root, poc_feature, repeat=False):
-        if root:
-            user = self.root_user
-        else:
-            user = self.normal_user
-        qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
-        qemu.logger.info("running PoC")
-        script = os.path.join(self.path_package, "scripts/run-script.sh")
-        chmodX(script)
-        p = Popen([script, str(qemu.port), self.path_case_plugin, qemu.key, user],
-            stderr=STDOUT,
-            stdout=PIPE)
-        with p.stdout:
-            log_anything(p.stdout, self.logger, self.debug)
-        # It looks like scp returned without waiting for all file finishing uploading.
-        # Sleeping for 1 second to ensure everything is ready in vm
-        time.sleep(1)
-        qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user=self.root_user, wait=True)
-        self._check_poc_feature(poc_feature, qemu, user)
-        if repeat:
-            qemu.command(cmds="chmod +x run.sh && ./run.sh", user=user, wait=False)
-        else:
-            qemu.command(cmds="rm -rf ./tmp && mkdir ./tmp && mv ./poc ./tmp && cd ./tmp && chmod +x poc && ./poc", user=user, wait=True)
-        return
     
     def _BugChecker(self, report):
         title = None

@@ -86,7 +86,7 @@ EOF
 
         apt-get update
         apt-get build-dep -y linux linux-image-$(uname -r)
-        apt-get install -y git trace-cmd psmisc fakeroot libncurses-dev gawk flex bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev libiberty-dev autoconf
+        apt-get install -y git trace-cmd psmisc fakeroot libncurses-dev gawk flex bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev libiberty-dev autoconf gcc-multilib
         apt-get install -y linux-cloud-tools-common linux-tools-common || true
 
         systemctl disable hv-kvp-daemon.service

@@ -33,7 +33,7 @@ function change_grub() {
 
 function install_necessary_packages() {
     if [ ! -f ~/.stamp/INSTALL_PACKAGES ]; then
-        dnf install -y fedpkg fedora-packager rpmdevtools ncurses-devel pesign grubby psmisc
+        dnf install -y fedpkg fedora-packager rpmdevtools ncurses-devel pesign grubby psmisc trace-cmd gcc-multilib
 
         useradd -m syzmorph || true
         touch ~/.stamp/INSTALL_PACKAGES

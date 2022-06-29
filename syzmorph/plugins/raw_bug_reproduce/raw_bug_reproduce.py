@@ -68,13 +68,18 @@ class RawBugReproduce(AnalysisModule):
         res = {}
         output = queue.Queue()
         for distro in self.cfg.get_distros():
+            if not distro.repro.need_repro():
+                self.logger.debug("{} does not need repro, bug was not introduced".format(distro.distro_name))
+                continue
             self.logger.info("start reproducing bugs on {}".format(distro.distro_name))
             x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="reproduce_async-{}".format(distro.distro_name))
             x.start()
             if self.debug:
                 x.join()
 
-        for _ in self.cfg.get_distros():
+        for distro in self.cfg.get_distros():
+            if not distro.repro.need_repro():
+                continue
             [distro_name, m] = output.get(block=True)
             res[distro_name] = m
         return res
@@ -122,12 +127,6 @@ class RawBugReproduce(AnalysisModule):
             self.bug_title = title
             return triggered, t
         return False, t
-    
-    def rename_poc(self, root: bool):
-        if root:
-            shutil.move(os.path.join(self.path_case_plugin, "poc.c"), os.path.join(self.path_case_plugin, "poc_root.c"))
-        else:
-            shutil.move(os.path.join(self.path_case_plugin, "poc.c"), os.path.join(self.path_case_plugin, "poc_normal.c"))
 
     def tune_poc(self, root: bool):
         feature = 0
@@ -139,7 +138,7 @@ class RawBugReproduce(AnalysisModule):
             dst = os.path.join(self.path_case_plugin, "poc_root.c")
 
         shutil.copyfile(src, dst)
-        self._compile_poc(root)
+        #self._compile_poc(root)
         return feature
     
     def success(self):
@@ -150,11 +149,11 @@ class RawBugReproduce(AnalysisModule):
         self.logger.info(final_report)
         self._write_to(final_report, self.REPORT_NAME)
     
-    def capture_kasan(self, qemu, th_index, poc_path, root, poc_feature):
+    def capture_kasan(self, qemu, th_index, work_dir, root, poc_feature):
         if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
             self.logger.fatal("KASAN is not enabled in kernel!")
             raise KASANDoesNotEnabled(self.case_hash)
-        self._run_poc(qemu, poc_path, root, poc_feature)
+        self._run_poc(qemu, work_dir, root, poc_feature)
         try:
             res, trigger_hunted_bug = self._qemu_capture_kasan(qemu, th_index)
         except Exception as e:
@@ -212,13 +211,6 @@ class RawBugReproduce(AnalysisModule):
                     crash.append(line)
             out_begin = out_end
         return res, trigger_hunted_bug
-    
-    def _compile_poc(self, root: bool):
-        if root:
-            poc_file = "poc_root.c"
-        else:
-            poc_file = "poc_normal.c"
-        call(["gcc", "-pthread", "-static", "-o", "poc", poc_file], cwd=self.path_case_plugin)
 
     def _kernel_config_pre_check(self, qemu, config):
         out = qemu.command(cmds="grep {} /boot/config-`uname -r`".format(config), user=self.root_user, wait=True)
@@ -229,12 +221,19 @@ class RawBugReproduce(AnalysisModule):
                 return True
         return False
 
-    def _run_poc(self, qemu, poc_path, root, poc_feature):
+    def _run_poc(self, qemu, work_dir, root, poc_feature):
         if root:
             user = self.root_user
+            poc_src = "poc_root.c"
         else:
             user = self.normal_user
+            poc_src = "poc_normal.c"
+        poc_path = os.path.join(work_dir, poc_src)
         qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
+        if '386' in self.case['manager']:
+            qemu.command(cmds="gcc -m32 -pthread -o poc {}".format(poc_src), user=user, wait=True)
+        else:
+            qemu.command(cmds="gcc -pthread -o poc {}".format(poc_src), user=user, wait=True)
         qemu.logger.info("running PoC")
         # It looks like scp returned without waiting for all file finishing uploading.
         # Sleeping for 1 second to ensure everything is ready in vm
