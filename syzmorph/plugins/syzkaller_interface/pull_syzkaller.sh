@@ -49,7 +49,7 @@ fi
 
 export GOPATH=$SYZ_REPO_PATH/gopath
 export GOROOT=$PROJECT_PATH/tools/goroot
-export PATH=$PATH:$GOROOT/bin
+export PATH=$GOROOT/bin:$PATH
 
 echo "[+] Building syzkaller"
 if [ ! -d "$GOPATH/src/github.com/google/syzkaller" ]; then

@@ -6,7 +6,7 @@ from subprocess import Popen, PIPE, STDOUT, call
 
 cfg_template = syz_config_template="""
 {{ 
-        "target": "linux/amd64",
+        "target": "linux/amd64/amd64",
         "http": "127.0.0.1:{5}",
         "workdir": "{0}/workdir",
         "kernel_obj": "{1}",
@@ -98,11 +98,14 @@ class SyzkallerInterface(AnalysisModule):
     @check_syzkaller
     def build_syzkaller(self, arch="amd64", component=None):
         my_env = os.environ.copy()
-        my_env["PATH"] = os.path.join(self.path_package, "tools/goroot/bin") + my_env["PATH"]
+        path_project = os.getcwd()
+        my_env["PATH"] = os.path.join(path_project, "tools/goroot/bin") + ':' + my_env["PATH"]
+        my_env["GOROOT"] = os.path.join(path_project, "tools/goroot/")
+        my_env["GOPATH"] = os.path.join(self.path_case_plugin, "gopath")
         if component == None:
-            p = Popen(["make", "TARGETARCH={}".format(arch), "TARGETVMARCH=amd64"], cwd=self.syzkaller_path, env=my_env, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+            p = Popen(["make", "TARGETARCH={}".format(arch), "TARGETVMARCH=amd64"], cwd=self.syzkaller_path, env=my_env, stdout=PIPE, stderr=PIPE)
         else:
-            p = Popen(["make", "TARGETARCH={}".format(arch), "TARGETVMARCH=amd64", component], cwd=self.syzkaller_path, env=my_env, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+            p = Popen(["make", "TARGETARCH={}".format(arch), "TARGETVMARCH=amd64", component], cwd=self.syzkaller_path, env=my_env, stdout=PIPE, stderr=PIPE)
         with p.stdout:
             log_anything(p.stdout, self.logger, self.debug)
         exitcode = p.wait()
@@ -148,7 +151,7 @@ class SyzkallerInterface(AnalysisModule):
         cmd = [syz_logparser, "-i", input_log, "-o", output_log, "-cfg", cfg_path]
         p = Popen(cmd, stdin=PIPE, stdout=PIPE)
         with p.stdout:
-            log_anything(p.stdout, logging.INFO, self.debug)
+            log_anything(p.stdout, self.logger, self.debug)
         exitcode = p.wait()
         if exitcode != 0:
             self.logger.info("Fail to generate a decent report from bug log")
