@@ -48,7 +48,7 @@ class CapabilityCheck(AnalysisModule):
     def get_capability_check_report(self):
         upstream = self.cfg.get_upstream()
         qemu = upstream.repro.launch_qemu(self.case_hash, work_path=self.path_case_plugin\
-            , log_name="qemu-{}.log".format(upstream.repro.type_name))
+            , log_name="qemu-{}.log".format(upstream.repro.type_name), timeout=3*60)
         _, qemu_queue = qemu.run(alternative_func=self._run_poc, args=())
         done = qemu_queue.get(block=True)
         report = self._parse_capability_log(qemu.output)
@@ -99,40 +99,6 @@ class CapabilityCheck(AnalysisModule):
                 self.report.append("".join(trace))
         return res
     
-    def tune_poc(self, debug=True):
-        data = []
-        src = os.path.join(self.path_case, "poc.c")
-        dst = os.path.join(self.path_case_plugin, "poc.c")
-        poc_func = ""
-        fsrc = open(src, "r")
-        fdst = open(dst, "w")
-
-        code = fsrc.readlines()
-        fsrc.close()
-        text = "".join(code)
-        if text.find("int main") != -1:
-            poc_func = r"^(static )?int main\(.*\)\n"
-        if text.find("void loop") != -1:
-            poc_func = r"^(static )?void loop\(.*\)\n"
-        if text.find("void execute_call") != -1:
-            poc_func = r"^(static )?void execute_call\(.*\)\n"
-        for i in range(0, len(code)):
-            line = code[i]
-            if regx_match(poc_func, line):
-                start_line = i+2
-                data = code[:start_line]
-                data.append("int debug = {};\n".format(int(debug)))
-                data.append("ioctl(-1, 0x37778, &debug);\n")
-                data.extend(code[start_line:])
-                break
-        if data != []:
-            fdst.writelines(data)
-            fdst.close()
-        else:
-            self.logger.error("Cannot find real PoC function")
-            return False
-        return True
-    
     def build_kernel(self):
         if self._check_stamp("BUILD_KERNEL") and not self._check_stamp("BUILD_CAPABILITY_CHECK_KERNEL"):
             self._remove_stamp("BUILD_KERNEL")
@@ -175,24 +141,100 @@ class CapabilityCheck(AnalysisModule):
         self.logger.info(final_report)
         self._write_to(final_report, self.REPORT_NAME)
     
+    def tune_poc(self, debug=True):
+        insert_exit_line = -1
+        data = []
+        write_monitor_controller = False
+
+        src = os.path.join(self.path_case, "poc.c")
+        dst = os.path.join(self.path_case_plugin, "poc.c")
+        non_thread_func = ""
+        fsrc = open(src, "r")
+        fdst = open(dst, "w")
+        
+        code = fsrc.readlines()
+        fsrc.close()
+        text = "".join(code)
+        if text.find("int main") != -1:
+            non_thread_func = r"^(static )?int main"
+            poc_func = r"^(static )?int main\(.*\)\n"
+        if text.find("void loop") != -1:
+            non_thread_func = r"^(static )?void loop\(.*\)\n"
+            poc_func = r"^(static )?void loop\(.*\)\n"
+        if text.find("void execute_one") != -1:
+            non_thread_func = r"^(static )?void loop\(.*\)\n"
+        if text.find("void execute_call") != -1:
+            poc_func = r"^(static )?void execute_call\(.*\)\n"
+
+        # Locate the function actual trigger the bug    
+        for i in range(0, len(code)):
+            line = code[i]
+            if insert_exit_line == i:
+                status = "status{}".format(random.randint(0,10000))
+                data.append("int {};\n".format(status))
+                data.append("wait(&{});\n".format(status))
+                data.append("exit(0);\n")
+            data.append(line)
+            if insert_exit_line != -1 and i < insert_exit_line:
+                if 'for (;; iter++) {' in line:
+                    data.pop()
+                    t = line.split(';')
+                    new_line = t[0] + ";iter<1" + t[1] + ";" + t[2]
+                    data.append(new_line)
+            
+            if write_monitor_controller:
+                data.append("int debug = {};\n".format(int(debug)))
+                data.append("ioctl(-1, 0x37778, &debug);\n")
+                write_monitor_controller = False
+            
+            if regx_match(poc_func, line):
+                write_monitor_controller = True
+
+            if regx_match(non_thread_func, line):
+                insert_exit_line = self._extract_func(i, code)
+            
+            # Some PoC pause the entire pocess by sleeping a very long time
+            # We skip it in order to speed up trace analysis
+            sleep_regx = r'^( )+?sleep\((\d+)\);'
+            if regx_match(sleep_regx, line):
+                time = regx_get(sleep_regx, line, 1)
+                if time == None:
+                    self.logger.error("Wrong sleep format: {}".format(line))
+                    continue
+                if int(time) > 5:
+                    data.pop()
+                    status = "status{}".format(random.randint(0,10000))
+                    data.append("int {};\n".format(status))
+                    data.append("wait(&{});\n".format(status))
+            
+            if 'for (procid = 0;' in line:
+                    data.pop()
+                    t = line.split(';')
+                    new_line = t[0] + ";procid<1;" + t[2]
+                    data.append(new_line)
+
+        fdst.writelines(data)
+        fdst.close()
+
+        return True
+
+    def _extract_func(self, start_line, text):
+        n_bracket = 0
+        for i in range(start_line, len(text)):
+            line = text[i].strip()
+            if '{' in line:
+                n_bracket += 1
+            if '}' in line:
+                n_bracket -= 1
+                if n_bracket == 0:
+                    return i
+        return -1
+
     def _run_poc(self, qemu):
-        poc_script = """
-#!/bin/bash
-
-set -ex
-
-chmod +x ./poc
-nohup ./poc > nohup.out 2>&1 &
-
-sleep 5
-killall poc || true
-"""
-        self._write_to(poc_script, "run_poc.sh")
         call(["gcc", "-pthread", "-static", "-o", "poc", "poc.c"], cwd=self.path_case_plugin)
         poc_path = os.path.join(self.path_case_plugin, "poc")
-        poc_script_path = os.path.join(self.path_case_plugin, "run_poc.sh")
-        qemu.upload(user="root", src=[poc_path, poc_script_path], dst="/root", wait=True)
-        qemu.command(cmds="chmod +x ./run_poc.sh && ./run_poc.sh", user="root", wait=True)
+        qemu.upload(user="root", src=[poc_path], dst="/root", wait=True)
+        qemu.command(cmds="chmod +x ./poc && ./poc", user="root", wait=True)
         qemu.alternative_func_output.put(True)
     
     def _parse_capability_log(self, output):
@@ -242,16 +284,13 @@ killall poc || true
         patch = os.path.join(self.path_package, "plugins/capability_check/syz_logparser.patch")
         if syz.check_binary(binary_name="syz-logparser"):
             return True
-        if syz.pull_syzkaller(commit=self.case['syzkaller']) != 0:
+        if syz.pull_syzkaller(commit='b8d780ab30ab6ba340c43ad1944096dae15e6e79') != 0:
             self.logger.error("Fail to pull syzkaller")
             return False
         if syz.patch_syzkaller(patch=patch) != 0:
             self.logger.error("Fail to patch syzkaller")
             return False
-        """
-        Will fail in first time
-        sys/sys.go:8:2: cannot find package "." in:
-        """
+
         syz.build_syzkaller()
         if syz.build_syzkaller(component='all') != 0:
             self.logger.error("Fail to build syzkaller")
