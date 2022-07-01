@@ -421,6 +421,9 @@ class BugReproduce(AnalysisModule):
             poc_src = "poc_normal.c"
         poc_path = os.path.join(work_dir, poc_src)
         qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
+        if os.path.exists(os.path.join(work_dir, "sandbox.h")):
+            sandbox_src = os.path.join(work_dir, "sandbox.h")
+            qemu.upload(user=user, src=[sandbox_src], dst="~/", wait=True)
         if '386' in self.case['manager']:
             qemu.command(cmds="gcc -m32 -pthread -o poc {}".format(poc_src), user=user, wait=True)
         else:
