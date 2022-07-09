@@ -183,7 +183,7 @@ class ImageCommand(Command):
         vm.kill_vm()
         if not t:
             self.logger.error("Image build failed, check the log")
-            time.sleep(3)
+            time.sleep(10)
             return False
         
         time.sleep(3)
@@ -203,7 +203,7 @@ class ImageCommand(Command):
             call(args=['tar', 'xf', './{}.tar.gz'.format(self.distro)], cwd=dst)
             os.remove(os.path.join(dst, './{}.tar.gz'.format(self.distro)))
 
-        time.sleep(3)
+        time.sleep(10)
         return True
     
     def _check_kernel_version(self, qemu: VM):
@@ -360,7 +360,7 @@ class ImageCommand(Command):
                     qemu.alternative_func_output.put(False)
                     return
 
-            out = qemu.command(user=self.ssh_user, cmds="ls -l /boot/vmlinuz-{}*".format(self.kernel_version), wait=True)
+            out = qemu.command(user=self.ssh_user, cmds="ls -l /boot/vmlinuz-*".format(self.kernel_version), wait=True)
             for line in out:
                 if regx_match(r'vmlinuz-(.*)\+debug', line):
                     self.kernel_version = regx_get(r'vmlinuz-(.*\+debug)', line, 0)

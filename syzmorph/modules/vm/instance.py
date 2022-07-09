@@ -217,7 +217,6 @@ class VMInstance(Network):
         self.key = key
         self.timeout = timeout
         self.cmd_launch = ["qemu-system-x86_64", "-m", mem, "-smp", cpu]
-        #self.cmd_launch = ["/data2/xzou017/projects/qemu/qemu-6.1.0/build/qemu-system-x86_64", "-m", mem, "-smp", cpu]
         if gdb_port != None:
             self.cmd_launch.extend(["-gdb", "tcp::{}".format(gdb_port)])
         if mon_port != None:

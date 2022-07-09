@@ -33,7 +33,7 @@ function change_grub() {
 
 function install_necessary_packages() {
     if [ ! -f ~/.stamp/INSTALL_PACKAGES ]; then
-        dnf install -y fedpkg fedora-packager rpmdevtools ncurses-devel pesign grubby psmisc trace-cmd gcc-multilib
+        dnf install -y fedpkg fedora-packager rpmdevtools ncurses-devel pesign grubby psmisc trace-cmd glibc-devel.i686 glibc-devel
 
         useradd -m syzmorph || true
         touch ~/.stamp/INSTALL_PACKAGES
@@ -64,10 +64,19 @@ function compile_fedora() {
                     hash_val=`printf "${line}" | awk '{{print $1}}'`
                     tag_name=`printf "${line}" | awk '{{print $2}}'`
                     version=`printf "${line}" | awk '{{print $3}}'`
-                    if [[ ${tag_name} == "Linux" ]]; then \
-                        echo "MAGIC!!?${version}"; \
-                        commit=${hash_val}; \
-                        break; \
+                    if [ -z "${version}" ]; then \
+                        version=${tag_name}; \
+                        if [[ ${version} =~ kernel-[0-9]+\.[0-9]+ ]]; then \
+                            echo "MAGIC!!? ${version}"; \
+                            commit=${hash_val}; \
+                            break; \
+                        fi \
+                    else \
+                        if [[ ${tag_name} == "Linux" ]]; then \
+                            echo "MAGIC!!?${version}"; \
+                            commit=${hash_val}; \
+                            break; \
+                        fi \
                     fi \
                 done
             if [ -z "${commit}" ]; then
@@ -89,6 +98,14 @@ function compile_fedora() {
 
         if [ $((enable_feature%2)) == 1 ]; then
             echo "CONFIG_UBSAN=y" >> kernel-local
+            echo "CONFIG_UBSAN_BOUNDS=y" >> kernel-local
+            echo "CONFIG_UBSAN_SHIFT=y" >> kernel-local
+            echo "CONFIG_UBSAN_DIV_ZERO=y" >> kernel-local
+            echo "CONFIG_UBSAN_BOOL=y" >> kernel-local
+            echo "CONFIG_UBSAN_ENUM=y" >> kernel-local
+            echo "CONFIG_UBSAN_ALIGNMENT=n" >> kernel-local
+            echo "CONFIG_UBSAN_SANITIZE_ALL=y" >> kernel-local
+            echo "CONFIG_TEST_UBSAN=n" >> kernel-local
         fi
         enable_feature=$((enable_feature>>1))
 
@@ -123,13 +140,10 @@ function archive_kernel() {
     cd ${linux_dir}
     if [ ! -f ~/.stamp/ARCHIVE_KERNEL ]; then
         mv .config config
-        git config --global user.email "xzou017@ucr.edu"
-        git config --global user.name "etenal"
-        git add -f vmlinux config
-        git commit -m "add vmlinux and config"
+        tar --exclude='*.o' -czf fedora.tar.gz ./*
+        mv fedora.tar.gz /tmp
         touch ~/.stamp/ARCHIVE_KERNEL
     fi
-    git archive --format=tar -o /tmp/fedora.tar.gz HEAD
 }
 
 if [ $# -ne 4 ] && [ $# -ne 3 ] ; then

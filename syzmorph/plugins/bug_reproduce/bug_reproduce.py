@@ -449,7 +449,9 @@ class BugReproduce(AnalysisModule):
         if repeat:
             qemu.command(cmds="chmod +x run.sh && ./run.sh", user=user, wait=False, timeout=BUG_REPRODUCE_TIMEOUT)
         else:
-            qemu.command(cmds="rm -rf ./tmp && mkdir ./tmp && mv ./poc ./tmp && cd ./tmp && chmod +x poc && ./poc", user=user, wait=True, timeout=BUG_REPRODUCE_TIMEOUT)
+            qemu.command(cmds="rm -rf ./tmp", user=user, wait=True)
+            qemu.command(cmds="mkdir ./tmp && mv ./poc ./tmp && cd ./tmp && chmod +x poc && ./poc", user=user, wait=True, timeout=BUG_REPRODUCE_TIMEOUT)
+            qemu.logger.info("Killing PoC")
             qemu.command(cmds="killall poc", user=self.root_user, wait=True)
         for _ in range(0, n):
             try:

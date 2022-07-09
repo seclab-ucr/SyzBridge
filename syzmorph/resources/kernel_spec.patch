@@ -1,4 +1,16 @@
 diff --git a/kernel.spec b/kernel.spec
+index fd3ce3c33..0f4f17115 100755
+--- a/kernel.spec
++++ b/kernel.spec
+@@ -1494,7 +1494,7 @@ for opt in %{clang_make_opts}; do
+   OPTS="$OPTS -m $opt"
+ done
+ %endif
+-./process_configs.sh $OPTS kernel %{rpmversion}
++./process_configs.sh -i kernel %{rpmversion}
+ 
+ cp %{SOURCE82} .
+ RPM_SOURCE_DIR=$RPM_SOURCE_DIR ./update_scripts.sh %{primary_target}
 index 67e34adb1..1883e7bcc 100644
 --- a/kernel.spec
 +++ b/kernel.spec

@@ -44,6 +44,8 @@ class SyzbotCommand(Command):
                             help='[bool] filter bugs that do not have a c reproducer\n')
         parser.add_argument('--filter-by-fixes-tag', action='store_true',
                             help='[bool] filter bugs that do not have fixes tag\n')
+        parser.add_argument('--addition', action='store_true',
+                            help='[bool] add additional cases\n')
     
     def custom_subparser(self, parser, cmd):
         return parser.add_parser(cmd, help='Get a case by hash or a file contains multiple hashs.')
@@ -106,6 +108,13 @@ class SyzbotCommand(Command):
         except:
             self.logger.error("Something went wrong in crawler, check the log for more details.")
 
+        if self.args.addition:
+            self.cases = self.read_cases(args.proj)
+            for e in crawler.cases:
+                if e not in self.cases:
+                    self.cases[e] = crawler.cases[e]
+        else:
+            self.cases = crawler.cases
         self.logger.info("Cases info saved in {}".format(os.path.join(self.proj_dir, "cases.json")))
         self.save_cases(crawler.cases, args.proj) 
     
@@ -120,9 +129,23 @@ class SyzbotCommand(Command):
         os.makedirs(proj_dir, exist_ok=True)
         
         if os.path.exists(os.path.join(proj_dir, "cases.json")):
-            self.logger.error("Project {} already existed.".format(name))
-            return None
+            if not self.args.addition:
+                self.logger.error("Project {} already existed.".format(name))
+                return None
         return proj_dir
+    
+    def read_cases(self, name):
+        cases = {}
+        work_path = os.getcwd()
+        cases_json_path = os.path.join(work_path, "projects/{}/cases.json".format(name))
+        if os.path.exists(cases_json_path):
+            with open(cases_json_path, 'r') as f:
+                cases = json.load(f)
+                f.close()
+        else:
+            print("No proj {} found".format(name))
+            return None
+        return cases
     
     def print_args_info(self):
         self.logger.info("[*] proj: {}".format(self.args.proj))
