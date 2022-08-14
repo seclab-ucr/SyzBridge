@@ -51,7 +51,7 @@ class Network:
                 cmd.append("{}@{}:{}".format(user, ip, each))
             cmd.append(dst)
         
-        self.logger.debug(" ".join(cmd))
+        self.logger.info(" ".join(cmd))
         p = Popen(cmd,
         stdout=PIPE,
         stderr=STDOUT)

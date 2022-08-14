@@ -186,6 +186,14 @@ class ImageCommand(Command):
             time.sleep(10)
             return False
         
+        if os.path.exists(os.path.join(self.build_dir, "{}.tar.gz".format(self.distro))):
+            src = os.path.join(self.build_dir, "{}.tar.gz".format(self.distro))
+            dst = os.path.join(self.build_dir, "{}-{}".format(self.distro, self.code_name))
+            os.makedirs(dst)
+            shutil.move(src, dst)
+            call(args=['tar', 'xf', './{}.tar.gz'.format(self.distro)], cwd=dst)
+            os.remove(os.path.join(dst, './{}.tar.gz'.format(self.distro)))
+
         time.sleep(3)
         _, q = vm.run(alternative_func=self._check_kernel_version)
         t = q.get(block=True)
@@ -194,14 +202,6 @@ class ImageCommand(Command):
             self.logger.error("Kernel version does not match {}, check grub".format(self.kernel_version))
             time.sleep(3)
             return False
-        
-        if os.path.exists(os.path.join(self.build_dir, "{}.tar.gz".format(self.distro))):
-            src = os.path.join(self.build_dir, "{}.tar.gz".format(self.distro))
-            dst = os.path.join(self.build_dir, "{}-{}".format(self.distro, self.code_name))
-            os.makedirs(dst)
-            shutil.move(src, dst)
-            call(args=['tar', 'xf', './{}.tar.gz'.format(self.distro)], cwd=dst)
-            os.remove(os.path.join(dst, './{}.tar.gz'.format(self.distro)))
 
         time.sleep(10)
         return True
@@ -367,7 +367,9 @@ class ImageCommand(Command):
                     qemu.command(user=self.ssh_user, cmds="grubby --set-default /boot/vmlinuz-{}".format(self.kernel_version), wait=True);
                     qemu.command(user=self.ssh_user, cmds="grub2-mkconfig -o /boot/grub2/grub.cfg", wait=True);
                     break;
+            qemu.command(user=self.ssh_user, cmds="shutdown -h now", wait=True)
 
+        time.sleep(10) # Wait for normally shutdown
         qemu.alternative_func_output.put(True)
         return
     

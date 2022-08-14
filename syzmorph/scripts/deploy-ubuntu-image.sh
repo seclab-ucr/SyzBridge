@@ -100,6 +100,7 @@ function clone_ubuntu() {
     if [ ! -f ~/.stamp/CLONE_UBUNTU ]; then
         mkdir ubuntu-${code_name} || (rm -rf ubuntu-${code_name} && mkdir ubuntu-${code_name})
         cd ubuntu-${code_name}
+        git config --global http.sslVerify "false"
         git clone https://git.launchpad.net/~ubuntu-kernel/ubuntu/+source/linux/+git/${code_name} kernel
         cd ..
         touch ~/.stamp/CLONE_UBUNTU
