@@ -302,8 +302,8 @@ exit $EXIT_CODE""".format(cmd)
         return script_path
     
     def _get_trace(self, cfg):
-        self.logger.info("Generating trace for {}".format(cfg.repro.type_name))
-        trace_path = os.path.join(self.path_case_plugin, "trace-{}.report".format(cfg.repro.type_name))
+        self.logger.info("Generating trace for {}".format(cfg.repro.distro_name))
+        trace_path = os.path.join(self.path_case_plugin, "trace-{}.report".format(cfg.repro.distro_name))
         if os.path.exists(trace_path):
             return trace_path
         if cfg.type == VMInstance.UPSTREAM:
@@ -311,8 +311,8 @@ exit $EXIT_CODE""".format(cmd)
                 self.logger.error("Failed to build upstream environment")
                 return None
 
-        qemu = cfg.repro.launch_qemu(self.case_hash, work_path=self.path_case_plugin, log_name="qemu-{}.log".format(cfg.repro.type_name), timeout=TIMEOUT_TRACE_ANALYSIS, snapshot=False)
-        _, qemu_queue = qemu.run(alternative_func=self._run_trace_cmd, args=("trace-{}".format(cfg.repro.type_name), ))
+        qemu = cfg.repro.launch_qemu(self.case_hash, work_path=self.path_case_plugin, log_name="qemu-{}.log".format(cfg.repro.distro_name), timeout=TIMEOUT_TRACE_ANALYSIS, snapshot=False)
+        _, qemu_queue = qemu.run(alternative_func=self._run_trace_cmd, args=("trace-{}".format(cfg.repro.distro_name), ))
         done = qemu_queue.get(block=True)
         qemu.kill()
         if not done:

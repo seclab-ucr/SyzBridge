@@ -201,6 +201,8 @@ function compile_ubuntu() {
             config_disable $key debian.master/config/config.common.ubuntu
         done
 
+        sed -i "s/CONFIG_FRAME_WARN=1024/CONFIG_FRAME_WARN=2048/g" debian.master/config/config.common.ubuntu
+
         LANG=C fakeroot debian/rules defaultconfigs || true
         LANG=C fakeroot debian/rules -j`nproc` binary-headers binary-generic binary-perarch skipdbg=false
 

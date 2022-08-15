@@ -5,7 +5,7 @@ from infra.tool_box import *
 from modules.reproducer import Reproducer
 
 class Vendor():
-    def __init__(self, cfg, index=0):
+    def __init__(self, cfg):
         self.keys_must_have = ["distro_image", "ssh_port", "ssh_key", "distro_name", "distro_code_name", "distro_version", "type"]
         self.default_modules = {}
         self.optional_modules = {}
@@ -20,6 +20,8 @@ class Vendor():
         self._distro_name = None
         self._distro_code_name = None
         self._distro_version = None
+        self._effective_cycle_start = ""
+        self._effective_cycle_end = ""
         self._built_modules = False
         self._type = None
         self._repro = None
@@ -250,3 +252,19 @@ class Vendor():
         if type(n) != str:
             raise TargetFormatNotMatch(n, type(n), str)
         self._distro_version = n
+
+    @property
+    def effective_cycle_start(self):
+        return self._effective_cycle_start
+
+    @effective_cycle_start.setter
+    def effective_cycle_start(self, time_str):
+        self._effective_cycle_start = time_str
+    
+    @property
+    def effective_cycle_end(self):
+        return self._effective_cycle_end
+
+    @effective_cycle_end.setter
+    def effective_cycle_end(self, time_str):
+        self._effective_cycle_end = time_str

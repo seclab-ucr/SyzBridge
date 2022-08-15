@@ -39,18 +39,16 @@ class Config:
             raise TargetFileNotExist(config)
     
     def load(self, cfg):
-        i = 0
         kernel_cfg = cfg['kernel']
         t = {}
         for vendor in kernel_cfg:
             vend_cfg = kernel_cfg[vendor]
-            _cfg = Vendor(vend_cfg, i)
+            _cfg = Vendor(vend_cfg)
             if _cfg.distro_name not in t:
                 setattr(self.kernel, vendor.lower(), _cfg)
                 t[_cfg.distro_name] = True
             else:
                 raise DuplicatedDistro(_cfg.distro_name)
-            i += 1
 
         proj_dir = os.path.join(os.getcwd(), "syzmorph")
         modules_dir = os.path.join(proj_dir, "plugins")

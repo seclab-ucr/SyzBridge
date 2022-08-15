@@ -43,12 +43,16 @@ class Launcher(Build):
     
     def need_repro(self):
         case = self.manager.case
-        if case['patch']['fixes'] == []:
+        if case['affect'] != None:
+            if self.distro_name in case['affect']:
+                return True 
+        else:
+            if case['patch']['fixes'] == []:
+                return True
+            for fix in case['patch']['fixes']:
+                if self.distro_name in fix['exclude']:
+                    return False
             return True
-        fixes = case['patch']['fixes']
-        if self.cfg.distro_name in fixes['exclude']:
-            return False
-        return True
     
     def reproduce(self, func, func_args, root, work_dir, vm_tag, **kwargs):
         self.kill_qemu = False
@@ -83,7 +87,7 @@ class Launcher(Build):
                 trigger = True
                 res = crashes
                 self.kill_qemu = True
-                self.save_crash_log(res, self.type_name)
+                self.save_crash_log(res, self.distro_name)
                 if res == []:
                     res = crashes
                 break
@@ -113,7 +117,7 @@ class Launcher(Build):
     
     def launch_qemu(self, c_hash=0, log_suffix="", log_name=None, timeout=15*60, gdb_port=None, mon_port=None, ssh_port=None, **kwargs):
         if log_name is None:
-            log_name = "qemu-{0}-{1}.log".format(c_hash, self.type_name)
+            log_name = "qemu-{0}-{1}.log".format(c_hash, self.distro_name)
         if ssh_port != None:
             self.ssh_port = ssh_port
         if gdb_port != None:

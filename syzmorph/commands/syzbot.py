@@ -30,7 +30,7 @@ class SyzbotCommand(Command):
                             help='[string] The maximum of cases for retrieval\n'
                                 '(By default all the cases will be retrieved)')
         parser.add_argument('--config', nargs='?', action='store',
-                            help='config file. Will be overwritten by arguments if conflict.')
+                            help='config file. Will be overwritte n by arguments if conflict.')
         parser.add_argument('--filter-by-reported', nargs='?',
                             default='',
                             help='[string] filter by bug reported days (X1-X2 days)\n')
@@ -44,6 +44,9 @@ class SyzbotCommand(Command):
                             help='[bool] filter bugs that do not have a c reproducer\n')
         parser.add_argument('--filter-by-fixes-tag', action='store_true',
                             help='[bool] filter bugs that do not have fixes tag\n')
+        parser.add_argument('--filter-by-distro-effective-cycle', action='store_true',
+                            help='[bool] filter bugs by distro effective cycle\n'
+                            'Use \'effective_cycle_start\' and \'effective_cycle_end\' in config file')
         parser.add_argument('--addition', action='store_true',
                             help='[bool] add additional cases\n')
     
@@ -68,6 +71,8 @@ class SyzbotCommand(Command):
         try:
             if self.args.config != None:
                 self.cfg = self.parse_config(self.args.config)
+            else:
+                self.logger.warn("No config file found. --filter-by-fixes-tag can not be used.")
         except TargetFileNotExist as e:
             self.logger.error(e)
             return
@@ -90,7 +95,7 @@ class SyzbotCommand(Command):
         crawler = Crawler(url=self.args.url, keyword=self.args.key, max_retrieve=int(self.args.max_retrieval), 
             filter_by_reported=self.args.filter_by_reported, filter_by_closed=self.args.filter_by_closed, 
             filter_by_c_prog=self.args.filter_by_c_prog, filter_by_kernel=self.args.filter_by_kernel,
-            filter_by_fixes_tag=self.args.filter_by_fixes_tag,
+            filter_by_fixes_tag=self.args.filter_by_fixes_tag, filter_by_distro_effective_cycle=self.args.filter_by_distro_effective_cycle,
             cfg=self.cfg, debug=self.args.debug, log_path = self.proj_dir)
         
         try:
@@ -105,8 +110,8 @@ class SyzbotCommand(Command):
                             crawler.run_one_case(line)
             else:
                 crawler.run()
-        except:
-            self.logger.error("Something went wrong in crawler, check the log for more details.")
+        except Exception as e:
+            self.logger.error("Something went wrong in crawler, check the log for more details.", e)
 
         if self.args.addition:
             self.cases = self.read_cases(args.proj)

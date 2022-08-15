@@ -8,6 +8,7 @@ from syzmorph.infra.config.config import Config
 from syzmorph.infra.tool_box import clone_repo, init_logger, regx_get, regx_match, request_get, extract_vul_obj_offset_and_size
 from bs4 import BeautifulSoup
 from bs4 import element
+from datetime import date
 from .error import *
 
 syzbot_bug_base_url = "bug?id="
@@ -18,7 +19,8 @@ class Crawler:
     def __init__(self,
                  url="https://syzkaller.appspot.com/upstream/fixed",
                  keyword=[], max_retrieve=99999, filter_by_reported="", log_path = ".", cfg=None,
-                 filter_by_closed="", filter_by_c_prog=False, filter_by_fixes_tag=False, filter_by_kernel=[], include_high_risk=True, debug=False):
+                 filter_by_closed="", filter_by_c_prog=False, filter_by_fixes_tag=False, filter_by_kernel=[], 
+                 filter_by_distro_effective_cycle=False, include_high_risk=True, debug=False):
         self.url = url
         if type(keyword) == list:
             self.keyword = keyword
@@ -32,6 +34,7 @@ class Crawler:
         self.logger = init_logger(log_path + "/syzbot.log", debug = debug, propagate=True)
         self.filter_by_reported = [-1, -1]
         self.filter_by_closed = [-1, -1]
+        self.filter_by_distro_effective_cycle = filter_by_distro_effective_cycle
         if filter_by_reported != "":
             n = filter_by_reported.split('-')
             n[0] = int(n[0])
@@ -75,6 +78,14 @@ class Crawler:
                     self.logger.debug("{} does not have a fixes tag".format(each['Hash']))
                     continue
             if self.retreive_case(each['Hash']) != -1:
+                if self.filter_by_distro_effective_cycle:
+                    self.cases[each['Hash']]['affect'] = self.get_affect_distro(each['Reported'])
+                    if len(self.cases[each['Hash']]['affect']) == 0:
+                        self.logger.debug("{} does not affect any distro within its life cycle".format(each['Hash']))
+                        self.cases.pop(each['Hash'])
+                        continue
+                else:
+                    self.cases[each['Hash']]['affect'] = None
                 self.cases[each['Hash']]['title'] = each['Title']
                 self.cases[each['Hash']]['patch'] = self.patch_info
 
@@ -91,6 +102,34 @@ class Crawler:
             res=None
         return res
     
+    def distro_in_effective_cycle(self, date_diff):
+        res = []
+        if self.cfg == None or date_diff == None:
+            return None
+        today = date.today()
+        for distro in self.cfg.get_distros():
+            if distro.effective_cycle_start != "":
+                effective_start_date_diff = today - pd.to_datetime(distro.effective_cycle_start).date()
+                if date_diff > effective_start_date_diff.days:
+                    continue
+            if distro.effective_cycle_end != "":
+                effective_end_date_diff = today - pd.to_datetime(distro.effective_cycle_end).date()
+                if date_diff <= effective_end_date_diff.days:
+                    continue
+            res.append(distro.distro_name)
+        return res
+
+    def get_affect_distro(self, reported_date):
+        res = self.distro_in_effective_cycle(reported_date)
+        if res == None:
+            return None
+        if self.filter_by_fixes_tag:
+            for fix in self.patch_info['fixes']:
+                for each in fix['exclude']:
+                    if each in res:
+                        res.remove(each)
+        return res
+    
     def check_excluded_distro(self, hash_val, patch_url):
         req = requests.request(method='GET', url=patch_url)
         soup = BeautifulSoup(req.text, "html.parser")
@@ -103,6 +142,7 @@ class Crawler:
             self.patch_info['date'] = patch_date.strftime("%Y-%m-%d")
         try:
             msg = soup.find('div', {'class': 'commit-msg'}).text
+            self.patch_info['fixes'] = []
             for line in msg.split('\n'):
                 if line.startswith('Fixes:'):
                     fix_hash = regx_get(r'Fixes: ([a-z0-9]+)', line, 0)
@@ -111,19 +151,31 @@ class Crawler:
                         commit_date = self.get_linux_commit_date_online(fix_hash)
                         if commit_date == None:
                             continue
-                    self.patch_info['fixes'] = {'hash': fix_hash, 'date': commit_date.strftime("%Y-%m-%d"), 'exclude': []}
+                    fixes = {'hash': fix_hash, 'date': commit_date.strftime("%Y-%m-%d"), 'exclude': []}
                     self.logger.debug("Fix tag {}: {}".format(fix_hash, commit_date))
 
                     # We want to save all fixes tag info
                     # don't return too early
                     if self.cfg == None:
                         continue
-                    base_version = self.closest_tag(fix_hash, soup)
-                    if base_version == None:
-                        continue
-                    for distro in self.cfg.get_distros():
-                        if not self.is_newer_version(base_version, distro.distro_version):
-                            self.patch_info['fixes']['exclude'].append(distro.distro_name)
+                    
+                    if self.filter_by_distro_effective_cycle:
+                        today = date.today()
+                        for distro in self.cfg.get_distros():
+                            if distro.effective_cycle_start != "":
+                                effective_start_date_diff = today - pd.to_datetime(distro.effective_cycle_start).date()
+                                commit_date_diff = today - commit_date.date()
+                                if commit_date_diff.days < effective_start_date_diff.days:
+                                    fixes['exclude'].append(distro.distro_name)
+                    else:
+                        base_version = self.closest_tag(fix_hash, soup)
+                        if base_version == None:
+                            continue
+                        for distro in self.cfg.get_distros():
+                            if not self.is_newer_version(base_version, distro.distro_version):
+                                fixes['exclude'].append(distro.distro_name)
+                    self.patch_info['fixes'].append(fixes)
+
         except Exception as e:
             self.logger.error("Error parsing fix tag for {}: {}".format(hash_val, e))
         return self.patch_info['fixes'] != []
@@ -204,20 +256,37 @@ class Crawler:
                 pass
         return None
 
-    def run_one_case(self, hash):
-        self.logger.info("retreive one case: %s",hash)
-        patch_url = self.get_patch_url(hash)
-        if self.retreive_case(hash) == -1:
+    def run_one_case(self, hash_val):
+        self.logger.info("retreive one case: %s",hash_val)
+        patch_url = self.get_patch_url(hash_val)
+        if self.retreive_case(hash_val) == -1:
             return
         self.patch_info = {'url': None, 'fixes':[], 'date':None}
         if self.filter_by_fixes_tag:
-            if not self.check_excluded_distro(hash, patch_url):
-                self.logger.error("{} does not have a fixes tag".format(hash))
+            if not self.check_excluded_distro(hash_val, patch_url):
+                self.logger.error("{} does not have a fixes tag".format(hash_val))
                 return
-        self.cases[hash]['title'] = self.get_title_of_case(hash)
-        self.cases[hash]['patch'] = self.patch_info
-        return self.cases[hash]
+        if self.filter_by_distro_effective_cycle:
+            report_date = self.case_first_crash(hash_val)
+            self.cases[hash_val]['affect'] = self.get_affect_distro(report_date)
+            if len(self.cases[hash_val]['affect']) == 0:
+                self.logger.error("{} does not affect any distro within its life cycle".format(hash_val))
+                return
+        else:
+            self.cases[hash_val]['affect'] = None
+        self.cases[hash_val]['title'] = self.get_title_of_case(hash_val)
+        self.cases[hash_val]['patch'] = self.patch_info
+        return self.cases[hash_val]
     
+    def case_first_crash(self, hash_val):
+        url = syzbot_host_url + syzbot_bug_base_url + hash_val
+        req = request_get(url)
+        soup = BeautifulSoup(req.text, "html.parser")
+        date_diff = regx_get(r'First crash: (\d+)d', soup.text, 0)
+        if date_diff == None:
+            raise None
+        return int(date_diff)
+
     def get_title_of_case(self, hash=None, text=None):
         if hash==None and text==None:
             self.logger.info("No case given")
