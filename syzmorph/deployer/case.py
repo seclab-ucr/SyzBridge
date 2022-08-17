@@ -84,8 +84,9 @@ class Case:
         exitcode = p.wait()
         self.case_logger.info("scripts/init-case.sh was done with exitcode {}".format(exitcode))
 
-        for cfg in self.cfg.get_all_kernels():
-            cfg.repro = Reproducer(cfg=cfg, manager=self, qemu_num=3)
+        for kernel in self.cfg.get_all_kernels():
+            if self.need_repro(kernel.distro_name) or kernel.type == 1: # If need reproduce or type is upstream kernel
+                kernel.repro = Reproducer(cfg=kernel, manager=self, qemu_num=3)
         #self.lts = self._determine_lts()
     """
     def _determine_lts(self):
@@ -111,6 +112,18 @@ class Case:
             else:
                 return each
     """
+
+    def need_repro(self, distro_name):
+        if self.case['affect'] != None:
+            if distro_name in self.case['affect']:
+                return True 
+        else:
+            if self.case['patch']['fixes'] == []:
+                return True
+            for fix in self.case['patch']['fixes']:
+                if distro_name in fix['exclude']:
+                    return False
+            return True
 
     def _get_case_path(self):
         path_case = None

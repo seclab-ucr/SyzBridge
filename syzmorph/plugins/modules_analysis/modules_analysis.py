@@ -44,9 +44,9 @@ class ModulesAnalysis(AnalysisModule):
         def inner(self):
             ret = func(self)
             if ret:
-                self.main_logger.info("[Modules analysis] All modules passed")
+                self.main_logger.info("[Modules analysis] Modules analysis passed")
             else:
-                self.main_logger.info("[Modules analysis] At least one module failed to find in {}".format(self._cur_distro.distro_name))
+                self.main_logger.info("[Modules analysis] Failed to analyze modules")
             return ret
         return inner
     
@@ -88,6 +88,7 @@ class ModulesAnalysis(AnalysisModule):
         except TraceAnalysisError as e:
             self.logger.error("[Modules analysis] {}".format(e))
             self.main_logger.error("[Modules analysis] {}".format(e))
+            return False
                 
         self.report.append(ModulesAnalysis.REPORT_END)
         if self._remove_trace_file:
@@ -105,7 +106,7 @@ class ModulesAnalysis(AnalysisModule):
     def check_ftrace(self):
         trace = self._open_trace()
         if trace == None:
-            raise TraceAnalysisError("Failed to open trace file: file do not exist")
+            raise TraceAnalysisError("Failed to open upstream trace file")
         vm = self._prepare_gdb()
         check_map = {}
         all_distros = self.cfg.get_distros()

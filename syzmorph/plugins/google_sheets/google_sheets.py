@@ -14,6 +14,7 @@ class GoogleSheets(AnalysisModule):
     DEPENDENCY_PLUGINS = ["RawBugReproduce", "BugReproduce", "CapabilityCheck", "ModulesAnalysis", "Syzscope", "Fuzzing"]
 
     TYPE_FAILED = (1,1,1,1)
+    TYPE_UNFINISHED = (0.9,0.23,0.58,0.8)
     TYPE_SUCCEED = (0.63,0.76,0.78,1.0) # rgba(162, 196, 201, 1)
     TYPE_SUCCEED_NEED_ADAPTATION = (0.27,0.5,0.55,1.0) # rgba(69, 129, 142, 1)
 
@@ -56,19 +57,38 @@ class GoogleSheets(AnalysisModule):
         self._write_hash(wks)
         self._write_title(wks)
         self._write_url(wks)
+
         if self.plugin_finished("BugReproduce"):
             self._write_reproducable(wks)
+        else:
+            self._render_cell_color('D2', self.TYPE_UNFINISHED, wks)
+            self._render_cell_color('E2', self.TYPE_UNFINISHED, wks)
+            self._render_cell_color('F2', self.TYPE_UNFINISHED, wks)
+
         if self.plugin_finished("ModulesAnalysis"):
             self._write_module_analysis(wks)
+        else:
+            self._render_cell_color('G2', self.TYPE_UNFINISHED, wks)
+
         if self.plugin_finished("CapabilityCheck"):
             self._write_capability_check(wks)
+        else:
+            self._render_cell_color('H2', self.TYPE_UNFINISHED, wks)
+
         if self.plugin_finished("SyzScope"):
             self._write_syzscope(wks)
+        else:
+            self._render_cell_color('I2', self.TYPE_UNFINISHED, wks)
         if self.plugin_finished("Fuzzing"):
             self._write_fuzzing(wks)
+        else:
+            self._render_cell_color('J2', self.TYPE_UNFINISHED, wks)
         if self.plugin_finished("RawBugReproduce"):
             self._write_raw_reproducable(wks)
-        self._render_coloer(wks)
+        else:
+            self._render_cell_color('K2', self.TYPE_UNFINISHED, wks)
+        self._render_cell_color('A2', self.case_type, wks)
+        #self._render_row_coloer(wks)
         try:
             if self.manager.module_capable("SlackBot") and \
                     (self.data['reproduce-by-normal'] != "" or self.data['reproduce-by-root'] != ""):
@@ -240,11 +260,15 @@ class GoogleSheets(AnalysisModule):
             if not triggered:
                 self.case_type = self.TYPE_SUCCEED_NEED_ADAPTATION
     
-    def _render_coloer(self, wks: pygsheets.Worksheet):
+    def _render_row_coloer(self, wks: pygsheets.Worksheet):
         for i in range(0, 26):
             ch = chr(ord('A') + i)
             cell = wks.cell(ch+'2')
             cell.color = self.case_type
+    
+    def _render_cell_color(self, pos, color, wks: pygsheets.Worksheet):
+        cell = wks.cell(pos)
+        cell.color = color
 
     def _write_to(self, content, name):
         file_path = "{}/{}".format(self.path_case_plugin, name)

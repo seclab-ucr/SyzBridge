@@ -125,7 +125,6 @@ class VMInstance(Network):
         return ret
 
     def monitor_execution(self):
-        qemu_failed = False
         count = 0
         run_alternative_func = False
         while self.timeout == None or count <self.timeout:

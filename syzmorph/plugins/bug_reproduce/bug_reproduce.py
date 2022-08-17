@@ -30,9 +30,18 @@ class BugReproduce(AnalysisModule):
         self.root_user = None
         self.normal_user = None
         self.distro_lock = threading.Lock()
+        self.repro_timeout = BUG_REPRODUCE_TIMEOUT
         
     def prepare(self):
         self._init_results()
+        try:
+            plugin = self.cfg.get_plugin(self.NAME)
+            if plugin == None:
+                self.logger.error("No such plugin {}".format(self.NAME))
+            self.repro_timeout = int(plugin.timeout)
+        except AttributeError:
+            self.logger.error("Failed to get timeout or gdb_port or qemu_monitor_port or max_round")
+            return False
         if not self.manager.has_c_repro:
             self.logger.info("Case does not have c reproducer")
             return False

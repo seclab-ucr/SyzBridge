@@ -79,18 +79,30 @@ class Config:
             res.append(cfg)
         return res
 
-    def get_distro(self, name):
+    def get_distro_by_name(self, name):
         distro = getattr(self.kernel, name)
         if distro.type == VMInstance.DISTROS:
             return distro
         return None
+    
+    # get_all_distros ignore is_inited() and need_repro()
+    # It returns every distro that was defined in config file
+    def get_all_distros(self)-> Vendor:
+        res = []
+        for name in self.kernel.__dict__:
+            distro = getattr(self.kernel, name)
+            if distro.type == VMInstance.DISTROS:
+                res.append(distro)
+        return res
 
     def get_distros(self)-> Vendor:
         res = []
         for name in self.kernel.__dict__:
             distro = getattr(self.kernel, name)
             if distro.type == VMInstance.DISTROS:
-                if distro.repro != None and not distro.repro.need_repro():
+                if not distro.is_inited():
+                    continue
+                if not distro.repro.need_repro():
                     continue
                 res.append(distro)
         return res

@@ -28,9 +28,18 @@ class RawBugReproduce(AnalysisModule):
         self.root_user = None
         self.normal_user = None
         self.distro_lock = threading.Lock()
+        self.repro_timeout = BUG_REPRODUCE_TIMEOUT
         
     def prepare(self):
         self._init_results()
+        try:
+            plugin = self.cfg.get_plugin(self.NAME)
+            if plugin == None:
+                self.logger.error("No such plugin {}".format(self.NAME))
+            self.repro_timeout = int(plugin.timeout)
+        except AttributeError:
+            self.logger.error("Failed to get timeout")
+            return False
         if not self.manager.has_c_repro:
             self.logger.info("Case does not have c reproducer")
             return False
@@ -86,12 +95,12 @@ class RawBugReproduce(AnalysisModule):
         res["bug_title"] = ""
         res["root"] = True
         
-        success, _ = self.reproduce(distro, func=self.capture_kasan, root=True)
+        success, _ = self.reproduce(distro, func=self.capture_kasan, root=True, timeout=self.repro_timeout)
         if success:
             res["triggered"] = True
             res["bug_title"] = self.bug_title
             res["root"] = True
-            success, _ = self.reproduce(distro, func=self.capture_kasan, root=False)
+            success, _ = self.reproduce(distro, func=self.capture_kasan, root=False, timeout=self.repro_timeout)
             if success:
                 res["triggered"] = True
                 res["bug_title"] = self.bug_title

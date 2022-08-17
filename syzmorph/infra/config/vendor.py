@@ -25,6 +25,7 @@ class Vendor():
         self._built_modules = False
         self._type = None
         self._repro = None
+        self._init = False
         if cfg["type"] == "distro":
             for key in self.keys_must_have:
                 if key not in cfg:
@@ -47,6 +48,9 @@ class Vendor():
         queue.get(block=True)
         qemu.kill()
         self._dump_modules_to_cache()
+    
+    def is_inited(self):
+        return self._init
     
     def _read_modules_from_cache(self):
         for name in ["optional_modules", "default_modules", "blacklist_modules"]:
@@ -127,6 +131,7 @@ class Vendor():
     def repro(self, value):
         if not isinstance(value, Reproducer):
             raise TypeError("repro must be an instance of Reproducer")
+        self._init = True
         self._repro = value
 
     @property
