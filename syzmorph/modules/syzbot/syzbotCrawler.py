@@ -121,13 +121,16 @@ class Crawler:
 
     def get_affect_distro(self, reported_date):
         res = self.distro_in_effective_cycle(reported_date)
+        self.logger.debug("Bug might affects {}".format(res))
         if res == None:
             return None
         if self.filter_by_fixes_tag:
             for fix in self.patch_info['fixes']:
+                self.logger.debug("Exclude {}".format(fix))
                 for each in fix['exclude']:
                     if each in res:
                         res.remove(each)
+        self.logger.debug("Bug affects {}".format(res))
         return res
     
     def check_excluded_distro(self, hash_val, patch_url):
@@ -271,6 +274,7 @@ class Crawler:
             self.cases[hash_val]['affect'] = self.get_affect_distro(report_date)
             if len(self.cases[hash_val]['affect']) == 0:
                 self.logger.error("{} does not affect any distro within its life cycle".format(hash_val))
+                self.cases.pop(hash_val)
                 return
         else:
             self.cases[hash_val]['affect'] = None

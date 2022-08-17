@@ -90,6 +90,8 @@ class Config:
         for name in self.kernel.__dict__:
             distro = getattr(self.kernel, name)
             if distro.type == VMInstance.DISTROS:
+                if distro.repro != None and not distro.repro.need_repro():
+                    continue
                 res.append(distro)
         return res
     

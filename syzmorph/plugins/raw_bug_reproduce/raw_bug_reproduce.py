@@ -68,9 +68,6 @@ class RawBugReproduce(AnalysisModule):
         res = {}
         output = queue.Queue()
         for distro in self.cfg.get_distros():
-            if not distro.repro.need_repro():
-                self.logger.debug("{} does not need repro, bug was not introduced".format(distro.distro_name))
-                continue
             self.logger.info("start reproducing bugs on {}".format(distro.distro_name))
             x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="reproduce_async-{}".format(distro.distro_name))
             x.start()
@@ -78,8 +75,6 @@ class RawBugReproduce(AnalysisModule):
                 x.join()
 
         for distro in self.cfg.get_distros():
-            if not distro.repro.need_repro():
-                continue
             [distro_name, m] = output.get(block=True)
             res[distro_name] = m
         return res

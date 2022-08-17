@@ -30,7 +30,7 @@ class SyzbotCommand(Command):
                             help='[string] The maximum of cases for retrieval\n'
                                 '(By default all the cases will be retrieved)')
         parser.add_argument('--config', nargs='?', action='store',
-                            help='config file. Will be overwritte n by arguments if conflict.')
+                            help='config file. Will be overwritten by arguments if conflict.')
         parser.add_argument('--filter-by-reported', nargs='?',
                             default='',
                             help='[string] filter by bug reported days (X1-X2 days)\n')
@@ -115,6 +115,9 @@ class SyzbotCommand(Command):
 
         if self.args.addition:
             self.cases = self.read_cases(args.proj)
+            if self.cases == None:
+                self.logger.error("Project {} does not exist".format(args.proj))
+                return
             for e in crawler.cases:
                 if e not in self.cases:
                     self.cases[e] = crawler.cases[e]
