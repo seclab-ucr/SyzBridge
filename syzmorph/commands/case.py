@@ -19,6 +19,9 @@ class CaseCommand(Command):
         parser.add_argument('--proj', nargs='?', action='store', help='project name')
         parser.add_argument('--hash', nargs='?', action='store', help='hash of a case or a file contains multiple hashs')
         parser.add_argument('--all', action='store_true', help='Get all case info')
+        parser.add_argument('--count', '-c', action='store_true', help='count the number of bugs')
+        parser.add_argument('--static', action='store_true', help='gather bugs\'s info from offline json file')
+
         parser.add_argument('--completed', action='store_true', help='Get completed case info') 
         parser.add_argument('--incomplete', action='store_true', help='Get incomplete case info')
         parser.add_argument('--succeed', action='store_true', help='Get succeed case info')
@@ -45,6 +48,12 @@ class CaseCommand(Command):
                         self.cases[hash_val] = t[hash_val]
             else:
                 self.cases = {args.hash: self.cases[args.hash]}
+        if args.static:
+            j = json.load(open(self.proj_dir + '/cases.json', 'r'))
+            if args.count:
+                print(len(j))
+            return
+    
         if args.all:
             self.print_case_info()
         if args.completed:
