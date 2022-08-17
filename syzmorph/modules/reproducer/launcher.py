@@ -19,7 +19,7 @@ class Launcher(Build):
         self.qemu_num = qemu_num
         self.debug = manager.debug
         self.kill_qemu = False
-        self.queue = multiprocessing.Manager().Queue()
+        self.queue = multiprocessing.Queue()
         
     def save_crash_log(self, log, name):
         with open("{}/crash_log-{}".format(self.path_case, name), "w+") as f:
@@ -67,7 +67,6 @@ class Launcher(Build):
             x = multiprocessing.Process(target=self._reproduce, kwargs=args, name="trigger-{}".format(i))
             x.start()
             self.log("Start reproducing {}, args {}".format(vm_tag + str(i), args))
-            x.join()
             
             t = self.queue.get(block=True)
             if len(t) >= 3:
@@ -109,7 +108,7 @@ class Launcher(Build):
             self.queue.put([[], False, True])
         else:
             self.queue.put(res)
-        qemu.kill();
+        qemu.kill()
         
         # sleep 5 seconds to wait qemu to exit
         sleep(5)

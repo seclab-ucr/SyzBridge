@@ -79,7 +79,7 @@ class Crawler:
                     continue
             if self.retreive_case(each['Hash']) != -1:
                 if self.filter_by_distro_effective_cycle:
-                    self.cases[each['Hash']]['affect'] = self.get_affect_distro(each['Reported'])
+                    self.cases[each['Hash']]['affect'] = self.get_affect_distro(int(each['Reported']))
                     if len(self.cases[each['Hash']]['affect']) == 0:
                         self.logger.debug("{} does not affect any distro within its life cycle".format(each['Hash']))
                         self.cases.pop(each['Hash'])
@@ -107,7 +107,7 @@ class Crawler:
         if self.cfg == None or date_diff == None:
             return None
         today = date.today()
-        for distro in self.cfg.get_distros():
+        for distro in self.cfg.get_all_distros():
             if distro.effective_cycle_start != "":
                 effective_start_date_diff = today - pd.to_datetime(distro.effective_cycle_start).date()
                 if date_diff > effective_start_date_diff.days:
@@ -119,7 +119,7 @@ class Crawler:
             res.append(distro.distro_name)
         return res
 
-    def get_affect_distro(self, reported_date):
+    def get_affect_distro(self, reported_date: int):
         res = self.distro_in_effective_cycle(reported_date)
         self.logger.debug("Bug might affects {}".format(res))
         if res == None:
@@ -164,7 +164,7 @@ class Crawler:
                     
                     if self.filter_by_distro_effective_cycle:
                         today = date.today()
-                        for distro in self.cfg.get_distros():
+                        for distro in self.cfg.get_all_distros():
                             if distro.effective_cycle_start != "":
                                 effective_start_date_diff = today - pd.to_datetime(distro.effective_cycle_start).date()
                                 commit_date_diff = today - commit_date.date()
@@ -174,7 +174,7 @@ class Crawler:
                         base_version = self.closest_tag(fix_hash, soup)
                         if base_version == None:
                             continue
-                        for distro in self.cfg.get_distros():
+                        for distro in self.cfg.get_all_distros():
                             if not self.is_newer_version(base_version, distro.distro_version):
                                 fixes['exclude'].append(distro.distro_name)
                     self.patch_info['fixes'].append(fixes)
