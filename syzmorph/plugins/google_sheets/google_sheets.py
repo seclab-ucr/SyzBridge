@@ -27,10 +27,10 @@ class GoogleSheets(AnalysisModule):
         try:
             plugin = self.cfg.get_plugin(self.NAME)
             if plugin == None:
-                self.logger.error("No such plugin: {}".format(self.NAME))
+                self.err_msg("No such plugin: {}".format(self.NAME))
             credential = plugin.credential
         except AttributeError:
-            self.logger.error("Credential not found in config file")
+            self.err_msg("Credential not found in config file")
             return False
         return self.prepare_on_demand(credential, self.args.proj)
     
@@ -97,7 +97,7 @@ class GoogleSheets(AnalysisModule):
                 blocks = bot.compose_blocks(self.data)
                 bot.post_message(blocks)
         except Exception as e:
-            self.logger.error("slackbot error: {}".format(e))
+            self.err_msg("slackbot error: {}".format(e))
     
     def create_banner(self, wks: pygsheets.Worksheet):
         if wks.get_value('A1') != 'hash':
@@ -115,7 +115,7 @@ class GoogleSheets(AnalysisModule):
     
     def generate_report(self):
         final_report = "\n".join(self.report)
-        self.logger.info(final_report)
+        self.info_msg(final_report)
         self._write_to(final_report, self.REPORT_NAME)
     
     def _write_hash(self, wks: pygsheets.Worksheet):

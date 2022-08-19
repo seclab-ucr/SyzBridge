@@ -35,13 +35,13 @@ class RawBugReproduce(AnalysisModule):
         try:
             plugin = self.cfg.get_plugin(self.NAME)
             if plugin == None:
-                self.logger.error("No such plugin {}".format(self.NAME))
+                self.err_msg("No such plugin {}".format(self.NAME))
             self.repro_timeout = int(plugin.timeout)
         except AttributeError:
-            self.logger.error("Failed to get timeout")
+            self.err_msg("Failed to get timeout")
             return False
         if not self.manager.has_c_repro:
-            self.logger.info("Case does not have c reproducer")
+            self.info_msg("Case does not have c reproducer")
             return False
         return self.prepare_on_demand()
     
@@ -63,12 +63,14 @@ class RawBugReproduce(AnalysisModule):
                         str_privilege = " by root user"
                     self.main_logger.info("{} triggers a bug: {} {}".format(key ,title, str_privilege))
                     self.report.append("{} triggers a bug: {} {}".format(key ,title, str_privilege))
+                    self.set_stage_text("Triggered")
                     self._move_to_success = True
                 else:
                     fail_name += key + " "
             if fail_name != "":
                 self.main_logger.info("{} fail to trigger the bug".format(fail_name))
                 self.report.append("{} fail to trigger the bug".format(fail_name))
+                self.set_stage_text("Failed")
             return True
         return inner
 
@@ -77,7 +79,7 @@ class RawBugReproduce(AnalysisModule):
         res = {}
         output = queue.Queue()
         for distro in self.cfg.get_distros():
-            self.logger.info("start reproducing bugs on {}".format(distro.distro_name))
+            self.info_msg("start reproducing bugs on {}".format(distro.distro_name))
             x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="reproduce_async-{}".format(distro.distro_name))
             x.start()
             if self.debug:
@@ -150,7 +152,7 @@ class RawBugReproduce(AnalysisModule):
     
     def generate_report(self):
         final_report = "\n".join(self.report)
-        self.logger.info(final_report)
+        self.info_msg(final_report)
         self._write_to(final_report, self.REPORT_NAME)
     
     def capture_kasan(self, qemu, th_index, work_dir, root, poc_feature):
@@ -161,12 +163,19 @@ class RawBugReproduce(AnalysisModule):
         try:
             res, trigger_hunted_bug = self._qemu_capture_kasan(qemu, th_index)
         except Exception as e:
-            self.logger.error("Exception occur when reporducing crash: {}".format(e))
+            self.err_msg("Exception occur when reporducing crash: {}".format(e))
             if qemu.instance.poll() == None:
                 qemu.instance.kill()
             res = []
             trigger_hunted_bug = False
         qemu.alternative_func_output.put([res, trigger_hunted_bug, qemu.qemu_fail], block=False)
+
+    def set_history_status(self):
+        for name in self.results:
+            if self.results[name]['trigger']:
+                self.set_stage_text("Triggered")
+                return
+        self.set_stage_text("Failed")
 
     def _crash_start(self, line):
         crash_head = [r'BUG: ', r'WARNING:', r'INFO:', r'Unable to handle kernel', 
@@ -221,7 +230,7 @@ class RawBugReproduce(AnalysisModule):
         for line in out:
             line = line.strip()
             if line == config:
-                self.logger.info("{} is enabled".format(config))
+                self.info_msg("{} is enabled".format(config))
                 return True
         return False
 
@@ -270,7 +279,7 @@ class RawBugReproduce(AnalysisModule):
             try:
                 title = report[0][0]
             except IndexError:
-                self.logger.error("Bug report error: {}".format(report))
+                self.err_msg("Bug report error: {}".format(report))
                 return None
             if regx_match(r'\[(( )+)?\d+\.\d+\] (.+)', title):
                 title = regx_get(r'\[(( )+)?\d+\.\d+\] (.+)', title, 2)
@@ -285,17 +294,17 @@ class RawBugReproduce(AnalysisModule):
                         if m != None and len(m.groups()) > 0:
                             title = m.groups()[0]
                     if regx_match(double_free_regx, line) and not flag_double_free:
-                            self.logger.info("Double free")
+                            self.info_msg("Double free")
                             self._write_to(self.path_project, "VendorDoubleFree")
                             flag_double_free = True
                             break
                     if regx_match(kasan_write_addr_regx, line) and not flag_kasan_write:
-                            self.logger.info("KASAN MemWrite")
+                            self.info_msg("KASAN MemWrite")
                             self._write_to(self.path_project, "VendorMemWrite")
                             flag_kasan_write = True
                             break
                     if regx_match(kasan_read_addr_regx, line) and not flag_kasan_read:
-                            self.logger.info("KASAN MemRead")
+                            self.info_msg("KASAN MemRead")
                             self._write_to(self.path_project, "VendorMemRead")
                             flag_kasan_read = True
                             break

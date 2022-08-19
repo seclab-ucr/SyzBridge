@@ -21,11 +21,11 @@ class SlackBot(AnalysisModule):
         try:
             plugin = self.cfg.get_plugin(self.NAME)
             if plugin == None:
-                self.logger.error("No such plugin {}".format(self.NAME))
+                self.err_msg("No such plugin {}".format(self.NAME))
             slack_token = plugin.slack_token
             channel = plugin.channel
         except AttributeError:
-            self.logger.error("Failed to get slack token or channel")
+            self.err_msg("Failed to get slack token or channel")
             return False
         return self.prepare_on_demand(slack_token, channel)
     
@@ -36,10 +36,10 @@ class SlackBot(AnalysisModule):
             for each in res['channels']:
                 if each['name'] == channel:
                     self.conversation_id = each['id']
-                    self.logger.info("Find target channel: {}".format(channel))
+                    self.info_msg("Find target channel: {}".format(channel))
                     break
         except SlackApiError as e:
-            self.logger.error("Failed to prepare SlackBot: {}".format(e))
+            self.err_msg("Failed to prepare SlackBot: {}".format(e))
             return False
         self._prepared = True
         return True
@@ -112,14 +112,14 @@ class SlackBot(AnalysisModule):
                 text="New bug reproducable on downstream distros",
                 blocks=block
             )
-            self.logger.info("Post new message to channel")
+            self.info_msg("Post new message to channel")
         except SlackApiError as e:
-            self.logger.error("Failed to post message to channel: {}".format(e))
+            self.err_msg("Failed to post message to channel: {}".format(e))
         return
     
     def generate_report(self):
         final_report = "\n".join(self.report)
-        self.logger.info(final_report)
+        self.info_msg(final_report)
         self._write_to(final_report, self.REPORT_NAME)
     
     def _write_to(self, content, name):

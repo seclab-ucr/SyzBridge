@@ -36,6 +36,7 @@ class VMInstance(Network):
         self.reset()
         self.logger = utilities.init_logger(os.path.join(work_path, log_name), debug=debug, propagate=debug)
         self.case_logger = self.logger
+        self.timer = 0
         if logger != None:
             self.case_logger = logger
         if tag != '':
@@ -125,14 +126,14 @@ class VMInstance(Network):
         return ret
 
     def monitor_execution(self):
-        count = 0
+        self.timer = 0
         run_alternative_func = False
-        while self.timeout == None or count <self.timeout:
+        while self.timeout == None or self.timer <self.timeout:
             if self.kill_qemu:
                 self.case_logger.info('Signal kill qemu received.')
                 self.kill_vm()
                 return
-            count += 1
+            self.timer += 1
             time.sleep(1)
             poll = self.instance.poll()
             if poll != None:
@@ -157,7 +158,7 @@ class VMInstance(Network):
                 return
             if not self.qemu_ready and self.is_qemu_ready():
                 self.qemu_ready = True
-                count = 0
+                self.timer = 0
                 time.sleep(10)
                 if self.alternative_func != None and not run_alternative_func:
                     x = threading.Thread(target=self._prepare_alternative_func, name="{} qemu call back".format(self.tag))

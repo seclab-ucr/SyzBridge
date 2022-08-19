@@ -90,7 +90,7 @@ class SyzkallerInterface(AnalysisModule):
             log_anything(p.stdout, self.logger, self.debug)
         exitcode = p.wait()
         if exitcode != 0:
-            self.logger.info("Fail to pull syzkaller")
+            self.info_msg("Fail to pull syzkaller")
         else:
             self.syzkaller_path = os.path.join(self.path_case_plugin, "gopath/src/github.com/google/syzkaller")
         return exitcode
@@ -146,7 +146,7 @@ class SyzkallerInterface(AnalysisModule):
                 break
         syz_logparser = os.path.join(self.path_case_plugin, "gopath/src/github.com/google/syzkaller/bin/syz-logparser")
         if not os.path.isfile(syz_logparser):
-            self.logger.info("Cannot find syz-logparser on current case")
+            self.info_msg("Cannot find syz-logparser on current case")
             return
         cmd = [syz_logparser, "-i", input_log, "-o", output_log, "-cfg", cfg_path]
         p = Popen(cmd, stdin=PIPE, stdout=PIPE)
@@ -154,7 +154,7 @@ class SyzkallerInterface(AnalysisModule):
             log_anything(p.stdout, self.logger, self.debug)
         exitcode = p.wait()
         if exitcode != 0:
-            self.logger.info("Fail to generate a decent report from bug log")
+            self.info_msg("Fail to generate a decent report from bug log")
         return 
     
     def support_enable_feature(self):
@@ -165,7 +165,7 @@ class SyzkallerInterface(AnalysisModule):
                 try:
                     line = line.decode("utf-8").strip('\n').strip('\r')
                 except:
-                    self.logger.info('bytes array \'{}\' cannot be converted to utf-8'.format(line))
+                    self.info_msg('bytes array \'{}\' cannot be converted to utf-8'.format(line))
                     continue
                 if line == "dfd609eca1871f01757d6b04b19fc273c87c14e5":
                     return True
@@ -182,7 +182,7 @@ class SyzkallerInterface(AnalysisModule):
     
     def generate_report(self):
         final_report = "\n".join(self.report)
-        self.logger.info(final_report)
+        self.info_msg(final_report)
         self._write_to(final_report, self.REPORT_NAME)
     
     def _write_to(self, content, name):

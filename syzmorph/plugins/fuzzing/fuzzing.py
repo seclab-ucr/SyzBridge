@@ -55,10 +55,10 @@ class Fuzzing(AnalysisModule):
         try:
             plugin = self.cfg.get_plugin(self.NAME)
             if plugin == None:
-                self.logger.error("No such plugin {}".format(self.NAME))
+                self.err_msg("No such plugin {}".format(self.NAME))
             time_limit = int(plugin.time)
         except AttributeError:
-            self.logger.error("Failed to get timeout or gdb_port or qemu_monitor_port or max_round")
+            self.err_msg("Failed to get timeout or gdb_port or qemu_monitor_port or max_round")
             return False
         return self.prepare_on_demand(time_limit)
     
@@ -74,7 +74,7 @@ class Fuzzing(AnalysisModule):
 
     def run(self):
         if self.prepare_custom_syzkaller() != 0:
-            self.logger.error("Failed to prepare syzkaller, stop fuzzing.")
+            self.err_msg("Failed to prepare syzkaller, stop fuzzing.")
             return False
         self.find_support_syscalls()
         for distro in self.cfg.get_distros():
@@ -95,16 +95,16 @@ class Fuzzing(AnalysisModule):
         self._write_to(testcase, "gopath/src/github.com/google/syzkaller/workdir/testcase")
         syscalls = self._extract_syscall_from_template(testcase)
         if syscalls == []:
-            self.logger.error("No syscalls found in testcase: {}".format(testcase))
+            self.err_msg("No syscalls found in testcase: {}".format(testcase))
             return -1
         for each in syscalls:
             dependent_syscalls.extend(self._extract_all_syzlang_syscalls(each, self.path_syzkaller))
         if len(dependent_syscalls) < 1:
-            self.logger.info("Cannot find dependent syscalls for\n{}\nTry to continue without them".format(testcase))
+            self.info_msg("Cannot find dependent syscalls for\n{}\nTry to continue without them".format(testcase))
         new_syscalls = syscalls.copy()
         new_syscalls.extend(dependent_syscalls)
         new_syscalls = unique(new_syscalls)
-        self.logger.info("supported syscall: {}".format(new_syscalls))
+        self.info_msg("supported syscall: {}".format(new_syscalls))
         self.enable_syscalls = "\"" + "\",\n\t\"".join(new_syscalls) + "\""
 
     def prepare_custom_syzkaller(self):
@@ -113,13 +113,13 @@ class Fuzzing(AnalysisModule):
             self.syz = self._init_module(SyzkallerInterface())
         self.syz.prepare_on_demand(self.path_case_plugin)
         if self.syz.pull_syzkaller(commit="b8d780ab30ab6ba340c43ad1944096dae15e6e79") != 0:
-            self.logger.error("Failed to pull syzkaller")
+            self.err_msg("Failed to pull syzkaller")
             return -1
         if self.syz.patch_syzkaller(patch=patch_path) != 0:
-            self.logger.error("Failed to patch syzkaller")
+            self.err_msg("Failed to patch syzkaller")
             return -1
         if self.syz.build_syzkaller() != 0:
-            self.logger.error("Failed to build syzkaller")
+            self.err_msg("Failed to build syzkaller")
             return -1
         self.path_syzkaller = self.syz.syzkaller_path
         return 0
@@ -159,7 +159,7 @@ class Fuzzing(AnalysisModule):
     
     def report_new_impact(self, crash_path):
         if crash_path == None:
-            self.logger.error("Error: crash path is None")
+            self.err_msg("Error: crash path is None")
             return
         src_files = os.listdir(crash_path)
         for files in src_files:
@@ -180,7 +180,7 @@ class Fuzzing(AnalysisModule):
    
     def generate_report(self):
         final_report = "\n".join(self.report)
-        self.logger.info(final_report)
+        self.info_msg(final_report)
         self._write_to(final_report, self.REPORT_NAME)
     
     def cleanup(self):
@@ -202,7 +202,7 @@ class Fuzzing(AnalysisModule):
         res = []
         dir = os.path.join(syzkaller_path, search_path)
         if not os.path.isdir(dir):
-            self.logger.info("{} do not exist".format(dir))
+            self.info_msg("{} do not exist".format(dir))
             return res
         for file in os.listdir(dir):
             if file.endswith(extension):
@@ -231,7 +231,7 @@ class Fuzzing(AnalysisModule):
             while(1):
                 try:
                     shutil.copytree(crash_path, dest_path)
-                    self.logger.info("Found crashes, copy them to {}".format(dest_path))
+                    self.info_msg("Found crashes, copy them to {}".format(dest_path))
                     break
                 except FileExistsError:
                     dest_path = "{}/crashes-{}".format(self.path_case_plugin, i)

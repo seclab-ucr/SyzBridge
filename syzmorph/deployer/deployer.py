@@ -6,6 +6,7 @@ from infra.tool_box import STREAM_HANDLER, init_logger, convert_folder_name_to_p
 from infra.strings import *
 from plugins import AnalysisModule, AnalysisModuleError
 from plugins.modules_analysis import ModulesAnalysis
+from infra.console.message import ConsoleMessage
 from .case import Case
 from .error import *
 from .task import Task
@@ -16,33 +17,39 @@ class Deployer(Case, Task):
 
     def __init__(self, index, owner, case_hash, case):
         Case.__init__(self, index, owner, case_hash, case)
-        kernel = self.case["kernel"]
+        kernel = case["kernel"]
         try:
-            if self.case["kernel"].startswith("https"):
-                kernel = self.case["kernel"].split('/')[-1].split('.')[0]
+            if case["kernel"].startswith("https"):
+                kernel = case["kernel"].split('/')[-1].split('.')[0]
         except:
             pass
+        self.console_queue = owner.console_queue
+        self.console_msg = ConsoleMessage(self.case_hash, index)
         self.logger = init_logger(__name__+str(self.index), 
             cus_format='%(asctime)s Thread {}: {}[{}] %(message)s'.format(self.index, self.case_hash, kernel).format(self.index),
             debug=self.debug, propagate=self.debug, handler_type=STREAM_HANDLER)
         Task.__init__(self, self.args)
         self.analysis = AnalysisModule()
-        self.analysis.setup(self)
+        self.analysis.init(self)
+        self.analysis.setup()
         self.build_analyzor_modules()
         self.build_plugins_order()
+        if self.console_mode:
+            self.send_plugins_order_to_console()
     
     def use_module(self, module):
         if not isinstance(module, AnalysisModule):
             raise AnalysisModuleError
         
         self.analysis.install_analyzor(module)
+        module.init(self)
         return module
     
     def do_task(self, task):
         analyzor_module = self.get_task_module(task)
         self.use_module(analyzor_module)
         if not self.analysis.check_stamp():
-            analyzor_module.setup(self)
+            analyzor_module.setup()
             if not self.analysis.prepare():
                 self.logger.error("Fail to prepare {}".format(self.analysis.name))
                 return 1
@@ -104,6 +111,21 @@ class Deployer(Case, Task):
                 A = self._get_plugin_instance_by_name(convert_folder_name_to_plugin_name(each))
                 self._build_dependency_module(task_id, A)
                 self.build_task_class(task_id, A)
+    
+    def send_plugins_order_to_console(self):
+        res = []
+        order = self.iterate_enabled_tasks()
+        for task in order:
+            if self.capable(task) and not self.is_service(task):
+                module = self.get_task_module(task)
+                res.append(module.NAME)
+        self.console_msg.type = ConsoleMessage.PLUGINS_ORDER
+        self.console_msg.message = res
+        self.send_to_console()
+
+    def send_to_console(self):
+        self.logger.info("Send to console: {}".format(self.console_msg.__dict__))
+        self.console_queue.put(self.console_msg.__dict__)
     
     def _build_dependency_module(self, task_id, module: AnalysisModule):
         dst_node = set()

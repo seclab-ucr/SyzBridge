@@ -24,11 +24,11 @@ class TraceAnalysis(AnalysisModule):
         
     def prepare(self):
         if not self.manager.has_c_repro:
-            self.logger.error("Case does not have c reproducer")
+            self.err_msg("Case does not have c reproducer")
             return False
         syzcalljson = os.path.join(self.path_package, "plugins/trace_analysis/syzcall2syscall.json")
         if not os.path.exists(syzcalljson):
-            self.logger.error("Cannot find syzcall2syscall.json")
+            self.err_msg("Cannot find syzcall2syscall.json")
             return False
         self.syzcall2syscall = json.load(open(syzcalljson, "r"))
         return self.prepare_on_demand()
@@ -42,33 +42,33 @@ class TraceAnalysis(AnalysisModule):
 
     def run(self):
         if not self._prepared:
-            self.logger.error("Module {} is not prepared".format(self.NAME))
+            self.err_msg("Module {} is not prepared".format(self.NAME))
             return False
 
         for _ in range(0,3):
-            self.logger.error("Starting retrieving trace from upstream")
+            self.err_msg("Starting retrieving trace from upstream")
             cfg = self.cfg.get_upstream()
             if cfg == None:
                 break
             trace_upstream = self._get_trace(cfg)
             if trace_upstream == None:
-                self.logger.error("Failed to get upstream trace, try again")
+                self.err_msg("Failed to get upstream trace, try again")
                 continue
             if self._is_trace_empty(trace_upstream):
                 continue
             break
 
         if self._is_trace_empty(trace_upstream):
-            self.logger.error("Failed to get upstream trace")
+            self.err_msg("Failed to get upstream trace")
             return False
         
         for distro in self.cfg.get_distros():
             for _ in range(0,3):
                 self.results[distro.distro_name] = False
-                self.logger.info("Starting retrieving trace from {}".format(distro.distro_name))
+                self.info_msg("Starting retrieving trace from {}".format(distro.distro_name))
                 trace_vendor = self._get_trace(distro)
                 if trace_vendor is None:
-                    self.logger.error("Failed to get vendor trace, try again")
+                    self.err_msg("Failed to get vendor trace, try again")
                     continue
                 if self._is_trace_empty(trace_vendor):
                     continue
@@ -156,7 +156,7 @@ class TraceAnalysis(AnalysisModule):
         with p.stdout:
             self._log_subprocess_output(p.stdout)
         exitcode = p.wait()
-        self.logger.info("script/deploy.sh is done with exitcode {}".format(exitcode))
+        self.info_msg("script/deploy.sh is done with exitcode {}".format(exitcode))
         return exitcode
     
     def _run_trace_cmd(self, qemu: VMInstance, trace_filename, syz_repro=False):
@@ -196,7 +196,7 @@ class TraceAnalysis(AnalysisModule):
         qemu.command(cmds="trace-cmd report > trace.report", user="root", wait=True)
         qemu.download(user="root", src=["/root/trace.report"], dst="{}/{}.report".format(self.path_case_plugin, trace_filename), wait=True)
         if qemu.dumped_ftrace:
-            self.logger.error("qemu paniced, restoring raw ftrace")
+            self.err_msg("qemu paniced, restoring raw ftrace")
             if self._save_dumped_ftrace(qemu, "{}/raw-{}.report".format(self.path_case_plugin, trace_filename)):
                 self._convert_raw_ftrace("{}/raw-{}.report".format(self.path_case_plugin, trace_filename),
                     "{}/{}.report".format(self.path_case_plugin, trace_filename), syscalls)
@@ -252,14 +252,14 @@ class TraceAnalysis(AnalysisModule):
         with p.stdout:
             self._log_subprocess_output(p.stdout)
         exitcode = p.wait()
-        self.logger.info("script/deploy-syzkaller.sh is done with exitcode {}".format(exitcode))
+        self.info_msg("script/deploy-syzkaller.sh is done with exitcode {}".format(exitcode))
         if exitcode != 2 and exitcode != 3:
             return 0
         return exitcode
     
     def generate_report(self):
         final_report = "\n".join(self.report)
-        self.logger.info(final_report)
+        self.info_msg(final_report)
         self._write_to(final_report, self.REPORT_NAME)
     
     def _generate_script(self, cmd):
@@ -302,13 +302,13 @@ exit $EXIT_CODE""".format(cmd)
         return script_path
     
     def _get_trace(self, cfg):
-        self.logger.info("Generating trace for {}".format(cfg.repro.distro_name))
+        self.info_msg("Generating trace for {}".format(cfg.repro.distro_name))
         trace_path = os.path.join(self.path_case_plugin, "trace-{}.report".format(cfg.repro.distro_name))
         if os.path.exists(trace_path):
             return trace_path
         if cfg.type == VMInstance.UPSTREAM:
             if self.build_env_upstream() != 0:
-                self.logger.error("Failed to build upstream environment")
+                self.err_msg("Failed to build upstream environment")
                 return None
 
         qemu = cfg.repro.launch_qemu(self.case_hash, work_path=self.path_case_plugin, log_name="qemu-{}.log".format(cfg.repro.distro_name), timeout=TIMEOUT_TRACE_ANALYSIS, snapshot=False)
@@ -404,7 +404,7 @@ exit $EXIT_CODE""".format(cmd)
             if regx_match(sleep_regx, line):
                 time = regx_get(sleep_regx, line, 1)
                 if time == None:
-                    self.logger.error("Wrong sleep format: {}".format(line))
+                    self.err_msg("Wrong sleep format: {}".format(line))
                     continue
                 if int(time) > 5:
                     data.pop()

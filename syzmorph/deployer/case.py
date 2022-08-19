@@ -11,7 +11,7 @@ from infra.config.config import Config
 reserve_port = 7
 class Case:
     def __init__(self, index, owner, case_hash, case):
-        self.cfg: Config = owner.cfg
+        self.cfg: Config = self.parse_config(owner.args.config)
         self.args = owner.args
         self.index = index
         self.debug = self.args.debug
@@ -26,10 +26,17 @@ class Case:
         self.lts = None
         self.has_c_repro = True
         self.path_linux = ""
+        self.console_mode = self.args.console
         self._init_case(case_hash)
         #if self.lts != None:
         #    self.path_linux = os.path.join(self.path_case, "linux/linux-{}".format(self.lts["version"]))
     
+    def parse_config(self, config):
+        cfg = Config()
+        cfg.load_from_file(config)
+
+        return cfg
+
     def save_to_others(self, error):
         dirname = os.path.dirname(self.path_ori)
         folder = os.path.basename(dirname)

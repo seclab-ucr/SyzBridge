@@ -54,7 +54,7 @@ class ModulesAnalysis(AnalysisModule):
         try:
             plugin = self.cfg.get_plugin(self.NAME)
             if plugin == None:
-                self.logger.error("No such plugin {}".format(self.NAME))
+                self.err_msg("No such plugin {}".format(self.NAME))
             remove_trace_file = plugin.remove_trace_file
         except AttributeError:
             remove_trace_file = False
@@ -76,7 +76,7 @@ class ModulesAnalysis(AnalysisModule):
     @check
     def run(self):
         if not self._prepared:
-            self.logger.error("Module {} is not prepared".format(ModulesAnalysis.NAME))
+            self.err_msg("Module {} is not prepared".format(ModulesAnalysis.NAME))
             return False
         self.report.append(ModulesAnalysis.REPORT_START)
 
@@ -86,7 +86,7 @@ class ModulesAnalysis(AnalysisModule):
         try:
             self.check_ftrace()
         except TraceAnalysisError as e:
-            self.logger.error("[Modules analysis] {}".format(e))
+            self.err_msg("[Modules analysis] {}".format(e))
             self.main_logger.error("[Modules analysis] {}".format(e))
             return False
                 
@@ -120,7 +120,7 @@ class ModulesAnalysis(AnalysisModule):
             if begin_node.parent is None and begin_node.is_function and not trace.is_filtered(begin_node):
                 if all_distros == []:
                     return False
-                self.logger.info("Starting from node {}".format(begin_node.info))
+                self.info_msg("Starting from node {}".format(begin_node.info))
                 if not self.check_modules_in_trace(begin_node, vm, check_map, all_distros):
                     return False
             begin_node = begin_node.next_node_by_time
@@ -148,7 +148,7 @@ class ModulesAnalysis(AnalysisModule):
                                 continue
                             check_map[distro.distro_name][src_file] = True
                             ret = self.module_check(distro, src_file)
-                            self.logger.info("Module {} in {} {}".format(self.vul_module, distro.distro_name, ret))
+                            self.info_msg("Module {} in {} {}".format(self.vul_module, distro.distro_name, ret))
                             if ret == None or ret == self.MODULE_ENABLED:
                                 continue
                             if self.vul_module not in self.results:
@@ -158,7 +158,7 @@ class ModulesAnalysis(AnalysisModule):
                                 miss_info['type'] = self.MODULE_DISABLED
                                 miss_info['missing_reason'] = 'Module disabled'
                                 self.report.append(begin_node.text)
-                                self.logger.info("Vendor {0} does not have {1} module enabled".format(distro.distro_name, self.vul_module))
+                                self.info_msg("Vendor {0} does not have {1} module enabled".format(distro.distro_name, self.vul_module))
                                 self.report.append("[Disabled] Module {} from {} is not enabled in {}".format(self.vul_module, src_file, distro.distro_name))
                             if ret == self.MODULE_REQUIRED_LOADING:
                                 miss_info['type'] = self.MODULE_REQUIRED_LOADING_BY_ROOT
@@ -203,7 +203,7 @@ class ModulesAnalysis(AnalysisModule):
             return self._ftrace_functions[begin_node.function_name], False
         addr = vm.get_func_addr(begin_node.function_name)
         if addr == 0:
-            self.logger.debug("Function {} doesn't have symbol file".format(begin_node.function_name))
+            self.debug_msg("Function {} doesn't have symbol file".format(begin_node.function_name))
             self._ftrace_functions[begin_node.function_name] = None
             return None, False
         file, _ = vm.get_dbg_info(addr)
@@ -250,14 +250,14 @@ class ModulesAnalysis(AnalysisModule):
                 if k != 'n' and not print_pass:
                     self.report.append("Check {} ---> Pass".format(vul_src_file))
                 else:
-                    self.logger.info("Vendor {0} does not have {1} module ({2}) enabled".format(self._cur_distro.distro_name, self.vul_module, vul_src_file))
+                    self.info_msg("Vendor {0} does not have {1} module ({2}) enabled".format(self._cur_distro.distro_name, self.vul_module, vul_src_file))
                     self.report.append("Check {} ---> Fail on {}".format(vul_src_file, self._cur_distro.distro_name))
                     res[distro.distro_name] = False
         return
     
     def generate_report(self):
         final_report = "\n".join(self.report)
-        self.logger.info(final_report)
+        self.info_msg(final_report)
         self._write_to(final_report, ModulesAnalysis.REPORT_NAME)
     
     def get_victim_module(self, upstream_vul_src_file):
@@ -388,15 +388,15 @@ class ModulesAnalysis(AnalysisModule):
         trace_file = os.path.join(self.path_case, TraceAnalysis.NAME, "trace-upstream.report")
         if not os.path.exists(trace_file):
             return None
-        self.logger.info("Open trace file: {}".format(trace_file))
+        self.info_msg("Open trace file: {}".format(trace_file))
 
         trace = Trace(logger=self.logger, debug=self.debug, as_servicve=True)
         trace.load_tracefile(trace_file)
         try:
             trace.serialize()
         except Exception as e:
-            self.logger.error("Failed to serialize trace file: {}".format(trace_file))
-            self.logger.error(e)
+            self.err_msg("Failed to serialize trace file: {}".format(trace_file))
+            self.err_msg(e)
             return None
         return trace
     
@@ -406,7 +406,7 @@ class ModulesAnalysis(AnalysisModule):
             full_dirname = os.path.join(self._cur_distro.distro_src, dirname)
             makefile = os.path.join(full_dirname, "Makefile")
 
-            self.logger.debug("Finding {} at {}".format(vul_obj, makefile))
+            self.debug_msg("Finding {} at {}".format(vul_obj, makefile))
             config = None
             if not os.path.exists(makefile):
                 return None
@@ -418,11 +418,11 @@ class ModulesAnalysis(AnalysisModule):
                 # if vulnerable object was enabled by obj-y,
                 # go back to it's parent folder to find config
                 # for this vulnerable folder
-                self.logger.debug("{} was enabled by obj-y. Go to the outer Makefile".format(vul_obj))
+                self.debug_msg("{} was enabled by obj-y. Go to the outer Makefile".format(vul_obj))
                 vul_obj = os.path.basename(dirname)
                 dirname = os.path.dirname(dirname)
             else:
-                self.logger.debug("Matching config {}".format(config))
+                self.debug_msg("Matching config {}".format(config))
                 return config
         return None
 

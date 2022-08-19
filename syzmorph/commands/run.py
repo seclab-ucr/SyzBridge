@@ -1,11 +1,12 @@
 import multiprocessing, threading
 import os, importlib
-import json, gc, logging
+import json, gc, copy
 
 from commands import Command
 from infra.error import *
 from infra.tool_box import STREAM_HANDLER, init_logger
 from deployer.deployer import Deployer
+from infra.console import CoolConsole
 
 from queue import Empty
 from subprocess import call
@@ -20,6 +21,7 @@ class RunCommand(Command):
         self.cases = None
         self.proj_dir = None
         self.cfg = None
+        self.console_queue = None
         self.logger = init_logger(__name__, handler_type=STREAM_HANDLER)
         
     def add_arguments(self, parser):
@@ -50,6 +52,8 @@ class RunCommand(Command):
                             help='The private key for ssh connection')
         parser.add_argument('--linux', nargs='?', action='store',
                             help='Linux repo index specified')
+        parser.add_argument('--console', action='store_true',
+                            help='Enable console mode')
     
     def add_arguments_for_plugins(self, parser):
         proj_dir = os.path.join(os.getcwd(), "syzmorph")
@@ -146,6 +150,11 @@ class RunCommand(Command):
         os.makedirs(os.path.join(self.proj_dir, "succeed"), exist_ok=True)
         os.makedirs(os.path.join(self.proj_dir, "error"), exist_ok=True)
     
+    def run_console(self):
+        self.console_queue = self.manager.Queue()
+        self.console = CoolConsole("SyzMorph", self.args.parallel_max, self.console_queue)
+        self.console.run()
+    
     def run(self, args):
         self.args = args
         if self.check_essential_args():
@@ -165,6 +174,9 @@ class RunCommand(Command):
             return
         
         self.print_args_info()
+
+        if self.args.console:
+            threading.Thread(target=self.run_console, name="console").start()
         
         self.queue = self.manager.Queue()
         self.proj_dir = os.path.join(os.getcwd(), "projects/{}".format(args.proj))

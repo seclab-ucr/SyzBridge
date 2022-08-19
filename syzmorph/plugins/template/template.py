@@ -34,7 +34,7 @@ class Template(AnalysisModule):
     def generate_report(self):
         self._cleanup()
         final_report = "\n".join(self.report)
-        self.logger.info(final_report)
+        self.info_msg(final_report)
         self._write_to(final_report, self.REPORT_NAME)
     
     def _write_to(self, content, name):

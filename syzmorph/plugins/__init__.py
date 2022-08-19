@@ -4,6 +4,7 @@ import json
 
 from subprocess import call
 from infra.config.config import Config
+from infra.console.message import ConsoleMessage
 from deployer.case import Case
 from .error import *
 
@@ -11,9 +12,13 @@ logger = logging.getLogger(__name__)
 
 class AnalysisModule:
     NAME = "MainAnalysisModule"
+    ERROR = 0
+    INFO = 1
+    DEBUG = 2
 
     def __init__(self):
         self.logger = logger
+        self.finish = False
         self.results = {}
         self.report = []
         self.path_case_plugin = ''
@@ -21,8 +26,8 @@ class AnalysisModule:
         self._move_to_success = False
         self._move_to_success = False
         self._analyzor = None
-
-    def setup(self, manager: Case):
+    
+    def init(self, manager: Case):
         if not isinstance(manager, Case):
             raise AnalysisModuleError("setup() requires class Case")
 
@@ -39,6 +44,10 @@ class AnalysisModule:
         self.lts = manager.lts
         self.index = manager.index
         self.debug = manager.debug
+        self.console_mode = manager.console_mode
+        self.console_msg: ConsoleMessage = manager.console_msg
+
+    def setup(self):
         if self.NAME == AnalysisModule.NAME:
             return
         self.path_case_plugin = os.path.join(self.path_case, self.NAME)
@@ -82,6 +91,7 @@ class AnalysisModule:
     @check
     def run(self):
         self.main_logger.info("Running {}".format(self.analyzor.NAME))
+        self.update_console_routine(self.analyzor.NAME)
         ret = self.analyzor.run()
         self.analyzor.dump_results()
         self._set_plugin_status(ret)
@@ -113,6 +123,7 @@ class AnalysisModule:
         ret = self._check_stamp(stamp)
         if ret:
             self.main_logger.info("{} has finished".format(self.analyzor.NAME))
+            self.analyzor.set_history_status()
         return ret
     
     @check
@@ -124,35 +135,64 @@ class AnalysisModule:
     def null_results(self):
         plugin = self.cfg.get_plugin(self.analyzor.NAME)
         plugin.instance.results = None
-        plugin.finish = False
+        plugin.instance.finish = False
     
     def plugin_finished(self, plugin_name):
         plugin = self.cfg.get_plugin(plugin_name)
-        try:
-            res = getattr(plugin, "finish")
-        except:
-            return False
-        return res
+        return plugin.instance.finish
 
     def cleanup(self):
         pass
 
     def dump_results(self):
         json.dump(self.results, open(os.path.join(self.path_case_plugin, "results.json"), 'w'))
+    
+    def set_history_status(self):
+        self.console_msg.module[self.NAME] = [ConsoleMessage.INFO, "", ""]
+        self.manager.send_to_console()
+
+    def update_console_routine(self, module_name):
+        if not self.console_mode:
+            return
+        self.console_msg.message = module_name
+        self.console_msg.type = ConsoleMessage.INFO
+        self.console_msg.module[module_name] = [ConsoleMessage.INFO, "Preparing {}".format(module_name), ""]
+        self.manager.send_to_console()
+
+    def set_stage_text(self, text):
+        self.console_msg.type = ConsoleMessage.INFO
+        self.console_msg.module[self.NAME] = [ConsoleMessage.INFO, text, ""]
+        self.manager.send_to_console()
+    
+    def set_stage_status(self, status):
+        self.console_msg.module[self.NAME][2] = status
+        self.manager.send_to_console()
+    
+    def err_msg(self, msg):
+        if self.console_mode:
+            self.console_msg.module[self.NAME] = [ConsoleMessage.ERROR, msg, ""]
+            self.console_msg.type = ConsoleMessage.INFO
+        self.logger.error(msg)
+    
+    def info_msg(self, msg):
+        self.logger.info(msg)
+    
+    def debug_msg(self, msg):
+        self.logger.debug(msg)
 
     def _get_analyzor_results_offline(self):
         plugin = self.cfg.get_plugin(self.analyzor.NAME)
         res = self._read_analyzor_results()
         if res == None:
-            plugin.finish = False
+            plugin.instance.finish = False
         else:
-            plugin.finish = True
+            plugin.instance.finish = True
             plugin.instance.results = res
         return
     
     def _set_plugin_status(self, ret):
         plugin = self.cfg.get_plugin(self.analyzor.NAME)
-        plugin.finish = ret
+        plugin.instance.finish = ret
     
     def _read_analyzor_results(self):
         plugin_path = os.path.join(self.path_case, self.analyzor.NAME)

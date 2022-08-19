@@ -33,7 +33,7 @@ class Syzscope(AnalysisModule):
         try:
             plugin = self.cfg.get_plugin(self.NAME)
             if plugin == None:
-                self.logger.error("No such plugin {}".format(self.NAME))
+                self.err_msg("No such plugin {}".format(self.NAME))
             timeout = int(plugin.timeout)
             max_round = int(plugin.max_round)
             if plugin.repro_mode == 'c':
@@ -41,7 +41,7 @@ class Syzscope(AnalysisModule):
             elif plugin.repro_mode == 'syz':
                 repro_mode = 1
         except AttributeError:
-            self.logger.error("Failed to get timeout or gdb_port or qemu_monitor_port or max_round")
+            self.err_msg("Failed to get timeout or gdb_port or qemu_monitor_port or max_round")
             return False
         return self.prepare_on_demand(timeout, max_round, repro_mode)
     
@@ -58,7 +58,7 @@ class Syzscope(AnalysisModule):
     def run(self):
         distros = self._reproducible()
         if len(distros) == 0:
-            self.logger.info("The bug is not reproducible on any distros, syzscope will be skipped")
+            self.info_msg("The bug is not reproducible on any distros, syzscope will be skipped")
             return True
         for each in distros:
             self.run_symbolic_execution(each)
@@ -69,13 +69,13 @@ class Syzscope(AnalysisModule):
             self._remove_stamp("BUILD_KERNEL")
         exitcode = self.build_env_upstream()
         if exitcode == 2:
-            self.logger.error("Patch has been rejected")
+            self.err_msg("Patch has been rejected")
             return False
         if exitcode == 1:
-            self.logger.error("Fail to build upstream environment")
+            self.err_msg("Fail to build upstream environment")
             return False
         if exitcode != 0:
-            self.logger.error("Unknown error that fails to build kernel")
+            self.err_msg("Unknown error that fails to build kernel")
             return False
         return True
     
@@ -99,18 +99,18 @@ class Syzscope(AnalysisModule):
         with p.stdout:
             self._log_subprocess_output(p.stdout)
         exitcode = p.wait()
-        self.logger.info("script/deploy.sh is done with exitcode {}".format(exitcode))
+        self.info_msg("script/deploy.sh is done with exitcode {}".format(exitcode))
         return exitcode
     
     def run_symbolic_execution(self, distro: Vendor):
         sub_dir = os.path.join(self.path_case_plugin, distro.distro_name)
         os.makedirs(sub_dir, exist_ok=True)
         if self._check_distro_port(distro):
-            self.logger.error("{} doesn't have one of the following port in configuration file: ssh_port, gdb_port, mon_port".format(distro.distro_name))
+            self.err_msg("{} doesn't have one of the following port in configuration file: ssh_port, gdb_port, mon_port".format(distro.distro_name))
             return
         
         for i in range(0, self.max_round):
-            self.logger.info("Round {}: {} symbolic execution".format(i, distro.distro_name))
+            self.info_msg("Round {}: {} symbolic execution".format(i, distro.distro_name))
             sym_logger = init_logger(sub_dir+"/symbolic_execution.log-{}".format(i), cus_format='%(asctime)s %(message)s', debug=self.debug)
             sym = SymExec(syzscope=self, logger=sym_logger, workdir=self.path_case_plugin, index=0, debug=self.debug)
             qemu = sym.setup_vm(timeout=5*60, log_suffix="-{}".format(i), distro=distro, work_path=sub_dir)
@@ -224,9 +224,9 @@ class Syzscope(AnalysisModule):
             args[3] = self.path_case_plugin
 
             if os.path.exists(args[1]):
-                self.logger.info("call syzmorph: poc {}".format(args))
+                self.info_msg("call syzmorph: poc {}".format(args))
                 out = self.manager.call_syzmorph('poc', args)
-                self.logger.info("\n".join(out))
+                self.info_msg("\n".join(out))
                 check_feature_script_path = os.path.join(self.path_case_plugin, "check-poc-feature.sh")
                 qemu.upload(user="root", src=[poc_path, poc_script_path, check_feature_script_path], dst="/root", wait=True)
                 qemu.command(cmds="chmod +x ./run_poc.sh && ./run_poc.sh", user="root", wait=False)
@@ -355,7 +355,7 @@ done
     
     def generate_report(self):
         final_report = "\n".join(self.report)
-        self.logger.info(final_report)
+        self.info_msg(final_report)
         self._write_to(final_report, self.REPORT_NAME)
     
     def cleanup(self):

@@ -4,6 +4,7 @@ import shutil
 from subprocess import Popen, PIPE, STDOUT, call
 from dateutil import parser as time_parser
 from infra.tool_box import *
+from infra.console.message import ConsoleMessage
 from modules.vm import VMInstance
 from plugins import AnalysisModule
 from plugins.syzkaller_interface import SyzkallerInterface
@@ -33,19 +34,21 @@ class CapabilityCheck(AnalysisModule):
 
     def run(self):
         if not self.build_kernel():
-            self.logger.error("Fail to build kernel")
+            self.err_msg("Fail to build kernel")
             return False
         if not self.tune_poc(debug=True):
-            self.logger.error("Fail to tune poc")
+            self.err_msg("Fail to tune poc")
             return False
         reports = self.get_capability_check_report()
         if reports == None:
-            self.logger.error("Fail to get capability check report")
+            self.err_msg("Fail to get capability check report")
             return True
         self.parse_report(reports)
+        self.set_stage_text("Done")
         return True
     
     def get_capability_check_report(self):
+        self.set_stage_text("Getting capabilities")
         upstream = self.cfg.get_upstream()
         qemu = upstream.repro.launch_qemu(self.case_hash, work_path=self.path_case_plugin\
             , log_name="qemu-{}.log".format(upstream.repro.distro_name), timeout=3*60)
@@ -72,7 +75,7 @@ class CapabilityCheck(AnalysisModule):
                 if func == None or src_file == None:
                     continue
                 if func == "":
-                    self.logger.error("{} is not a valid trace".format(line))
+                    self.err_msg("{} is not a valid trace".format(line))
                     continue
                 if func == "capable":
                     self.results[key_name] = False
@@ -100,14 +103,15 @@ class CapabilityCheck(AnalysisModule):
         return res
     
     def build_kernel(self):
+        self.set_stage_text("Building kernel")
         if self._check_stamp("BUILD_KERNEL") and not self._check_stamp("BUILD_CAPABILITY_CHECK_KERNEL"):
             self._remove_stamp("BUILD_KERNEL")
         exitcode = self.build_env_upstream()
         if exitcode == 2:
-            self.logger.error("Patch has been rejected")
+            self.err_msg("Patch has been rejected")
             return False
         if exitcode == 1:
-            self.logger.error("Fail to build upstream environment")
+            self.err_msg("Fail to build upstream environment")
             return False
         self._create_stamp("BUILD_CAPABILITY_CHECK_KERNEL")
         return True
@@ -133,13 +137,19 @@ class CapabilityCheck(AnalysisModule):
         with p.stdout:
             self._log_subprocess_output(p.stdout)
         exitcode = p.wait()
-        self.logger.info("script/deploy.sh is done with exitcode {}".format(exitcode))
+        self.info_msg("script/deploy.sh is done with exitcode {}".format(exitcode))
         return exitcode
     
     def generate_report(self):
         final_report = "\n".join(self.report)
-        self.logger.info(final_report)
+        self.info_msg(final_report)
         self._write_to(final_report, self.REPORT_NAME)
+    
+    def set_history_status(self):
+        if self.finish:
+            self.set_stage_text("Done")
+        else:
+            self.set_stage_text("Failed")
     
     def tune_poc(self, debug=True):
         insert_exit_line = -1
@@ -199,7 +209,7 @@ class CapabilityCheck(AnalysisModule):
             if regx_match(sleep_regx, line):
                 time = regx_get(sleep_regx, line, 1)
                 if time == None:
-                    self.logger.error("Wrong sleep format: {}".format(line))
+                    self.err_msg("Wrong sleep format: {}".format(line))
                     continue
                 if int(time) > 5:
                     data.pop()
@@ -253,7 +263,7 @@ class CapabilityCheck(AnalysisModule):
             call_trace = extrace_call_trace(out1, start_with=self.LOG_HEADER)
             self._write_to("\n".join(call_trace), "call_trace.log-{}".format(n))
             if not self._build_syz_logparser(self.syz):
-                self.logger.error("Fail to build syz logparser")
+                self.err_msg("Fail to build syz logparser")
                 return None
             self.syz.pull_cfg_for_cur_case()
             src = os.path.join(self.path_case_plugin, "call_trace.log-{}".format(n))
@@ -285,15 +295,15 @@ class CapabilityCheck(AnalysisModule):
         if syz.check_binary(binary_name="syz-logparser"):
             return True
         if syz.pull_syzkaller(commit='b8d780ab30ab6ba340c43ad1944096dae15e6e79') != 0:
-            self.logger.error("Fail to pull syzkaller")
+            self.err_msg("Fail to pull syzkaller")
             return False
         if syz.patch_syzkaller(patch=patch) != 0:
-            self.logger.error("Fail to patch syzkaller")
+            self.err_msg("Fail to patch syzkaller")
             return False
 
         syz.build_syzkaller()
         if syz.build_syzkaller(component='all') != 0:
-            self.logger.error("Fail to build syzkaller")
+            self.err_msg("Fail to build syzkaller")
             return False
         return True
     
