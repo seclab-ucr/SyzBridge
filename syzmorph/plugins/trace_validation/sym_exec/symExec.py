@@ -68,6 +68,7 @@ class SymExec(MemInstrument):
         return self.vm
     
     def cleanup(self):
+        super().cleanup()
         if self.vm != None:
             self.vm.kill()
 

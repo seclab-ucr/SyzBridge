@@ -116,6 +116,11 @@ class RawBugReproduce(AnalysisModule):
         return
 
     def reproduce(self, distro, root: bool, func, func_args=(), log_prefix= "qemu", **kwargs):
+        if root:
+            self.set_stage_text("\[root] Booting {}".format(distro.distro_name))
+        else:
+            self.set_stage_text("\[user] Booting {}".format(distro.distro_name))
+
         self.distro_lock.acquire()
         poc_feature = self.tune_poc(root)
         self.distro_lock.release()
@@ -155,7 +160,20 @@ class RawBugReproduce(AnalysisModule):
         self.info_msg(final_report)
         self._write_to(final_report, self.REPORT_NAME)
     
+    def _update_qemu_timer_status(self, index, qemu):
+        while True:
+            if qemu.instance.poll() != None:
+                break
+            self.set_stage_status("[{}/3] {}/{}".format(index, qemu.timer, qemu.timeout))
+            time.sleep(5)
+
     def capture_kasan(self, qemu, th_index, work_dir, root, poc_feature):
+        if root:
+            self.set_stage_text("\[root] Reproducing on {}".format(qemu.tag))
+        else:
+            self.set_stage_text("\[user] Reproducing on {}".format(qemu.tag))
+        threading.Thread(target=self._update_qemu_timer_status, args=(th_index, qemu)).start()
+
         if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
             self.logger.fatal("KASAN is not enabled in kernel!")
             raise KASANDoesNotEnabled(self.case_hash)
@@ -315,3 +333,5 @@ class RawBugReproduce(AnalysisModule):
         file_path = "{}/{}".format(self.path_case_plugin, name)
         super()._write_to(content, file_path)
 
+    def cleanup(self):
+        super().cleanup()

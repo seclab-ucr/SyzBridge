@@ -126,3 +126,5 @@ class SlackBot(AnalysisModule):
         file_path = "{}/{}".format(self.path_case_plugin, name)
         super()._write_to(content, file_path)
 
+    def cleanup(self):
+        super().cleanup()

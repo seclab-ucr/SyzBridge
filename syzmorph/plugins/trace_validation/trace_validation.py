@@ -33,7 +33,6 @@ class TraceValidation(AnalysisModule):
         return True
     
     def generate_report(self):
-        self._cleanup()
         final_report = "\n".join(self.report)
         self.info_msg(final_report)
         self._write_to(final_report, self.REPORT_NAME)
@@ -42,5 +41,5 @@ class TraceValidation(AnalysisModule):
         file_path = "{}/{}".format(self.path_case_plugin, name)
         super()._write_to(content, file_path)
 
-    def _cleanup(self):
-        pass
+    def cleanup(self):
+        super().cleanup()

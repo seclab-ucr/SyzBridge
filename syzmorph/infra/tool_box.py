@@ -5,6 +5,8 @@ import logging
 import random
 import datetime, json
 from subprocess import call
+from os import get_terminal_size
+from platform import platform, system
 
 from .strings import *
 
@@ -19,6 +21,17 @@ NONCRITICAL = 0
 AbMemRead = 1
 AbMemWrite = 2
 InvFree = 4
+
+def get_terminal_width() -> int:
+    try:
+        width, _ = get_terminal_size()
+    except OSError:
+        width = 80
+
+    if system().lower() == "windows":
+        width -= 1
+
+    return width
 
 def regx_match(regx, line):
     m = re.search(regx, line)

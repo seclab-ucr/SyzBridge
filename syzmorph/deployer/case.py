@@ -93,7 +93,7 @@ class Case:
 
         for kernel in self.cfg.get_all_kernels():
             if self.need_repro(kernel.distro_name) or kernel.type == 1: # If need reproduce or type is upstream kernel
-                kernel.repro = Reproducer(cfg=kernel, manager=self, qemu_num=3)
+                kernel.repro = Reproducer(cfg=kernel, manager=self)
         #self.lts = self._determine_lts()
     """
     def _determine_lts(self):

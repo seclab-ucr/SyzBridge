@@ -1,12 +1,12 @@
+from distutils.dist import Distribution
 import multiprocessing, threading
 import os, importlib
 import json, gc, copy
 
 from commands import Command
 from infra.error import *
-from infra.tool_box import STREAM_HANDLER, init_logger
+from infra.tool_box import STREAM_HANDLER, init_logger, get_terminal_width
 from deployer.deployer import Deployer
-from infra.console import CoolConsole
 
 from queue import Empty
 from subprocess import call
@@ -22,6 +22,7 @@ class RunCommand(Command):
         self.proj_dir = None
         self.cfg = None
         self.console_queue = None
+        self._module_folder = None
         self.logger = init_logger(__name__, handler_type=STREAM_HANDLER)
         
     def add_arguments(self, parser):
@@ -58,9 +59,9 @@ class RunCommand(Command):
     def add_arguments_for_plugins(self, parser):
         proj_dir = os.path.join(os.getcwd(), "syzmorph")
         modules_dir = os.path.join(proj_dir, "plugins")
-        module_folder = [ cmd for cmd in os.listdir(modules_dir)
+        self._module_folder = [ cmd for cmd in os.listdir(modules_dir)
                     if not cmd.endswith('.py') and not cmd == "__pycache__" ]
-        for module_name in module_folder:
+        for module_name in self._module_folder:
             try:
                 module = importlib.import_module("plugins.{}".format(module_name))
                 enable = module.ENABLE
@@ -101,7 +102,7 @@ class RunCommand(Command):
             self.lock.acquire(blocking=True)
             try:
                 hash_val = self.queue.get(block=True, timeout=3)
-                print("Thread {}: run case {} [{}/{}] left".format(index, hash_val, self.rest.value-1, self.total))
+                #print("Thread {}: run case {} [{}/{}] left".format(index, hash_val, self.rest.value-1, self.total))
                 self.rest.value -= 1
                 self.lock.release()
                 x = multiprocessing.Process(target=self.deploy_one_case, args=(index, hash_val,), name="lord-{}".format(index))
@@ -111,7 +112,7 @@ class RunCommand(Command):
             except Empty:
                 self.lock.release()
                 break
-        print("Thread {} exit->".format(index))
+        #print("Thread {} exit->".format(index))
 
     def parse_config(self, config):
         from syzmorph.infra.config.config import Config
@@ -132,17 +133,60 @@ class RunCommand(Command):
         return False
 
     def print_args_info(self):
-        print("[*] proj: {}".format(self.args.proj))
-        if self.cfg != None:
-            for vendor in self.cfg.kernel.__dict__:
-                t = getattr(self.cfg.kernel, vendor)
-                print("=========={}==========".format(t.distro_name))
-                print("[*] vendor image: {}".format(t.distro_image))
-                print("[*] vmlinux: {}".format(t.vmlinux))
-                print("[*] ssh_port: {}".format(t.ssh_port))
-                print("[*] ssh_key: {}".format(t.ssh_key))
-                print("[*] distro_src: {}".format(t.distro_src))
-                print("[*] distro_name: {}".format(t.distro_name))
+        if self.args.console:
+            from rich.table import Table
+            term_width = get_terminal_width()
+
+            enabled_modules = []
+            for module_name in self._module_folder:
+                try:
+                    if getattr(self.args, module_name):
+                        enabled_modules.append(module_name)
+                except AttributeError:
+                    pass
+            enabled_modules_text = ' | '.join(enabled_modules)
+
+            msg = (
+                "\n┌─[ Running with the following parameters ]\n"
+                + f"├"
+                + "─" * (term_width - 1)
+                + "\n"
+                + f"│\tProj : [sky_blue3]{self.args.proj}[/sky_blue3]\n"
+                + f"│\tEnabled Plugins : [yellow]{enabled_modules_text}[/yellow]\n"
+                + f"│\tParallel Processes : [red]{self.args.parallel_max}[/red]\n"
+                + f"│\tConfig File : [dark_sea_green1]{self.args.config}[/dark_sea_green1]\n"
+                + "└" + "─" * (term_width - 1)
+            )
+
+            self.console.console.print(msg)
+
+            table = Table(title="Testing Kernels", title_style="bold", header_style="bold magenta", border_style="navy_blue", expand=True)
+            table.add_column("Distro Name", justify="center")
+            table.add_column("Distro Image", justify="center")
+            table.add_column("Distro Source", justify="center")
+            table.add_column("SSH Port", justify="center")
+            table.add_column("SSH Key", justify="center")
+            if self.cfg != None:
+                for vendor in self.cfg.kernel.__dict__:
+                    t = getattr(self.cfg.kernel, vendor)
+                    table.add_row(
+                        str(t.distro_name), str(t.distro_image), str(t.distro_src), str(t.ssh_port), str(t.ssh_key)
+                    )
+
+            self.console.console.print(table)
+            return
+        else:
+            print("[*] proj: {}".format(self.args.proj))
+            if self.cfg != None:
+                for vendor in self.cfg.kernel.__dict__:
+                    t = getattr(self.cfg.kernel, vendor)
+                    print("=========={}==========".format(t.distro_name))
+                    print("[*] vendor image: {}".format(t.distro_image))
+                    print("[*] vmlinux: {}".format(t.vmlinux))
+                    print("[*] ssh_port: {}".format(t.ssh_port))
+                    print("[*] ssh_key: {}".format(t.ssh_key))
+                    print("[*] distro_src: {}".format(t.distro_src))
+                    print("[*] distro_name: {}".format(t.distro_name))
     
     def build_work_dir(self):
         os.makedirs(os.path.join(self.proj_dir, "incomplete"), exist_ok=True)
@@ -151,8 +195,6 @@ class RunCommand(Command):
         os.makedirs(os.path.join(self.proj_dir, "error"), exist_ok=True)
     
     def run_console(self):
-        self.console_queue = self.manager.Queue()
-        self.console = CoolConsole("SyzMorph", self.args.parallel_max, self.console_queue)
         self.console.run()
     
     def run(self, args):
@@ -172,7 +214,12 @@ class RunCommand(Command):
         except TargetFormatNotMatch as e:
             self.logger.error(e)
             return
-        
+
+        if self.args.console:
+            from infra.console import CoolConsole
+
+            self.console_queue = self.manager.Queue()
+            self.console = CoolConsole("SyzMorph", self.args.parallel_max, self.console_queue)
         self.print_args_info()
 
         if self.args.console:

@@ -46,6 +46,16 @@ class GoogleSheets(AnalysisModule):
     def success(self):
         return self._move_to_success
 
+    def handle_error(func):
+        def inner(self):
+            try:
+                ret = func(self)
+                return True
+            except Exception as e:
+                self.err_msg("GoogleSheets error: {}".format(e))
+                return False
+        return inner
+
     def run(self):
         self.write_case_result(self.sh)
         return True
@@ -273,4 +283,7 @@ class GoogleSheets(AnalysisModule):
     def _write_to(self, content, name):
         file_path = "{}/{}".format(self.path_case_plugin, name)
         super()._write_to(content, file_path)
+    
+    def cleanup(self):
+        super().cleanup()
 

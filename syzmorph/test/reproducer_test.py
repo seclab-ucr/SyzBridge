@@ -7,5 +7,5 @@ logger.setLevel(logging.NOTSET)
 
 def get_reproducer(cfg):
     repro = Reproducer(cfg=cfg, path_linux=self.path_linux, path_case=self.path_case, path_syzmorph=self.path_syzmorph, 
-            ssh_port=cfg.ssh_port, case_logger=logger, debug= True, qemu_num=3)
+            ssh_port=cfg.ssh_port, case_logger=logger, debug= True)
     return repro

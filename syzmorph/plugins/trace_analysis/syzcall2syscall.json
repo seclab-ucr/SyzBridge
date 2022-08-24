@@ -18,6 +18,9 @@
         "socketpair",
         "write"
     ],
+    "syz_usb_connect": [
+        "ioctl"
+    ],
     "syz_btf_id_by_name": [
         "open",
         "openat",

@@ -11,12 +11,10 @@ from modules.vm import VM
 from .build import Build
 
 class Launcher(Build):
-    def __init__(self, cfg, manager, qemu_num=3):
+    def __init__(self, cfg, manager):
         Build.__init__(self, cfg, manager)
-        self.logger = None
         self.manager = manager
         self.case_logger = manager.case_logger
-        self.qemu_num = qemu_num
         self.debug = manager.debug
         self.kill_qemu = False
         self.queue = multiprocessing.Queue()
@@ -27,19 +25,6 @@ class Launcher(Build):
                 for line in each:
                     f.write(line+"\n")
                 f.write("\n")
-    
-    def init_logger(self, logger):
-        self.logger = logger
-    
-    def log(self, message, debug=False):
-        if debug:
-            self.case_logger.debug(message)
-            if self.logger != None:
-                self.logger.debug(message)
-        else:
-            self.case_logger.info(message)
-            if self.logger != None:
-                self.logger.info(message)
     
     def need_repro(self):
         case = self.manager.case
@@ -54,7 +39,7 @@ class Launcher(Build):
                     return False
             return True
     
-    def reproduce(self, func, func_args, root, work_dir, vm_tag, **kwargs):
+    def reproduce(self, func, func_args, root, work_dir, vm_tag, attempt=3, **kwargs):
         self.kill_qemu = False
         res = []
         trigger = False
@@ -62,7 +47,7 @@ class Launcher(Build):
         remain = []
         
         i = 0
-        while i < self.qemu_num:
+        while i < attempt:
             args = {'th_index':i, 'func':func, 'args':func_args, 'root':root, 'work_dir':work_dir, 'vm_tag':vm_tag + '-' + str(i), **kwargs}
             x = multiprocessing.Process(target=self._reproduce, kwargs=args, name="trigger-{}".format(i))
             x.start()

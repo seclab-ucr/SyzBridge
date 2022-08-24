@@ -81,9 +81,8 @@ class AnalysisModule:
             try:
                 ret = func(self)
             except Exception as e:
-                logging.exception("Case {} caught exception in plugin {}".format(self.case_hash, self.NAME))
-                self.case_logger.error("[{}] Exception happens: {}".format(self.analyzor.NAME, e))
-                self.main_logger.error("[{}] Exception happens: {}".format(self.analyzor.NAME, e))
+                self.case_logger.exception("[{}] Exception happens: {}".format(self.analyzor.NAME, e))
+                self.main_logger.exception("Case {} caught exception in plugin {}: {}".format(self.case_hash, self.analyzor.NAME, e))
                 return False
             return ret
         return inner
@@ -134,11 +133,15 @@ class AnalysisModule:
     
     def null_results(self):
         plugin = self.cfg.get_plugin(self.analyzor.NAME)
+        if plugin == None:
+            return False
         plugin.instance.results = None
         plugin.instance.finish = False
     
     def plugin_finished(self, plugin_name):
         plugin = self.cfg.get_plugin(plugin_name)
+        if plugin == None:
+            return False
         return plugin.instance.finish
 
     def cleanup(self):
@@ -247,7 +250,8 @@ class AnalysisModule:
     def _init_module(self, module):
         if not isinstance(module, AnalysisModule):
             raise AnalysisModuleError("_init_module() requires class AnalysisModule")
-        module.setup(self.manager)
+        module.init(self.manager)
+        module.setup()
         return module
     
     def _write_to(self, content, file):

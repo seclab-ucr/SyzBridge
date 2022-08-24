@@ -6,6 +6,7 @@ from infra.tool_box import *
 
 class Build():
     def __init__(self, cfg, manager):
+        self.logger = None
         self.cfg = cfg
         self.image_path = None
         self.vmlinux = None
@@ -22,6 +23,13 @@ class Build():
         self._gdb_port = None
         self.prepare()
         self.setup()
+    
+    def log(self, msg):
+        if self.logger != None:
+            self.logger.info(msg)
+
+    def init_logger(self, logger):
+        self.logger = logger
     
     def prepare(self):
         path_image = os.path.join(self.path_case, "img")
@@ -55,6 +63,7 @@ class Build():
 
     def create_snapshot(self, src, img, image_name):
         dst = "{}/{}-snapshot.img".format(img, image_name)
+        self.log("Create image {} from {}".format(dst, src))
         if os.path.isfile(dst):
             os.remove(dst)
         cmd = ["qemu-img", "create", "-f", "qcow2", "-b", src, dst]

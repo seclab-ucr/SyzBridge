@@ -97,6 +97,7 @@ class SyzkallerInterface(AnalysisModule):
     
     @check_syzkaller
     def build_syzkaller(self, arch="amd64", component=None):
+        self.add_dependencies()
         my_env = os.environ.copy()
         path_project = os.getcwd()
         my_env["PATH"] = os.path.join(path_project, "tools/goroot/bin") + ':' + my_env["PATH"]
@@ -120,6 +121,22 @@ class SyzkallerInterface(AnalysisModule):
             log_anything(p.stdout, self.logger, self.debug)
         exitcode = p.wait()
         return exitcode
+    
+    def add_dependencies(self):
+        my_env = os.environ.copy()
+        path_project = os.getcwd()
+        my_env["PATH"] = os.path.join(path_project, "tools/goroot/bin") + ':' + my_env["PATH"]
+        my_env["GOROOT"] = os.path.join(path_project, "tools/goroot/")
+        my_env["GOPATH"] = os.path.join(self.path_case_plugin, "gopath")
+        p = Popen(["go", "get", "github.com/gofrs/flock@v0.8.0"], cwd=self.syzkaller_path, env=my_env, stdout=PIPE, stderr=PIPE)
+        with p.stdout:
+            log_anything(p.stdout, self.logger, self.debug)
+        p.wait()
+        p = Popen(["go", "mod", "vendor"], cwd=self.syzkaller_path, env=my_env, stdout=PIPE, stderr=PIPE)
+        with p.stdout:
+            log_anything(p.stdout, self.logger, self.debug)
+        p.wait()
+        return
 
     def delete_syzkaller(self):
         if os.path.exists(self.syzkaller_path):
@@ -195,4 +212,7 @@ class SyzkallerInterface(AnalysisModule):
                 if os.path.isfile(os.path.join(bin, each)) and each == binary_name:
                     return True
         return False
+    
+    def cleanup(self):
+        super().cleanup()
 

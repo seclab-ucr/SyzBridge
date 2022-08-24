@@ -1,5 +1,5 @@
 import threading
-import logging
+import traceback
 import time
 import os, queue
 import infra.tool_box as utilities
@@ -128,6 +128,7 @@ class VMInstance(Network):
     def monitor_execution(self):
         self.timer = 0
         run_alternative_func = False
+        error_count = 0
         while self.timeout == None or self.timer <self.timeout:
             if self.kill_qemu:
                 self.case_logger.info('Signal kill qemu received.')
@@ -140,6 +141,10 @@ class VMInstance(Network):
                 if not self.qemu_ready:
                     self.kill_proc_by_port(self.port)
                     self.case_logger.error('QEMU: Error occur at booting qemu')
+                    error_count += 1
+                    if error_count > 5:
+                        self.case_logger.error('QEMU: Reach the maximum attempts to boot qemu')
+                        return
                     if self.need_reboot():
                         if self._reboot_once:
                             self.case_logger.debug('QEMU: Image reboot already')
@@ -202,6 +207,9 @@ class VMInstance(Network):
 
     def is_qemu_ready(self):
         output = self.command("uname -r", "root", wait=True, timeout=5)
+        if output == None:
+            self.logger.warn("QEMU: SSH does not respond")
+            return False
         if type(output) == list and len(output) > 0:
             for line in output:
                 if utilities.regx_match(r'^\d+\.\d+', line):
@@ -294,7 +302,10 @@ class VMInstance(Network):
             self.alternative_func(self, *self.alternative_func_args)
         except Exception as e:
             self.logger.error("alternative_func failed: {}".format(e))
-            raise AlternativeFunctionError("alternative_func failed: {}".format(e))
+            self.alternative_func_output.put([False])
+            tb = traceback.format_exc()
+            self.logger.error(tb)
+        return
     
     def _new_output_timer(self):
         while (self.instance.poll() is None):

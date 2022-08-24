@@ -180,7 +180,7 @@ class Crawler:
                     self.patch_info['fixes'].append(fixes)
 
         except Exception as e:
-            self.logger.error("Error parsing fix tag for {}: {}".format(hash_val, e))
+            self.logger.exception("Error parsing fix tag for {}: {}".format(hash_val, e))
         return self.patch_info['fixes'] != []
 
     def closest_tag(self, patch_hash, soup: BeautifulSoup):
@@ -429,15 +429,13 @@ class Crawler:
                             manager = case.find('td', {"class": "manager"})
                             manager_str = manager.text
                         except Exception as e:
-                            self.logger.info("Failed to retrieve case \"manager\" {}{}{}".format(syzbot_host_url, syzbot_bug_base_url, hash))
-                            self.logger.debug(e)
+                            self.logger.exception("Failed to retrieve case \"manager\" {}{}{}: {}".format(syzbot_host_url, syzbot_bug_base_url, hash, e))
                         
                         try:
                             time = case.find('td', {"class": "time"})
                             time_str = time.text
                         except Exception as e:
-                            self.logger.info("Failed to retrieve case \"time\" {}{}{}".format(syzbot_host_url, syzbot_bug_base_url, hash))
-                            self.logger.debug(e)
+                            self.logger.exception("Failed to retrieve case \"time\" {}{}{}: {}".format(syzbot_host_url, syzbot_bug_base_url, hash, e))
                         
                         try:
                             tags = case.find_all('td', {"class": "tag"})
@@ -446,8 +444,7 @@ class Crawler:
                                 m = re.search(r'commits\/([0-9a-z]*)', tags[0].next.attrs['href'])
                             commit = m.groups()[0]
                         except Exception as e:
-                            self.logger.info("Failed to retrieve case \"commit\" {}{}{}".format(syzbot_host_url, syzbot_bug_base_url, hash))
-                            self.logger.debug(e)
+                            self.logger.exception("Failed to retrieve case \"commit\" {}{}{}: {}".format(syzbot_host_url, syzbot_bug_base_url, hash, e))
                             continue
                             
                         try:
@@ -456,16 +453,14 @@ class Crawler:
                             syzkaller = m.groups()[0]
                             self.logger.debug("Syzkaller commit: {}".format(syzkaller))
                         except Exception as e:
-                            self.logger.info("Failed to retrieve case \"syzkaller\" {}{}{}".format(syzbot_host_url, syzbot_bug_base_url, hash))
-                            self.logger.debug(e)
+                            self.logger.exception("Failed to retrieve case \"syzkaller\" {}{}{}: {}".format(syzbot_host_url, syzbot_bug_base_url, hash, e))
                             continue
 
                         try:
                             config = syzbot_host_url + case.find('td', {"class": "config"}).next.attrs['href']
                             self.logger.debug("Config URL: {}".format(config))
                         except Exception as e:
-                            self.logger.info("Failed to retrieve case \"config\" {}{}{}".format(syzbot_host_url, syzbot_bug_base_url, hash))
-                            self.logger.debug(e)
+                            self.logger.exception("Failed to retrieve case \"config\" {}{}{}: {}".format(syzbot_host_url, syzbot_bug_base_url, hash, e))
                             continue
                             
                         try:
@@ -475,16 +470,14 @@ class Crawler:
                             report = syzbot_host_url + repros[1].next.attrs['href']
                             self.logger.debug("Log URL: {}".format(report))
                         except Exception as e:
-                            self.logger.info("Failed to retrieve case \"report\" {}{}{}".format(syzbot_host_url, syzbot_bug_base_url, hash))
-                            self.logger.debug(e)
+                            self.logger.exception("Failed to retrieve case \"report\" {}{}{}: {}".format(syzbot_host_url, syzbot_bug_base_url, hash, e))
                         
                         try:
                             r = request_get(report)
                             report_list = r.text.split('\n')
                             offset, size, _ = extract_vul_obj_offset_and_size(report_list)
                         except Exception as e:
-                            self.logger.info("Failed to retrieve case \"offset\" and \"size\" {}{}{}".format(syzbot_host_url, syzbot_bug_base_url, hash))
-                            self.logger.debug(e)
+                            self.logger.exception("Failed to retrieve case \"offset\" and \"size\" {}{}{}: {}".format(syzbot_host_url, syzbot_bug_base_url, hash, e))
                         
                         try:
                             syz_repro = syzbot_host_url + repros[2].next.attrs['href']

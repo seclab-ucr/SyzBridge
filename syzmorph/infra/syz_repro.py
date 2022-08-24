@@ -23,7 +23,7 @@ class SyzRepro():
                 try:
                     pair = line.split(':')
                 except Exception as e:
-                    logging.error("{} is not a valid syscall pair")
+                    logging.exception("{} is not a valid syscall pair")
                     continue
                 self.syscall_table[pair[0]] = pair[1].strip()
     

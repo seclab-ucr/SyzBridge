@@ -1,12 +1,14 @@
 from rich.live import Live
 from rich.table import Table
-from rich.layout import Layout
 from rich.console import Console
+from rich import box
 
 from syzmorph.infra.console.message import ConsoleMessage
 from .routine import Routine
+from .layout import BuildLayout
 
 from multiprocessing import Manager
+from queue import Empty
 
 import time
 import threading
@@ -18,18 +20,18 @@ class Interface:
         self.deployer_cache = []
         self.communi_queue = queue
         self.deployers = {}
-        self.console = Console()
+        self.console = Console(force_terminal=True,color_system='truecolor')
         self.title = title
         self._init_table(title)
         for _ in range(0, self.pm):
             self.deployer_cache.append(None)
     
     def _init_layout(self):
-        self.layout = Layout()
+        self.layout = BuildLayout()
         self.layout.add_layout(self.table)
     
     def _init_table(self, title):
-        self.table = Table(title=title)
+        self.table = Table(title=title, box=box.ROUNDED, expand=True, show_lines=True)
         self.table.add_column("Process", justify="left", style="cyan")
         self.table.add_column("Case", justify="left", style="green")
 
@@ -39,7 +41,7 @@ class Interface:
             self.add_status()
     
     def add_routine(self, routine):
-        self.table.add_column(routine, justify="left", style="blue")
+        self.table.add_column(routine, justify="left", style="bright_blue")
     
     def add_status(self):
         self.table.add_column("Status", justify="left", style="red")
@@ -85,19 +87,20 @@ class Interface:
             del self.deployers[index]
     
     def msg_dispatch(self):
-        msg = self.communi_queue.get(block=True)
-        print("Receive at console: {}".format(msg))
-        if msg['type'] == ConsoleMessage.PLUGINS_ORDER:
-            self.routine_list = msg['message']
-            self._init_table(self.title)
-        if msg['type'] == ConsoleMessage.INFO:
-            self.update(msg)
-        return self.table
+        while True:
+            try:
+                msg = self.communi_queue.get(block=False)
+                if msg['type'] == ConsoleMessage.PLUGINS_ORDER:
+                    if self.routine_list == []:
+                        self.routine_list = msg['message']
+                        self._init_table(self.title)
+                if msg['type'] == ConsoleMessage.INFO:
+                    self.update(msg)
+            except Empty:
+                return self.table
 
     def run(self):
-
-        self.console.clear()
-        with Live(self.table, console=self.console, refresh_per_second=4) as live:
+        with Live(console=self.console, auto_refresh=False) as live:
             while True:
                 live.update(self.msg_dispatch(), refresh=True)
                 time.sleep(1)

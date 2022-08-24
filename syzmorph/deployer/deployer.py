@@ -2,7 +2,7 @@ import os
 
 from psutil import Popen
 
-from infra.tool_box import STREAM_HANDLER, init_logger, convert_folder_name_to_plugin_name
+from infra.tool_box import STREAM_HANDLER, FILE_HANDLER, init_logger, convert_folder_name_to_plugin_name
 from infra.strings import *
 from plugins import AnalysisModule, AnalysisModuleError
 from plugins.modules_analysis import ModulesAnalysis
@@ -25,9 +25,12 @@ class Deployer(Case, Task):
             pass
         self.console_queue = owner.console_queue
         self.console_msg = ConsoleMessage(self.case_hash, index)
+        handler_type = STREAM_HANDLER
+        if self.console_mode:
+            handler_type = FILE_HANDLER
         self.logger = init_logger(__name__+str(self.index), 
             cus_format='%(asctime)s Thread {}: {}[{}] %(message)s'.format(self.index, self.case_hash, kernel).format(self.index),
-            debug=self.debug, propagate=self.debug, handler_type=STREAM_HANDLER)
+            debug=self.debug, propagate=self.debug, handler_type=handler_type)
         Task.__init__(self, self.args)
         self.analysis = AnalysisModule()
         self.analysis.init(self)
@@ -124,8 +127,8 @@ class Deployer(Case, Task):
         self.send_to_console()
 
     def send_to_console(self):
-        self.logger.info("Send to console: {}".format(self.console_msg.__dict__))
-        self.console_queue.put(self.console_msg.__dict__)
+        if self.console_queue != None:
+            self.console_queue.put(self.console_msg.__dict__, block=True)
     
     def _build_dependency_module(self, task_id, module: AnalysisModule):
         dst_node = set()

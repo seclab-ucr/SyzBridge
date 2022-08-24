@@ -31,17 +31,23 @@ class BugReproduce(AnalysisModule):
         self.normal_user = None
         self.distro_lock = threading.Lock()
         self.repro_timeout = BUG_REPRODUCE_TIMEOUT
+        self._skip_regular_reproduce = False
         
     def prepare(self):
         self._init_results()
+        plugin = self.cfg.get_plugin(self.NAME)
+        if plugin == None:
+            self.err_msg("No such plugin {}".format(self.NAME))
         try:
-            plugin = self.cfg.get_plugin(self.NAME)
-            if plugin == None:
-                self.err_msg("No such plugin {}".format(self.NAME))
             self.repro_timeout = int(plugin.timeout)
         except AttributeError:
             self.err_msg("Failed to get timeout")
             return False
+
+        try:
+            self._skip_regular_reproduce = plugin.skip_regular_reproduce
+        except AttributeError:
+            pass
         if not self.manager.has_c_repro:
             self.err_msg("Case does not have c reproducer")
             return False
@@ -100,20 +106,21 @@ class BugReproduce(AnalysisModule):
         res["bug_title"] = ""
         res["root"] = True
         
-        success, _ = self.reproduce(distro, func=self.capture_kasan, root=True)
-        if success:
-            res["triggered"] = True
-            res["bug_title"] = self.bug_title
-            res["root"] = True
-            success, _ = self.reproduce(distro, func=self.capture_kasan, root=False)
+        if not self._skip_regular_reproduce:
+            success, _ = self.reproduce(distro, func=self.capture_kasan, root=True)
             if success:
                 res["triggered"] = True
                 res["bug_title"] = self.bug_title
-                res["root"] = False
-            self.results[distro.distro_name]['root'] = res['root']
-            self.results[distro.distro_name]['trigger'] = True
-            q.put([distro.distro_name, res])
-            return
+                res["root"] = True
+                success, _ = self.reproduce(distro, func=self.capture_kasan, root=False)
+                if success:
+                    res["triggered"] = True
+                    res["bug_title"] = self.bug_title
+                    res["root"] = False
+                self.results[distro.distro_name]['root'] = res['root']
+                self.results[distro.distro_name]['trigger'] = True
+                q.put([distro.distro_name, res])
+                return
         
         if not self.plugin_finished("ModulesAnalysis"):
             self.info_msg("BugReproduce will not locate missing modules due to incorrectly results from ModulesAnslysis")
@@ -171,7 +178,7 @@ class BugReproduce(AnalysisModule):
     def minimize_modules(self, distro, tested_modules: list, essential_modules: list):
         tested_modules = tested_modules[::-1][1:]
         self.info_msg("{} is minimizing modules list {}, current essential list {}".format(distro.distro_name, tested_modules, essential_modules))
-        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(tested_modules, essential_modules), root=True, log_prefix='minimize', timeout=MAX_BUG_REPRODUCE_TIMEOUT)
+        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(tested_modules, essential_modules), root=True, attempt=1, log_prefix='minimize', timeout=MAX_BUG_REPRODUCE_TIMEOUT)
         if success:
             tested_modules = t[0]
             if tested_modules != []:
@@ -181,11 +188,11 @@ class BugReproduce(AnalysisModule):
                 return essential_modules
         return None
 
-    def reproduce(self, distro: Vendor, root: bool, func, func_args=(), log_prefix= "qemu", **kwargs):
+    def reproduce(self, distro: Vendor, root: bool, func, func_args=(), log_prefix= "qemu", attempt=3, **kwargs):
         if root:
-            self.set_stage_text("[root] Booting on {}".format(distro.distro_name))
+            self.set_stage_text("\[root] Booting {}".format(distro.distro_name))
         else:
-            self.set_stage_text("[user] Booting on {}".format(distro.distro_name))
+            self.set_stage_text("\[user] Booting {}".format(distro.distro_name))
         self.distro_lock.acquire()
         poc_feature = self.tune_poc(root, distro)
         self.distro_lock.release()
@@ -197,7 +204,7 @@ class BugReproduce(AnalysisModule):
         distro.repro.init_logger(self.logger)
         self.root_user = distro.repro.root_user
         self.normal_user = distro.repro.normal_user
-        report, triggered, t = distro.repro.reproduce(func=func, func_args=func_args, root=root, work_dir=self.path_case_plugin, vm_tag=distro.distro_name, c_hash=self.case_hash, log_name=log_name, **kwargs)
+        report, triggered, t = distro.repro.reproduce(func=func, func_args=func_args, root=root, work_dir=self.path_case_plugin, vm_tag=distro.distro_name, attempt=attempt, c_hash=self.case_hash, log_name=log_name, **kwargs)
         if triggered:
             title = self._BugChecker(report)
             self.bug_title = title
@@ -362,6 +369,7 @@ class BugReproduce(AnalysisModule):
             self.logger.fatal("KASAN is not enabled in kernel!")
             raise KASANDoesNotEnabled(self.case_hash)
 
+        qemu.logger.info("Missing modules: {}".format(missing_modules))
         qemu.logger.info("Loading essential modules {}".format(essential_modules))
         if essential_modules != []:
             self._enable_missing_modules(qemu, essential_modules)
@@ -375,7 +383,7 @@ class BugReproduce(AnalysisModule):
                 self.results[vm_tag]["repeat"] = True
                 qemu.alternative_func_output.put([res, trigger, qemu.qemu_fail, tested_modules], block=False)
                 return
-
+        
         for module in missing_modules:
             self.set_stage_text("testing {} on {}".format(module, qemu.tag))
             qemu.logger.info("Loading missing module {}".format(module))
@@ -395,7 +403,10 @@ class BugReproduce(AnalysisModule):
         qemu.alternative_func_output.put([[], False, False, []], block=False)
     
     def capture_kasan(self, qemu, th_index, work_dir, root, poc_feature):
-        self.set_stage_text("Reproducing on {}".format(qemu.tag))
+        if root:
+            self.set_stage_text("\[root] Reproducing on {}".format(qemu.tag))
+        else:
+            self.set_stage_text("\[user] Reproducing on {}".format(qemu.tag))
         threading.Thread(target=self._update_qemu_timer_status, args=(th_index, qemu)).start()
         q = queue.Queue()
         threading.Thread(target=self.warp_qemu_capture_kasan, args=(qemu, th_index, q)).start()
@@ -427,7 +438,7 @@ class BugReproduce(AnalysisModule):
             if qemu.instance.poll() != None:
                 break
             self.set_stage_status("[{}/3] {}/{}".format(index, qemu.timer, qemu.timeout))
-            time.sleep(1)
+            time.sleep(5)
 
     def _crash_start(self, line):
         crash_head = [r'BUG: ', r'WARNING:', r'INFO:', r'Unable to handle kernel', 
@@ -482,6 +493,7 @@ class BugReproduce(AnalysisModule):
             qemu.command(cmds="mkdir ./tmp && mv ./poc ./tmp && cd ./tmp && chmod +x poc && ./poc", user=user, wait=True, timeout=BUG_REPRODUCE_TIMEOUT)
             qemu.logger.info("Killing PoC")
             qemu.command(cmds="killall poc", user=self.root_user, wait=True)
+        self.set_stage_text("gathering output")
         for _ in range(0, n):
             try:
                 [res, trigger] = qemu_queue.get(block=True, timeout=15)
@@ -554,6 +566,8 @@ class BugReproduce(AnalysisModule):
             if line == config:
                 self.info_msg("{} is enabled".format(config))
                 return True
+        if out == None:
+            self.err_msg("kernel config check failed due to ssh problem")
         return False
     
     def _init_results(self):
@@ -615,4 +629,7 @@ class BugReproduce(AnalysisModule):
     def _write_to(self, content, name):
         file_path = "{}/{}".format(self.path_case_plugin, name)
         super()._write_to(content, file_path)
+    
+    def cleanup(self):
+        super().cleanup()
 

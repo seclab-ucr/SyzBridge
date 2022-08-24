@@ -93,6 +93,7 @@ class ModulesAnalysis(AnalysisModule):
         self.report.append(ModulesAnalysis.REPORT_END)
         if self._remove_trace_file:
             self.remove_trace_file()
+        self.set_stage_text("Done")
         return True
     
     def remove_trace_file(self):
@@ -118,6 +119,7 @@ class ModulesAnalysis(AnalysisModule):
         begin_node = trace.find_node(0)
         while begin_node != None:
             if begin_node.parent is None and begin_node.is_function and not trace.is_filtered(begin_node):
+                self.set_stage_text("Checking {}".format(begin_node.function_name))
                 if all_distros == []:
                     return False
                 self.info_msg("Starting from node {}".format(begin_node.info))
@@ -342,6 +344,13 @@ class ModulesAnalysis(AnalysisModule):
             return False
         return False
     
+    def set_history_status(self):
+        if self.results == {}:
+            self.set_stage_text("Failed")
+            return
+        self.set_stage_text("Done")
+        return
+    
     def _is_generic_module(self, src):
         if self._base_dir(src) == "mm":
             """
@@ -390,13 +399,13 @@ class ModulesAnalysis(AnalysisModule):
             return None
         self.info_msg("Open trace file: {}".format(trace_file))
 
+        self.set_stage_text("Loading trace-upstream.report")
         trace = Trace(logger=self.logger, debug=self.debug, as_servicve=True)
         trace.load_tracefile(trace_file)
         try:
             trace.serialize()
         except Exception as e:
-            self.err_msg("Failed to serialize trace file: {}".format(trace_file))
-            self.err_msg(e)
+            self.err_msg("Failed to serialize trace file {}: {}".format(trace_file, e))
             return None
         return trace
     
@@ -479,3 +488,5 @@ class ModulesAnalysis(AnalysisModule):
         file_path = "{}/{}".format(self.path_case_plugin, name)
         super()._write_to(content, file_path)
 
+    def cleanup(self):
+        super().cleanup()

@@ -62,10 +62,13 @@ class TraceAnalysis(AnalysisModule):
             self.err_msg("Failed to get upstream trace")
             return False
         
-        for distro in self.cfg.get_distros():
+        affect_distros = self.cfg.get_distros()
+        for i in range(0, len(affect_distros)):
+            distro = affect_distros[i]
             for _ in range(0,3):
                 self.results[distro.distro_name] = False
                 self.info_msg("Starting retrieving trace from {}".format(distro.distro_name))
+                self.set_stage_text("Getting trace from {} [{}/{}]".format(cfg.repro.distro_name, i, len(affect_distros)))
                 trace_vendor = self._get_trace(distro)
                 if trace_vendor is None:
                     self.err_msg("Failed to get vendor trace, try again")
@@ -75,6 +78,7 @@ class TraceAnalysis(AnalysisModule):
                 self.results[distro.distro_name] = True
                 break
 
+        self.set_stage_text("Done")
         #ret = self.analyze_trace(trace_vendor, trace_upstream)
         return True
     
@@ -134,6 +138,7 @@ class TraceAnalysis(AnalysisModule):
         return None
     
     def build_env_upstream(self):
+        self.set_stage_text("Building upstream kernel")
         image = "stretch"
         gcc_version = set_compiler_version(time_parser.parse(self.case["time"]), self.case["config"])
         script = os.path.join(self.path_package, "scripts/deploy-linux.sh")
@@ -160,6 +165,7 @@ class TraceAnalysis(AnalysisModule):
         return exitcode
     
     def _run_trace_cmd(self, qemu: VMInstance, trace_filename, syz_repro=False):
+        self.set_stage_text("Extracting trace from {}".format(trace_filename))
         if syz_repro:
             syz_execprog = os.path.join(self.path_case_plugin, "syz-execprog")
             syz_executor = os.path.join(self.path_case_plugin, "syz-executor")
@@ -257,6 +263,17 @@ class TraceAnalysis(AnalysisModule):
             return 0
         return exitcode
     
+    def set_history_status(self):
+        text = ""
+        for distro_name in self.results:
+            if not self.results[distro_name]:
+                text += "{} failed\n".format(distro_name)
+        if text == "":
+            self.set_stage_text("Done")
+            return
+        self.set_stage_text(text)
+        return
+
     def generate_report(self):
         final_report = "\n".join(self.report)
         self.info_msg(final_report)
@@ -302,6 +319,7 @@ exit $EXIT_CODE""".format(cmd)
         return script_path
     
     def _get_trace(self, cfg):
+        self.set_stage_text("Getting trace from {}".format(cfg.repro.distro_name))
         self.info_msg("Generating trace for {}".format(cfg.repro.distro_name))
         trace_path = os.path.join(self.path_case_plugin, "trace-{}.report".format(cfg.repro.distro_name))
         if os.path.exists(trace_path):
@@ -447,6 +465,8 @@ exit $EXIT_CODE""".format(cmd)
                 if syscall in self.syzcall2syscall:
                     for each in self.syzcall2syscall[syscall]:
                         enabled_syscalls.append(self._syscall_add_prefix(each))
+                else:
+                    self.logger.error("Cannot find {} in syzcall2syscall".format(syscall))
         return unique(enabled_syscalls)
     
     def _syscall_add_prefix(self, syscall):
@@ -491,3 +511,5 @@ exit $EXIT_CODE""".format(cmd)
         file_path = "{}/{}".format(self.path_case_plugin, name)
         super()._write_to(content, file_path)
 
+    def cleanup(self):
+        super().cleanup()

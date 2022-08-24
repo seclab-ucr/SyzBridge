@@ -67,7 +67,6 @@ class Network:
         "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "StrictHostKeyChecking=no", 
         "-i", key, 
         "-p", str(port), "{}@{}".format(user, ip), command]
-        pipe_output = []
 
         self.logger.debug(" ".join(cmd))
         p = Popen(cmd,

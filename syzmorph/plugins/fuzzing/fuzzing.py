@@ -184,6 +184,7 @@ class Fuzzing(AnalysisModule):
         self._write_to(final_report, self.REPORT_NAME)
     
     def cleanup(self):
+        super().cleanup()
         if self.syz != None:
             self.syz.delete_syzkaller()
     

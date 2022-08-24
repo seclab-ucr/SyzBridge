@@ -241,7 +241,10 @@ class CapabilityCheck(AnalysisModule):
         return -1
 
     def _run_poc(self, qemu):
-        call(["gcc", "-pthread", "-static", "-o", "poc", "poc.c"], cwd=self.path_case_plugin)
+        p = Popen(["gcc", "-pthread", "-static", "-o", "poc", "poc.c"], cwd=self.path_case_plugin, stderr=PIPE, stdout=PIPE)
+        with p.stdout:
+            self._log_subprocess_output(p.stdout)
+        p.wait()
         poc_path = os.path.join(self.path_case_plugin, "poc")
         qemu.upload(user="root", src=[poc_path], dst="/root", wait=True)
         qemu.command(cmds="chmod +x ./poc && ./poc", user="root", wait=True)
@@ -321,6 +324,7 @@ class CapabilityCheck(AnalysisModule):
         super()._write_to(content, file_path)
     
     def cleanup(self):
+        super().cleanup()
         if self.syz != None:
             self.syz.delete_syzkaller()
 
