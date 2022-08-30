@@ -183,7 +183,8 @@ class TraceAnalysis(AnalysisModule):
         for each in syscalls:
             cmd += "-g {} ".format(each)
         cmd += trigger_commands
-        trace_poc_path = self._generate_script(cmd)
+        trace_poc_script_name = "trace-poc-{}.sh".format(qemu.tag)
+        trace_poc_path = self._generate_script(cmd, trace_poc_script_name)
 
         if syz_repro:
             qemu.upload(user="root", src=[testcase], dst="/root", wait=True)
@@ -198,7 +199,7 @@ class TraceAnalysis(AnalysisModule):
                 qemu.command(cmds="gcc -pthread -o poc {}".format(poc_src), user="root", wait=True)
 
         qemu.upload(user="root", src=[trace_poc_path], dst="/root", wait=True)
-        qemu.command(cmds="chmod +x trace-poc.sh && ./trace-poc.sh\n", user="root", wait=True)
+        qemu.command(cmds="chmod +x {0} && ./{0}\n".format(trace_poc_script_name), user="root", wait=True)
         qemu.command(cmds="trace-cmd report > trace.report", user="root", wait=True)
         qemu.download(user="root", src=["/root/trace.report"], dst="{}/{}.report".format(self.path_case_plugin, trace_filename), wait=True)
         if qemu.dumped_ftrace:
@@ -279,7 +280,7 @@ class TraceAnalysis(AnalysisModule):
         self.info_msg(final_report)
         self._write_to(final_report, self.REPORT_NAME)
     
-    def _generate_script(self, cmd):
+    def _generate_script(self, cmd, script_name):
         trace_poc_text = """
 #!/bin/bash
 
@@ -313,7 +314,7 @@ fi
 EXIT_CODE=0
 ls trace.dat || EXIT_CODE=1
 exit $EXIT_CODE""".format(cmd)
-        script_path = os.path.join(self.path_case_plugin, "trace-poc.sh")
+        script_path = os.path.join(self.path_case_plugin, script_name)
         with open(script_path, "w") as f:
             f.write(trace_poc_text)
         return script_path
@@ -329,7 +330,7 @@ exit $EXIT_CODE""".format(cmd)
                 self.err_msg("Failed to build upstream environment")
                 return None
 
-        qemu = cfg.repro.launch_qemu(self.case_hash, work_path=self.path_case_plugin, log_name="qemu-{}.log".format(cfg.repro.distro_name), timeout=TIMEOUT_TRACE_ANALYSIS, snapshot=False)
+        qemu = cfg.repro.launch_qemu(self.case_hash, tag=cfg.distro_name, work_path=self.path_case_plugin, log_name="qemu-{}.log".format(cfg.repro.distro_name), timeout=TIMEOUT_TRACE_ANALYSIS, snapshot=False)
         _, qemu_queue = qemu.run(alternative_func=self._run_trace_cmd, args=("trace-{}".format(cfg.repro.distro_name), ))
         done = qemu_queue.get(block=True)
         qemu.kill()
