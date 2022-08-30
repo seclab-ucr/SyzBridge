@@ -4,7 +4,7 @@ import requests
 import logging
 import random
 import datetime, json
-from subprocess import call
+from subprocess import call, Popen, PIPE, STDOUT
 from os import get_terminal_size
 from platform import platform, system
 
@@ -502,6 +502,27 @@ def kasan_mem_to_shadow(addr):
 def clone_repo(repo_url, repo_path):
     ret = call(['git', 'clone', repo_url, repo_path])
     return ret
+
+def local_command(command, cwd=None, shell=False, redir_err=True):
+    out = []
+    if redir_err:
+        p = Popen(args=command, shell=shell, cwd=cwd, stdout=PIPE, stderr=PIPE)
+    else:
+        p = Popen(args=command, shell=shell, cwd=cwd, stdout=PIPE, stderr=STDOUT)
+    with p.stdout:
+        try:
+            for line in iter(p.stdout.readline, b''):
+                try:
+                    line = line.decode("utf-8").strip('\n').strip('\r')
+                except:
+                    continue
+                out.append(line)
+                #if debug:
+                    #print(line)
+        except ValueError:
+            if p.stdout.close:
+                return out
+    return out
 
 if __name__ == '__main__':
     pass
