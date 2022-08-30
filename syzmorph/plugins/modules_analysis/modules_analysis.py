@@ -108,12 +108,13 @@ class ModulesAnalysis(AnalysisModule):
         trace = self._open_trace()
         if trace == None:
             raise TraceAnalysisError("Failed to open upstream trace file")
+        upstream = self.cfg.get_upstream()
+        self.vm["upstream"] = self._prepare_gdb(upstream)
         check_map = {}
         all_distros = self.cfg.get_distros()
         for distro in all_distros:
             distro.build_module_list()
             check_map[distro.distro_name] = {}
-            self.vm[distro.distro_name] = self._prepare_gdb(distro)
 
         trace.add_filter("task", "==\"poc\"")
         begin_node = trace.find_node(0)
@@ -128,6 +129,47 @@ class ModulesAnalysis(AnalysisModule):
             begin_node = begin_node.next_node_by_time
         return True
     
+    def determine_module_attr(self, src_file, begin_node, distro: Vendor, hook_end_node, skip_src_check=False):
+        ret = self.module_check(distro, src_file, skip_src_check=skip_src_check)
+        self.info_msg("Module {} in {} {}".format(self.vul_module, distro.distro_name, ret))
+        if ret == None or ret == self.MODULE_ENABLED:
+            return
+        if self.vul_module not in self.results:
+            self.results[self.vul_module] = {'name': self.vul_module, 'src_file': src_file, 'hook': hook_end_node != None, 'missing': {}}
+        miss_info = {'distro_name': distro.distro_name, 'distro_version': distro.distro_version}
+        if ret == self.MODULE_DISABLED:
+            miss_info['type'] = self.MODULE_DISABLED
+            miss_info['missing_reason'] = 'Module disabled'
+            self.report.append(begin_node.text)
+            self.info_msg("Vendor {0} does not have {1} module enabled".format(distro.distro_name, self.vul_module))
+            self.report.append("[Disabled] Module {} from {} is not enabled in {}".format(self.vul_module, src_file, distro.distro_name))
+        if ret == self.MODULE_REQUIRED_LOADING:
+            miss_info['type'] = self.MODULE_REQUIRED_LOADING_BY_ROOT
+            miss_info['missing_reason'] = 'need loading by root'
+            self.report.append(begin_node.text)
+            user = 'root'
+            if self.check_module_privilege(self.vul_module):
+                miss_info['type'] = self.MODULE_REQUIRED_LOADING_BY_NON_ROOT
+                miss_info['missing_reason'] = 'need loading by normal user'
+                user = 'normal user'
+            self.report.append("[{}] Module {} from {} need to be loaded in {} ".format(user, self.vul_module, src_file, distro.distro_name))
+        if ret == self.MODULE_IN_BLACKLIST:
+            miss_info['type'] = self.MODULE_IN_BLACKLIST
+            miss_info['missing_reason'] = 'Module in blacklist'
+            self.report.append(begin_node.text)
+            self.report.append("[Blacklist] Module {} from {} need root to be loaded".format(self.vul_module, src_file))
+        self.results[self.vul_module]['missing'][distro.distro_name] = miss_info
+        return
+    
+    def module_attr(self, vul_module, distro: Vendor):
+        if vul_module in distro.default_modules:
+            return self.MODULE_ENABLED
+        if vul_module in distro.optional_modules:
+            if vul_module in distro.blacklist_modules:
+                return self.MODULE_IN_BLACKLIST
+            return self.MODULE_REQUIRED_LOADING
+        return None
+    
     def check_modules_in_trace(self, begin_node, check_map, all_distros):
         end_node = begin_node.scope_end_node
         hook_end_node = None
@@ -140,44 +182,18 @@ class ModulesAnalysis(AnalysisModule):
                         hook_end_node = self.is_hook_func(begin_node)
                     for distro in all_distros:
                         self._cur_distro = distro
-                        src_file, procceed = self.get_src_file_from_function(begin_node, distro)
-                        if src_file == None:
+                        if self.compiled_in_vmlinux(begin_node.function_name, distro):
                             continue
-                        if procceed:
+                        src_file_list, found_modules = self.get_src_file_from_function(begin_node, distro)
+                        for src_file in src_file_list:
+                            if src_file == None:
+                                continue
                             if src_file in check_map[distro.distro_name]:
                                 continue
                             if self._is_generic_module(src_file):
                                 continue
                             check_map[distro.distro_name][src_file] = True
-                            ret = self.module_check(distro, src_file)
-                            self.info_msg("Module {} in {} {}".format(self.vul_module, distro.distro_name, ret))
-                            if ret == None or ret == self.MODULE_ENABLED:
-                                continue
-                            if self.vul_module not in self.results:
-                                self.results[self.vul_module] = {'name': self.vul_module, 'src_file': src_file, 'hook': hook_end_node != None, 'missing': {}}
-                            miss_info = {'distro_name': distro.distro_name, 'distro_version': distro.distro_version}
-                            if ret == self.MODULE_DISABLED:
-                                miss_info['type'] = self.MODULE_DISABLED
-                                miss_info['missing_reason'] = 'Module disabled'
-                                self.report.append(begin_node.text)
-                                self.info_msg("Vendor {0} does not have {1} module enabled".format(distro.distro_name, self.vul_module))
-                                self.report.append("[Disabled] Module {} from {} is not enabled in {}".format(self.vul_module, src_file, distro.distro_name))
-                            if ret == self.MODULE_REQUIRED_LOADING:
-                                miss_info['type'] = self.MODULE_REQUIRED_LOADING_BY_ROOT
-                                miss_info['missing_reason'] = 'need loading by root'
-                                self.report.append(begin_node.text)
-                                user = 'root'
-                                if self.check_module_privilege(self.vul_module):
-                                    miss_info['type'] = self.MODULE_REQUIRED_LOADING_BY_NON_ROOT
-                                    miss_info['missing_reason'] = 'need loading by normal user'
-                                    user = 'normal user'
-                                self.report.append("[{}] Module {} from {} need to be loaded in {} ".format(user, self.vul_module, src_file, distro.distro_name))
-                            if ret == self.MODULE_IN_BLACKLIST:
-                                miss_info['type'] = self.MODULE_IN_BLACKLIST
-                                miss_info['missing_reason'] = 'Module in blacklist'
-                                self.report.append(begin_node.text)
-                                self.report.append("[Blacklist] Module {} from {} need root to be loaded".format(self.vul_module, src_file))
-                            self.results[self.vul_module]['missing'][distro.distro_name] = miss_info
+                            self.determine_module_attr(src_file, begin_node, distro, hook_end_node, skip_src_check=found_modules)
             begin_node = begin_node.next_node
             if hook_end_node == begin_node:
                 hook_end_node = None
@@ -194,12 +210,17 @@ class ModulesAnalysis(AnalysisModule):
             self._ftrace_functions[distro.distro_name] = {}
         if begin_node.function_name in self._ftrace_functions[distro.distro_name]:
             return self._ftrace_functions[distro.distro_name][begin_node.function_name], False
-        addr = self.vm[distro.distro_name].get_func_addr(begin_node.function_name)
-        if addr == 0:
-            self.debug_msg("Function {} doesn't have symbol file".format(begin_node.function_name))
-            self._ftrace_functions[distro.distro_name][begin_node.function_name] = None
-            return None, False
-        file, _ = self.vm[distro.distro_name].get_dbg_info(addr)
+        module_path = self.find_module_by_func_name(begin_node.function_name, distro)
+        if len(module_path) == 0:
+            addr = self.vm["upstream"].get_func_addr(begin_node.function_name)
+            if addr == 0:
+                self.debug_msg("Function {} doesn't have symbol file".format(begin_node.function_name))
+                self._ftrace_functions[distro.distro_name][begin_node.function_name] = [None]
+                return [None], False
+            file, _ = self.vm["upstream"].get_dbg_info(addr)
+            self._ftrace_functions[distro.distro_name][begin_node.function_name] = [file]
+            return [file], False
+        file = [x[:-2]+'c' for x in module_path if x.endswith('.ko')]
         self._ftrace_functions[distro.distro_name][begin_node.function_name] = file
         return file, True
         
@@ -266,15 +287,16 @@ class ModulesAnalysis(AnalysisModule):
         self.vul_module = vul_obj
         return vul_obj, dirname
     
-    def module_check(self, distro, upstream_vul_src_file):
+    def module_check(self, distro, upstream_vul_src_file, skip_src_check=False):
         victim_module, dirname = self.get_victim_module(upstream_vul_src_file)
-        if victim_module == None:
-            return self.MODULE_ENABLED
-        k = self.module_check_by_config(dirname) # victim_module pass to self.vul_module, this function actually check the vul module
-        if k == 'n':
-            return self.MODULE_DISABLED
-        if k == 'y':
-            return self.MODULE_ENABLED
+        if not skip_src_check:
+            if victim_module == None:
+                return self.MODULE_ENABLED
+            k = self.module_check_by_config(dirname) # victim_module pass to self.vul_module, this function actually check the vul module
+            if k == 'n':
+                return self.MODULE_DISABLED
+            if k == 'y':
+                return self.MODULE_ENABLED
         if self.vul_module in distro.default_modules:
             return self.MODULE_ENABLED
         if self.vul_module in distro.optional_modules:
@@ -342,6 +364,20 @@ class ModulesAnalysis(AnalysisModule):
         self.set_stage_text("Done")
         return
     
+    def compiled_in_vmlinux(self, func_name, distro: Vendor):
+        try:
+            res = distro.func2module[func_name]
+            return "vmlinux" in res
+        except KeyError:
+            return False
+
+    def find_module_by_func_name(self, func_name, distro: Vendor):
+        try:
+            res = distro.func2module[func_name]
+            return res
+        except KeyError:
+            return []
+    
     def _prepare_gdb(self, distro: Vendor):
         vmlinux = distro.repro.vmlinux
         image = distro.repro.image_path
@@ -349,47 +385,7 @@ class ModulesAnalysis(AnalysisModule):
         vm = VM(linux=distro.distro_src, cfg=distro, vmlinux=vmlinux, key=key,
             port=random.randint(1024, 65535), image=image, hash_tag=self.case_hash)
         vm.gdb_attach_vmlinux()
-        self._gdb_load_all_modules(distro, vm)
         return vm
-    
-    def _gdb_load_all_modules(self, distro: Vendor, vm: VM):
-        dirname = os.path.dirname(distro.distro_src)
-        modules_dir = os.path.join(dirname, 'modules')
-        out = local_command("find {} -name \"*.ko\"".format(modules_dir), shell=True)
-        base_addr = 0x10000000
-        for each_module in out:
-            each_module = each_module.strip()
-            if os.path.exists(each_module):
-                offset = self._get_module_offset(each_module)
-                size = self._get_module_size(each_module)
-                self.debug_msg("Loading {} into gdb at {}".format(each_module, hex(base_addr)))
-                vm.gdb.add_symbol_file(each_module, base_addr)
-                if offset != None and size != None:
-                    base_addr += self._round_up(size + offset)
-    
-    def _round_up(self, value):
-        align = 1
-        while value > (align << 4):
-            align = align << 4
-        return (value + align - 1) & ~(align - 1)
-    
-    def _get_module_offset(self, module_path):
-        ret = 0
-        out = local_command("readelf -WS {} | grep -E \" \.text \" | awk '{{ print \"0x\"$6 }}'".format(module_path), shell=True)
-        try:
-            ret = int(out[0], 16)
-        except:
-            return None
-        return ret
-    
-    def _get_module_size(self, module_path):
-        ret = 0
-        out = local_command("readelf -WS {} | grep -E \" \.text \" | awk '{{ print \"0x\"$7 }}'".format(module_path), shell=True)
-        try:
-            ret = int(out[0], 16)
-        except:
-            return None
-        return ret
 
     def _is_generic_module(self, src):
         if self._base_dir(src) == "mm":

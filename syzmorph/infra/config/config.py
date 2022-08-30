@@ -6,6 +6,7 @@ from infra.error import *
 from syzmorph.modules.vm.instance import VMInstance
 from .vendor import Vendor
 from infra.tool_box import *
+from typing import List
 
 base_ssh_port = 36777
 
@@ -72,7 +73,7 @@ class Config:
                 setattr(module, key, plugin_cfg[plugin][key])
         return cfg
 
-    def get_all_kernels(self):
+    def get_all_kernels(self) -> List[Vendor]:
         res = []
         for name in self.kernel.__dict__:
             cfg = getattr(self.kernel, name)
@@ -87,7 +88,7 @@ class Config:
     
     # get_all_distros ignore is_inited() and need_repro()
     # It returns every distro that was defined in config file
-    def get_all_distros(self)-> Vendor:
+    def get_all_distros(self)-> List[Vendor]:
         res = []
         for name in self.kernel.__dict__:
             distro = getattr(self.kernel, name)
@@ -95,7 +96,7 @@ class Config:
                 res.append(distro)
         return res
 
-    def get_distros(self)-> Vendor:
+    def get_distros(self)-> List[Vendor]:
         res = []
         for name in self.kernel.__dict__:
             distro = getattr(self.kernel, name)

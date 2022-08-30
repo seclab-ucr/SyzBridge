@@ -10,6 +10,7 @@ class Vendor():
         self.default_modules = {}
         self.optional_modules = {}
         self.blacklist_modules = {}
+        self.func2module = {}
         self._ssh_port = None
         self._gdb_port = None
         self._mon_port = None
@@ -47,13 +48,41 @@ class Vendor():
         _, queue = self.repro.run_qemu(qemu, self._get_modules)
         queue.get(block=True)
         qemu.kill()
+        self.build_module_func_list()
         self._dump_modules_to_cache()
     
+    def build_module_func_list(self):
+        file_path_regex = r'File: (.*\.ko)'
+        cmd = "readelf -sW vmlinux | awk '{{ if ($4 == \"FUNC\") print $8; else if ($1 ~ /File:/) print}}'"
+        out = local_command(cmd, shell=True, cwd=self.distro_src)
+        cur_module = "vmlinux"
+        for func in out:
+            func = func.strip()
+            if func not in self.func2module:
+                self.func2module[func] = []
+            self.func2module[func].append(cur_module) 
+
+        dirname = os.path.dirname(self.distro_src)
+        modules_dir = os.path.join(dirname, 'modules')
+        cmd = "readelf -sW `find ./ -name \"*.ko\"` | awk '{{ if ($4 == \"FUNC\") print $8; else if ($1 ~ /File:/) print}}'"
+        out = local_command(cmd, shell=True, cwd=modules_dir)
+        for func in out:
+            func = func.strip()
+            if regx_match(r'^File:', func):
+                cur_module = regx_get(file_path_regex, func, 0)
+                if cur_module.startswith("./"):
+                    cur_module = cur_module[2:]
+                continue
+            if func not in self.func2module:
+                self.func2module[func] = []
+            self.func2module[func].append(cur_module)
+        return
+
     def is_inited(self):
         return self._init
     
     def _read_modules_from_cache(self):
-        for name in ["optional_modules", "default_modules", "blacklist_modules"]:
+        for name in ["optional_modules", "default_modules", "blacklist_modules", "func2module"]:
             cache_file = os.path.join(self.distro_src, name+".json")
             if not os.path.exists(cache_file):
                 return False
@@ -61,7 +90,7 @@ class Vendor():
         return True
     
     def _dump_modules_to_cache(self):
-        for name in ["optional_modules", "default_modules", "blacklist_modules"]:
+        for name in ["optional_modules", "default_modules", "blacklist_modules", "func2module"]:
             cache_file = os.path.join(self.distro_src, name+".json")
             json.dump(getattr(self, name), open(cache_file, "w"))
     
