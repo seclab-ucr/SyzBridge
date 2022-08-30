@@ -1,4 +1,3 @@
-from pwn import *
 from .kernel import Kernel
 from .monitor import Monitor
 

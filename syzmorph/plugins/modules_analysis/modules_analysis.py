@@ -9,7 +9,6 @@ from plugins.error import *
 from plugins.trace_analysis import TraceAnalysis
 from infra.ftraceparser.ftraceparser.trace import Trace
 from modules.vm import VM, VMInstance
-from syzmorph.infra.config.config import Config
 from syzmorph.infra.config.vendor import Vendor
 
 class TraceAnalysisError(Exception):
@@ -39,6 +38,7 @@ class ModulesAnalysis(AnalysisModule):
         self.config_cache['vendor_config_path'] = ''
         self._loadable_modules = {}
         self._ftrace_functions = {}
+        self.vm = {}
     
     def check(func):
         def inner(self):
@@ -108,12 +108,12 @@ class ModulesAnalysis(AnalysisModule):
         trace = self._open_trace()
         if trace == None:
             raise TraceAnalysisError("Failed to open upstream trace file")
-        vm = self._prepare_gdb()
         check_map = {}
         all_distros = self.cfg.get_distros()
         for distro in all_distros:
             distro.build_module_list()
             check_map[distro.distro_name] = {}
+            self.vm[distro.distro_name] = self._prepare_gdb(distro)
 
         trace.add_filter("task", "==\"poc\"")
         begin_node = trace.find_node(0)
@@ -123,12 +123,12 @@ class ModulesAnalysis(AnalysisModule):
                 if all_distros == []:
                     return False
                 self.info_msg("Starting from node {}".format(begin_node.info))
-                if not self.check_modules_in_trace(begin_node, vm, check_map, all_distros):
+                if not self.check_modules_in_trace(begin_node, check_map, all_distros):
                     return False
             begin_node = begin_node.next_node_by_time
         return True
     
-    def check_modules_in_trace(self, begin_node, vm, check_map, all_distros):
+    def check_modules_in_trace(self, begin_node, check_map, all_distros):
         end_node = begin_node.scope_end_node
         hook_end_node = None
         while begin_node != end_node:
@@ -136,14 +136,14 @@ class ModulesAnalysis(AnalysisModule):
             # next node will be found after the loop
             for _ in range(0, 1):
                 if begin_node.is_function:
-                    src_file, procceed = self.get_src_file_from_function(begin_node, vm)
                     if hook_end_node == None:
                         hook_end_node = self.is_hook_func(begin_node)
-                    if src_file == None:
-                        break
-                    if procceed:
-                        for distro in all_distros:
-                            self._cur_distro = distro
+                    for distro in all_distros:
+                        self._cur_distro = distro
+                        src_file, procceed = self.get_src_file_from_function(begin_node, distro)
+                        if src_file == None:
+                            continue
+                        if procceed:
                             if src_file in check_map[distro.distro_name]:
                                 continue
                             if self._is_generic_module(src_file):
@@ -188,28 +188,19 @@ class ModulesAnalysis(AnalysisModule):
         if 'hook' in node.function_name:
             return node.scope_end_node
         return None
-
-    def _prepare_gdb(self):
-        linux = os.path.join(self.path_case, "linux")
-        upstream = self.cfg.get_upstream()
-        vmlinux = upstream.repro.vmlinux
-        image = upstream.repro.image_path
-        key = upstream.repro.ssh_key
-        vm = VM(linux=linux, cfg=upstream, vmlinux=vmlinux, key=key, tag='{} upstream'.format(self.case_hash),
-            port=random.randint(1024, 65535), image=image, hash_tag=self.case_hash)
-        vm.gdb_attach_vmlinux()
-        return vm
     
-    def get_src_file_from_function(self, begin_node, vm):
-        if begin_node.function_name in self._ftrace_functions:
-            return self._ftrace_functions[begin_node.function_name], False
-        addr = vm.get_func_addr(begin_node.function_name)
+    def get_src_file_from_function(self, begin_node, distro: Vendor):
+        if distro.distro_name not in self._ftrace_functions:
+            self._ftrace_functions[distro.distro_name] = {}
+        if begin_node.function_name in self._ftrace_functions[distro.distro_name]:
+            return self._ftrace_functions[distro.distro_name][begin_node.function_name], False
+        addr = self.vm[distro.distro_name].get_func_addr(begin_node.function_name)
         if addr == 0:
             self.debug_msg("Function {} doesn't have symbol file".format(begin_node.function_name))
-            self._ftrace_functions[begin_node.function_name] = None
+            self._ftrace_functions[distro.distro_name][begin_node.function_name] = None
             return None, False
-        file, _ = vm.get_dbg_info(addr)
-        self._ftrace_functions[begin_node.function_name] = file
+        file, _ = self.vm[distro.distro_name].get_dbg_info(addr)
+        self._ftrace_functions[distro.distro_name][begin_node.function_name] = file
         return file, True
         
     def check_kasan_report(self):
@@ -351,6 +342,55 @@ class ModulesAnalysis(AnalysisModule):
         self.set_stage_text("Done")
         return
     
+    def _prepare_gdb(self, distro: Vendor):
+        vmlinux = distro.repro.vmlinux
+        image = distro.repro.image_path
+        key = distro.repro.ssh_key
+        vm = VM(linux=distro.distro_src, cfg=distro, vmlinux=vmlinux, key=key,
+            port=random.randint(1024, 65535), image=image, hash_tag=self.case_hash)
+        vm.gdb_attach_vmlinux()
+        self._gdb_load_all_modules(distro, vm)
+        return vm
+    
+    def _gdb_load_all_modules(self, distro: Vendor, vm: VM):
+        dirname = os.path.dirname(distro.distro_src)
+        modules_dir = os.path.join(dirname, 'modules')
+        out = local_command("find {} -name \"*.ko\"".format(modules_dir), shell=True)
+        base_addr = 0x10000000
+        for each_module in out:
+            each_module = each_module.strip()
+            if os.path.exists(each_module):
+                offset = self._get_module_offset(each_module)
+                size = self._get_module_size(each_module)
+                self.debug_msg("Loading {} into gdb at {}".format(each_module, hex(base_addr)))
+                vm.gdb.add_symbol_file(each_module, base_addr)
+                if offset != None and size != None:
+                    base_addr += self._round_up(size + offset)
+    
+    def _round_up(self, value):
+        align = 1
+        while value > (align << 4):
+            align = align << 4
+        return (value + align - 1) & ~(align - 1)
+    
+    def _get_module_offset(self, module_path):
+        ret = 0
+        out = local_command("readelf -WS {} | grep -E \" \.text \" | awk '{{ print \"0x\"$6 }}'".format(module_path), shell=True)
+        try:
+            ret = int(out[0], 16)
+        except:
+            return None
+        return ret
+    
+    def _get_module_size(self, module_path):
+        ret = 0
+        out = local_command("readelf -WS {} | grep -E \" \.text \" | awk '{{ print \"0x\"$7 }}'".format(module_path), shell=True)
+        try:
+            ret = int(out[0], 16)
+        except:
+            return None
+        return ret
+
     def _is_generic_module(self, src):
         if self._base_dir(src) == "mm":
             """

@@ -2,7 +2,7 @@ import infra.tool_box as utilities
 import math
 import logging
 
-from pwn import *
+from pwn import remote
 from .error import QemuIsDead
 
 class Monitor:
@@ -154,7 +154,7 @@ class Monitor:
     
     def waitfor(self, pattern):
         try:
-            text = self.mon_inst.recvuntil(pattern)
+            text = self.mon_inst.recvuntil(pattern.encode())
         except EOFError:
             raise QemuIsDead
         self.logger.info(text.decode("utf-8"))

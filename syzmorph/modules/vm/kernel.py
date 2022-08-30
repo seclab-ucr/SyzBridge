@@ -82,16 +82,22 @@ class Kernel:
 
     def __init__(self, vmlinux, addr_bytes, proj_path, log_suffix="", debug=False):
         self.proj = None
-        try:
-            self.proj = angr.Project(vmlinux,
-                                    load_options={"auto_load_libs": False})
-        except Exception as e:
-            print(e)
-            raise AngrRefuseToLoadKernel
+        self._vmlinux = vmlinux
         self.gdbhelper = GDBHelper(vmlinux, addr_bytes, proj_path, debug, log_suffix)
         # private
         self._kasan_report = 0
         self._kasan_ret = []
+    
+    def load_angr_proj(self):
+        try:
+            self.proj = angr.Project(self._vmlinux,
+                                        load_options={"auto_load_libs": False})
+        except Exception as e:
+            print(e)
+            raise AngrRefuseToLoadKernel
+    
+    def add_symbol_file(self, sym_path, addr):
+        self.gdbhelper.add_symbol_file(sym_path, addr)
 
     def getStructOffset(self, struct_name, field_name):
         cmd = "p &((struct %s *)0)->%s" % (struct_name, field_name)
@@ -210,6 +216,8 @@ class Kernel:
                     return
 
     def resolve_addr(self, addr):
+        if self.proj == None:
+            return None
         func = self.proj.loader.find_symbol(addr, fuzzy=True)
         if func:
             return "%s+%d" % (func.name, addr - func.rebased_addr)
@@ -217,15 +225,21 @@ class Kernel:
             return hex(addr)
 
     def find_symbol(self, addr, fuzzy=True):
+        if self.proj == None:
+            return None
         return self.proj.loader.find_symbol(addr, fuzzy)
 
     def func_start(self, name):
+        if self.proj == None:
+            return None
         func = self.proj.loader.find_symbol(name)
         if func:
             return func.rebased_addr
         return 0
 
     def getFunctionCFG(self, func):
+        if self.proj == None:
+            return None
         symbol = self.find_symbol(func)
         if symbol is None:
             return None
@@ -252,6 +266,8 @@ class Kernel:
         return exits
 
     def getBlock(self, addr):
+        if self.proj == None:
+            return None
         return self.proj.factory.block(addr)
 
     def backtrace(self,

@@ -3,7 +3,7 @@ import math
 import infra.tool_box as utilities
 
 from subprocess import Popen, PIPE, STDOUT, TimeoutExpired
-from pwn import *
+from pwn import process
 from .error import QemuIsDead
 
 class GDBHelper:
@@ -35,6 +35,7 @@ class GDBHelper:
         logger.addHandler(handler)
         logger.propagate = False
         if self._debug:
+            logger.propagate = True
             logger.setLevel(logging.DEBUG)
         return logger
     
@@ -46,6 +47,9 @@ class GDBHelper:
             if 'Pwndbg' in versions[0]:
                 return True
         return False
+    
+    def add_symbol_file(self, file, addr):
+        self.sendline("add-symbol-file {} {}".format(file, addr))
     
     def connect(self, port):
         self.sendline('target remote :{}'.format(port))
@@ -59,7 +63,7 @@ class GDBHelper:
     
     def waitfor(self, pattern, timeout=5):
         try:
-            text = self.gdb_inst.recvuntil(pattern, timeout=timeout)
+            text = self.gdb_inst.recvuntil(pattern.encode(), timeout=timeout)
         except EOFError:
             raise QemuIsDead
         self.logger.info(text.decode("utf-8"))
@@ -183,7 +187,7 @@ class GDBHelper:
     def get_dbg_info(self, addr):
         cmd = 'b *{}'.format(addr)
         raw = self.sendline(cmd)
-        dbg_info_regx = r'Breakpoint \d+ at 0x[a-f0-9]+: file (([A-Za-z0-9_\-.]+\/)+[A-Za-z0-9_.\-]+), line (\d+)'
+        dbg_info_regx = r'Breakpoint \d+ at 0x[a-f0-9]+: file ((\/)?([A-Za-z0-9_\-.]+\/)+[A-Za-z0-9_.\-]+), line (\d+)'
         ret = []
         for line in raw.split('\n'):
             line = line.strip('\n')
@@ -222,7 +226,7 @@ class GDBHelper:
         self.gdb_inst.kill()
 
     def _sendline(self, cmd):
-        self.gdb_inst.sendline(cmd)
+        self.gdb_inst.sendline(cmd.encode())
 
     def command(self, cmd):
         ret = list()

@@ -17,3 +17,7 @@ class VM(VMInstance, VMState):
             self.mon.close()
         if self.kernel != None and self.kernel.proj != None:
             del self.kernel.proj
+        if self._output_lock.locked():
+            self._output_lock.release()
+        if self.lock.locked():
+            self.lock.release()

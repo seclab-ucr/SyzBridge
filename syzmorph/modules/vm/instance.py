@@ -197,6 +197,7 @@ class VMInstance(Network):
                     call("kill -9 {}".format(pid), shell=True)
                     break
     
+    # No new output in (default_output_timer) seconds
     def no_new_output(self):
         return self._output_lock.locked()
     
