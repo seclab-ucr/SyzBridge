@@ -59,6 +59,10 @@ class ImageCommand(Command):
                             help='Enable CONFIG_UBSAN (Fall 2020)')
         parser.add_argument('--enable-fault-injection', action='store_true',
                             help='Enable CONFIG_FAULT_INJECTION')
+        parser.add_argument('--enable-extra', action='store', nargs='+',
+                            help='Enable extra config')
+        parser.add_argument('--disable-extra', action='store', nargs='+',
+                            help='Disable extra config')
 
         # image building options
         parser.add_argument('--version-since', nargs='?', action='store', default='',
@@ -186,13 +190,16 @@ class ImageCommand(Command):
             time.sleep(10)
             return False
         
+        dst = os.path.join(self.build_dir, "{}-{}".format(self.distro, self.code_name))
         if os.path.exists(os.path.join(self.build_dir, "{}.tar.gz".format(self.distro))):
             src = os.path.join(self.build_dir, "{}.tar.gz".format(self.distro))
-            dst = os.path.join(self.build_dir, "{}-{}".format(self.distro, self.code_name))
             os.makedirs(dst)
             shutil.move(src, dst)
             call(args=['tar', 'xf', './{}.tar.gz'.format(self.distro)], cwd=dst)
             os.remove(os.path.join(dst, './{}.tar.gz'.format(self.distro)))
+        elif not os.path.exists(dst):
+            self.logger.error("Cannot find {}.tar.gz, please make sure the building is succeed".format(self.distro))
+            return False
 
         time.sleep(3)
         _, q = vm.run(alternative_func=self._check_kernel_version)
@@ -202,8 +209,18 @@ class ImageCommand(Command):
             self.logger.error("Kernel version does not match {}, check grub".format(self.kernel_version))
             time.sleep(3)
             return False
+        
+        dst = os.path.join(self.build_dir, "modules")
+        if os.path.exists(os.path.join(self.build_dir, "modules.tar.gz")):
+            src = os.path.join(self.build_dir, "modules.tar.gz")
+            os.makedirs(dst)
+            shutil.move(src, dst)
+            call(args=['tar', 'xf', './modules.tar.gz'], cwd=dst)
+            os.remove(os.path.join(dst, './modules.tar.gz'.format(self.distro)))
+        elif not os.path.exists(dst):
+            self.logger.error("Cannot find modules.tar.gz, please make sure the building is succeed")
+            return False
 
-        time.sleep(10)
         return True
     
     def _check_kernel_version(self, qemu: VM):
@@ -230,6 +247,9 @@ class ImageCommand(Command):
                         qemu.alternative_func_output.put(False)
                         return
                 if passed_check:
+                    self._retrieve_modules(qemu)
+                    qemu.command(user=self.ssh_user, cmds="shutdown -h now", wait=True)
+                    time.sleep(10)
                     qemu.alternative_func_output.put(True)
                     return
                 else:
@@ -242,6 +262,10 @@ class ImageCommand(Command):
         qemu.alternative_func_output.put(False)
         return
     
+    def _retrieve_modules(self, qemu: VM):
+        qemu.command(user=self.ssh_user, cmds="tar -czf /tmp/modules.tar.gz -C /lib/modules/`uname -r`/kernel .", wait=True)
+        qemu.download(user=self.ssh_user, src=["/tmp/modules.tar.gz"], dst=os.path.join(self.build_dir, "modules.tar.gz"), wait=True)
+    
     def _deploy_image(self, qemu: VM):
         out = qemu.command(user=self.ssh_user, cmds="lsb_release -c | awk  '{print $2}'", wait=True)
         self.code_name = out[1]
@@ -249,6 +273,30 @@ class ImageCommand(Command):
         proj_path = os.path.join(os.getcwd(), "syzmorph")
         image_building_script = "deploy-{}-image.sh".format(self.distro)
         image_building_script_path = os.path.join(proj_path, "scripts/{}".format(image_building_script))
+
+        if self.args.disable_extra != None:
+            disable_config_file = self.build_dir+'/disable_extra_config'
+            with open(disable_config_file, 'w') as f:
+                f.writelines(self.args.disable_extra)
+                f.close()
+                ret = qemu.upload(user=self.ssh_user, src=[disable_config_file], dst='~', wait=True)
+                if ret == None or ret != 0:
+                    qemu.logger.error("Failed to upload {}".format(disable_config_file))
+                    qemu.kill_vm()
+                    qemu.alternative_func_output.put(False)
+                    return
+        
+        if self.args.enable_extra != None:
+            enable_config_file = self.build_dir+'/enable_extra_config'
+            with open(enable_config_file, 'w') as f:
+                f.writelines(self.args.enable_extra)
+                f.close()
+                ret = qemu.upload(user=self.ssh_user, src=[enable_config_file], dst='~', wait=True)
+                if ret == None or ret != 0:
+                    qemu.logger.error("Failed to upload {}".format(enable_config_file))
+                    qemu.kill_vm()
+                    qemu.alternative_func_output.put(False)
+                    return
 
         if self.distro == 'ubuntu':
             dkms_path_path = os.path.join(proj_path, "resources/dkms.patch")

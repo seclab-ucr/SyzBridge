@@ -14,8 +14,7 @@ class BitcodeCommand(Command):
         self.llvm_build_path = None
         self.bc_ready = False
 
-        manager = multiprocessing.Manager()
-        self.cmd_queue = manager.Queue()
+        self.cmd_queue = multiprocessing.Queue()
 
     def add_arguments(self, parser):
         super().add_arguments(parser)

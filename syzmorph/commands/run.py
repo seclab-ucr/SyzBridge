@@ -14,8 +14,7 @@ class RunCommand(Command):
     def __init__(self):
         super().__init__()
         self.lock = threading.Lock()
-        self.manager = multiprocessing.Manager()
-        self.queue = self.manager.Queue()
+        self.queue = multiprocessing.Queue()
         self.rest = 0
         self.total = 0
         self.cases = None
@@ -218,14 +217,13 @@ class RunCommand(Command):
         if self.args.console:
             from infra.console import CoolConsole
 
-            self.console_queue = self.manager.Queue()
+            self.console_queue = multiprocessing.Queue()
             self.console = CoolConsole("SyzMorph", self.args.parallel_max, self.console_queue)
         self.print_args_info()
 
         if self.args.console:
             threading.Thread(target=self.run_console, name="console").start()
         
-        self.queue = self.manager.Queue()
         self.proj_dir = os.path.join(os.getcwd(), "projects/{}".format(args.proj))
 
         self.cases = self.read_cases(args.proj)
@@ -239,11 +237,11 @@ class RunCommand(Command):
         parallel_max = int(self.args.parallel_max)
         l = list(self.cases.keys())
         self.total = len(l)
-        self.rest = self.manager.Value('i', self.total)
+        self.rest = multiprocessing.Value('i', self.total)
         for i in range(0,min(parallel_max,self.total)):
             if self.args.linux != None:
                 index = int(self.args.linux)
             else:
                 index = i
-            x = threading.Thread(target=self.prepare_cases, args=(index,), name="lord-{}".format(i))
+            x = threading.Thread(target=self.prepare_cases, args=(index,), name="dispatcher-{}".format(i))
             x.start()

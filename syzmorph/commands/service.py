@@ -22,8 +22,7 @@ class ServiceCommand(Command):
     def __init__(self):
         super().__init__()
         self.lock = threading.Lock()
-        self.manager = multiprocessing.Manager()
-        self.queue = self.manager.Queue()
+        self.queue = multiprocessing.Queue()
         self.skiped = False
 
     def add_arguments(self, parser):
@@ -237,7 +236,7 @@ class ServiceCommand(Command):
         
         while True:
             x = []
-            self.queue = self.manager.Queue()
+            self.queue = multiprocessing.Queue()
             cases = self.get_daily_cases()
             start_time = self.get_cur_time()
             for key in cases:
@@ -246,7 +245,7 @@ class ServiceCommand(Command):
             parallel_max = int(self.args.parallel_max)
             l = list(cases.keys())
             self.total = len(l)
-            self.rest = self.manager.Value('i', self.total)
+            self.rest = multiprocessing.Value('i', self.total)
             for i in range(0,min(parallel_max,self.total)):
                 if self.args.linux != None:
                     index = int(self.args.linux)
