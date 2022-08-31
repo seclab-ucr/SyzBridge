@@ -6,20 +6,42 @@
 set -ex
 
 function config_enable() {
-  key=$1
-  config=$2
-  sed -i "s/$key=n/# $key is not set/g" ${config}
-  sed -i "s/$key=m/# $key is not set/g" ${config}
-  sed -i "s/# $key is not set/$key=y/g" ${config}
-  echo "$key=y" >> ${config}
+    key=$1
+    config=$2
+    sed -i "s/$key=n/# $key is not set/g" ${config}
+    sed -i "s/$key=m/# $key is not set/g" ${config}
+    sed -i "s/# $key is not set/$key=y/g" ${config}
+    echo "$key=y" >> ${config}
 }
 
 function config_disable() {
-  key=$1
-  config=$2
-  sed -i "s/$key=n/# $key is not set/g" ${config}
-  sed -i "s/$key=m/# $key is not set/g" ${config}
-  sed -i "s/$key=y/# $key is not set/g" ${config}
+    key=$1
+    config=$2
+    sed -i "s/$key=n/# $key is not set/g" ${config}
+    sed -i "s/$key=m/# $key is not set/g" ${config}
+    sed -i "s/$key=y/# $key is not set/g" ${config}
+}
+
+function enable_extra_config() {
+    if [ -f "~/enable_extra_config"]; then
+        while read -r key; 
+        do
+            config_enable $key debian.master/config/config.common.ubuntu
+            config_enable $key debian.master/config/amd64/config.common.amd64
+            config_enable $key debian.master/config/amd64/config.flavour.generic
+        done < ~/enable_extra_config
+    fi
+}
+
+function disable_extra_config() {
+    if [ -f "~/disable_extra_config"]; then
+        while read -r key; 
+        do
+            config_disable $key debian.master/config/config.common.ubuntu
+            config_disable $key debian.master/config/amd64/config.common.amd64
+            config_disable $key debian.master/config/amd64/config.flavour.generic
+        done < ~/disable_extra_config
+    fi
 }
 
 function prepare_script() {
@@ -84,6 +106,8 @@ deb-src http://archive.ubuntu.com/ubuntu ${code_name} main
 deb-src http://archive.ubuntu.com/ubuntu ${code_name}-updates main
 EOF
 
+        # Known issue 1: ubuntu-22.04 installs tiny-initramfs along with linux dep packages
+        # This cause kernel from locating lvm disk
         apt-get update
         apt-get build-dep -y linux linux-image-$(uname -r)
         apt-get install -y git trace-cmd psmisc fakeroot libncurses-dev gawk flex bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev libiberty-dev autoconf gcc-multilib
@@ -200,6 +224,10 @@ function compile_ubuntu() {
         do
             config_disable $key debian.master/config/config.common.ubuntu
         done
+
+        enable_extra_config
+
+        disable_extra_config
 
         sed -i "s/CONFIG_FRAME_WARN=1024/CONFIG_FRAME_WARN=2048/g" debian.master/config/amd64/config.common.amd64
 
