@@ -58,6 +58,7 @@ class GoogleSheets(AnalysisModule):
 
     def run(self):
         self.write_case_result(self.sh)
+        self.set_stage_text("Done")
         return True
     
     def write_case_result(self, sh: pygsheets.Spreadsheet):
@@ -71,32 +72,32 @@ class GoogleSheets(AnalysisModule):
         if self.plugin_finished("BugReproduce"):
             self._write_reproducable(wks)
         else:
-            self._render_cell_color('D2', self.TYPE_UNFINISHED, wks)
-            self._render_cell_color('E2', self.TYPE_UNFINISHED, wks)
-            self._render_cell_color('F2', self.TYPE_UNFINISHED, wks)
+            self.write_failed_str_to_cell('D2', wks)
+            self.write_failed_str_to_cell('E2', wks)
+            self.write_failed_str_to_cell('F2', wks)
 
         if self.plugin_finished("ModulesAnalysis"):
             self._write_module_analysis(wks)
         else:
-            self._render_cell_color('G2', self.TYPE_UNFINISHED, wks)
+            self.write_failed_str_to_cell('G2', wks)
 
         if self.plugin_finished("CapabilityCheck"):
             self._write_capability_check(wks)
         else:
-            self._render_cell_color('H2', self.TYPE_UNFINISHED, wks)
+            self.write_failed_str_to_cell('H2', wks)
 
         if self.plugin_finished("SyzScope"):
             self._write_syzscope(wks)
         else:
-            self._render_cell_color('I2', self.TYPE_UNFINISHED, wks)
+            self.write_failed_str_to_cell('I2', wks)
         if self.plugin_finished("Fuzzing"):
             self._write_fuzzing(wks)
         else:
-            self._render_cell_color('J2', self.TYPE_UNFINISHED, wks)
+            self.write_failed_str_to_cell('J2', wks)
         if self.plugin_finished("RawBugReproduce"):
             self._write_raw_reproducable(wks)
         else:
-            self._render_cell_color('K2', self.TYPE_UNFINISHED, wks)
+            self.write_failed_str_to_cell('K2', wks)
         self._render_cell_color('A2', self.case_type, wks)
         #self._render_row_coloer(wks)
         try:
@@ -127,6 +128,12 @@ class GoogleSheets(AnalysisModule):
         final_report = "\n".join(self.report)
         self.info_msg(final_report)
         self._write_to(final_report, self.REPORT_NAME)
+    
+    def set_history_status(self):
+        if self.finish:
+            self.set_stage_text("Done")
+        else:
+            self.set_stage_text("Failed")
     
     def _write_hash(self, wks: pygsheets.Worksheet):
         hash_value = self.case['hash']
@@ -270,6 +277,12 @@ class GoogleSheets(AnalysisModule):
             if not triggered:
                 self.case_type = self.TYPE_SUCCEED_NEED_ADAPTATION
     
+    def write_failed_str_to_cell(self, pos, wks):
+        self._write_to_cell(pos, "failed", wks)
+
+    def _write_to_cell(self, pos, text, wks):
+        wks.update_value(pos, text)
+
     def _render_row_coloer(self, wks: pygsheets.Worksheet):
         for i in range(0, 26):
             ch = chr(ord('A') + i)

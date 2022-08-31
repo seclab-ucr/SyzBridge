@@ -1,8 +1,4 @@
-import os
-import queue
 import multiprocessing
-from re import T
-import threading
 from time import sleep
 
 from infra.strings import *
@@ -49,7 +45,7 @@ class Launcher(Build):
         i = 0
         while i < attempt:
             args = {'th_index':i, 'func':func, 'args':func_args, 'root':root, 'work_dir':work_dir, 'vm_tag':vm_tag + '-' + str(i), **kwargs}
-            x = multiprocessing.Process(target=self._reproduce, kwargs=args, name="trigger-{}".format(i))
+            x = multiprocessing.Process(target=self._reproduce, kwargs=args, name="{}-{} trigger-{}".format(self.manager.case_hash, self.cfg.distro_name, i))
             x.start()
             self.log("Start reproducing {}, args {}".format(vm_tag + str(i), args))
             

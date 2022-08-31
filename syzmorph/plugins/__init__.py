@@ -81,7 +81,7 @@ class AnalysisModule:
             try:
                 ret = func(self)
             except Exception as e:
-                self.case_logger.exception("[{}] Exception happens: {}".format(self.analyzor.NAME, e))
+                self.logger.exception("[{}] Exception happens: {}".format(self.analyzor.NAME, e))
                 self.main_logger.exception("Case {} caught exception in plugin {}: {}".format(self.case_hash, self.analyzor.NAME, e))
                 return False
             return ret
@@ -151,6 +151,8 @@ class AnalysisModule:
         json.dump(self.results, open(os.path.join(self.path_case_plugin, "results.json"), 'w'))
     
     def set_history_status(self):
+        if not self.console_mode:
+            return
         self.console_msg.module[self.NAME] = [ConsoleMessage.INFO, "", ""]
         self.manager.send_to_console()
 
@@ -163,11 +165,15 @@ class AnalysisModule:
         self.manager.send_to_console()
 
     def set_stage_text(self, text):
+        if not self.console_mode:
+            return
         self.console_msg.type = ConsoleMessage.INFO
         self.console_msg.module[self.NAME] = [ConsoleMessage.INFO, text, ""]
         self.manager.send_to_console()
     
     def set_stage_status(self, status):
+        if not self.console_mode:
+            return
         self.console_msg.module[self.NAME][2] = status
         self.manager.send_to_console()
     

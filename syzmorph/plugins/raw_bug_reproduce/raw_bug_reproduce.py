@@ -80,12 +80,12 @@ class RawBugReproduce(AnalysisModule):
         output = queue.Queue()
         for distro in self.cfg.get_distros():
             self.info_msg("start reproducing bugs on {}".format(distro.distro_name))
-            x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="reproduce_async-{}".format(distro.distro_name))
+            x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="{} reproduce_async-{}".format(self.case_hash, distro.distro_name))
             x.start()
             if self.debug:
                 x.join()
 
-        for distro in self.cfg.get_distros():
+        for _ in self.cfg.get_distros():
             [distro_name, m] = output.get(block=True)
             res[distro_name] = m
         return res
@@ -133,6 +133,7 @@ class RawBugReproduce(AnalysisModule):
         self.root_user = distro.repro.root_user
         self.normal_user = distro.repro.normal_user
         report, triggered, t = distro.repro.reproduce(func=func, func_args=func_args, root=root, work_dir=self.path_case_plugin, vm_tag=distro.distro_name, c_hash=self.case_hash, log_name=log_name, **kwargs)
+        self.info_msg("{} triggered bugs: {}".format(distro.distro_name, triggered))
         if triggered:
             title = self._BugChecker(report)
             self.bug_title = title
@@ -172,7 +173,7 @@ class RawBugReproduce(AnalysisModule):
             self.set_stage_text("\[root] Reproducing on {}".format(qemu.tag))
         else:
             self.set_stage_text("\[user] Reproducing on {}".format(qemu.tag))
-        threading.Thread(target=self._update_qemu_timer_status, args=(th_index, qemu)).start()
+        threading.Thread(target=self._update_qemu_timer_status, args=(th_index, qemu), name="update_qemu_timer_status").start()
 
         if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
             self.logger.fatal("KASAN is not enabled in kernel!")
@@ -222,9 +223,10 @@ class RawBugReproduce(AnalysisModule):
             out_end = len(qemu.output)
             for line in qemu.output[out_begin:]:
                 if regx_match(call_trace_regx, line) or \
-                regx_match(message_drop_regx, line):
+                regx_match(message_drop_regx, line) or \
+                self._crash_start(line):
                     crash_flag = 1
-                if regx_match(boundary_regx, line) or \
+                if (regx_match(boundary_regx, line) and record_flag) or \
                 regx_match(panic_regx, line):
                     if crash_flag == 1:
                         res.append(crash)
@@ -234,9 +236,7 @@ class RawBugReproduce(AnalysisModule):
                     record_flag = 0
                     crash_flag = 0
                     continue
-                if (regx_match(kasan_mem_regx, line) and 'null-ptr-deref' not in line):
-                    kasan_flag = 1
-                if self._crash_start(line):
+                if regx_match(boundary_regx, line) and not record_flag:
                     record_flag = 1
                 if record_flag:
                     crash.append(line)

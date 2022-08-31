@@ -78,6 +78,7 @@ class SymExec(MemInstrument):
     def prepare_angr(self):
         self.logger.info("Loading kernel into angr")
         self.vm.gdb_attach_vmlinux()
+        self.vm.load_angr_proj()
 
     def setup_gdb_and_monitor(self, qemu: VMInstance):
         if self.vm == None:

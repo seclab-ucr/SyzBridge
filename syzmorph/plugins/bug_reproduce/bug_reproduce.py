@@ -88,7 +88,7 @@ class BugReproduce(AnalysisModule):
         output = queue.Queue()
         for distro in self.cfg.get_distros():
             self.info_msg("Reproducing bugs on {}".format(distro.distro_name))
-            x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="reproduce_async-{}".format(distro.distro_name))
+            x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="{} reproduce_async-{}".format(self.case_hash, distro.distro_name))
             x.start()
             if self.debug:
                 x.join()
@@ -254,7 +254,7 @@ class BugReproduce(AnalysisModule):
             need_namespace = True
             self.results[distro.distro_name]['namespace'] = True
 
-        skip_funcs = [r"setup_usb\(\);", r"setup_leak\(\);", r"setup_cgroups\(\);", r"initialize_cgroups\(\);", r"setup_cgroups_loop\(\);"]
+        skip_funcs = [r"setup_usb\(\);", r"setup_leak\(\);"]
         data = []
         src = os.path.join(self.path_case, "poc.c")
         if not root:
@@ -357,7 +357,7 @@ class BugReproduce(AnalysisModule):
             q.put([res, trigger_hunted_bug])
 
     def tweak_modules(self, qemu: VMInstance, th_index, work_dir, root, missing_modules: list, essential_modules: list, poc_feature: int):
-        threading.Thread(target=self._update_qemu_timer_status, args=(th_index, qemu)).start()
+        threading.Thread(target=self._update_qemu_timer_status, args=(th_index, qemu), name="update_qemu_timer_status").start()
         
         tested_modules = []
         vm_tag = "-".join(qemu.tag.split('-')[:-1])
@@ -386,7 +386,9 @@ class BugReproduce(AnalysisModule):
         
         for module in missing_modules:
             self.set_stage_text("testing {} on {}".format(module, qemu.tag))
+            qemu.logger.info("****************************************")
             qemu.logger.info("Loading missing module {}".format(module))
+            qemu.logger.info("****************************************")
             if not self._enable_missing_modules(qemu, [module]):
                 continue
             tested_modules.append(module)
@@ -407,7 +409,7 @@ class BugReproduce(AnalysisModule):
             self.set_stage_text("\[root] Reproducing on {}".format(qemu.tag))
         else:
             self.set_stage_text("\[user] Reproducing on {}".format(qemu.tag))
-        threading.Thread(target=self._update_qemu_timer_status, args=(th_index, qemu)).start()
+        threading.Thread(target=self._update_qemu_timer_status, args=(th_index, qemu), name="update_qemu_timer_status").start()
         q = queue.Queue()
         threading.Thread(target=self.warp_qemu_capture_kasan, args=(qemu, th_index, q)).start()
         vm_tag = "-".join(qemu.tag.split('-')[:-1])
@@ -521,9 +523,11 @@ class BugReproduce(AnalysisModule):
             out_end = len(qemu.output)
             for line in qemu.output[out_begin:]:
                 if regx_match(call_trace_regx, line) or \
-                regx_match(message_drop_regx, line):
+                regx_match(message_drop_regx, line) or \
+                (self._crash_start(line) and record_flag):
                     crash_flag = 1
-                if regx_match(boundary_regx, line) or \
+
+                if (regx_match(boundary_regx, line) and record_flag) or \
                 regx_match(panic_regx, line):
                     if crash_flag == 1:
                         res.append(crash)
@@ -533,10 +537,8 @@ class BugReproduce(AnalysisModule):
                     record_flag = 0
                     crash_flag = 0
                     continue
-                if (regx_match(kasan_mem_regx, line) and 'null-ptr-deref' not in line):
-                    kasan_flag = 1
-                if self._crash_start(line):
-                    record_flag = 1
+                if regx_match(boundary_regx, line):
+                    record_flag ^= 1
                 if record_flag:
                     crash.append(line)
             out_begin = out_end
@@ -547,7 +549,7 @@ class BugReproduce(AnalysisModule):
         for each in manual_enable_modules:
             out = qemu.command(cmds="modprobe {}".format(each), user=self.root_user, wait=True)
             for line in out:
-                if 'modprobe: FATAL:' in line:
+                if 'modprobe: FATAL:' in line or 'modprobe: ERROR:' in line:
                     failed += 1
         return failed != len(manual_enable_modules)
     

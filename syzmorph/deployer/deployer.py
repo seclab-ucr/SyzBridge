@@ -23,7 +23,10 @@ class Deployer(Case, Task):
                 kernel = case["kernel"].split('/')[-1].split('.')[0]
         except:
             pass
-        self.console_queue = owner.console_queue
+        if owner.args.console:
+            self.console_queue = owner.console_queue
+        else:
+            self.console_queue = None
         self.console_msg = ConsoleMessage(self.case_hash, index)
         handler_type = STREAM_HANDLER
         if self.console_mode:

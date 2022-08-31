@@ -4,7 +4,6 @@ import math
 import archinfo
 
 from angr import SimProcedure, SimValueError, SimUnsatError
-from pwn import *
 from .symTracing import PropagationHandler
 from .stateManager import StateManager
 from capstone.x86_const import X86_REG_GS, X86_REG_CS, X86_REG_SS, X86_REG_DS, X86_REG_ES, X86_REG_FS, X86_OP_MEM
