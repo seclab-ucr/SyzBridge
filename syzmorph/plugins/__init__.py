@@ -41,7 +41,6 @@ class AnalysisModule:
         self.path_case = manager.path_case
         self.path_project = manager.path_project
         self.path_package = manager.path_package
-        self.lts = manager.lts
         self.index = manager.index
         self.debug = manager.debug
         self.console_mode = manager.console_mode

@@ -8,21 +8,21 @@ from infra.tool_box import convert_folder_name_to_plugin_name
 class Task:
     def __init__(self, args):
         self.args = args
-        self.task_value = ()
+        self._task_value = ()
         self.task = self._build_tasks()
-        self.task_class = {}
-        self.task_topological_order = []
+        self._task_class = {}
+        self._task_topological_order = []
         self.ts = {}
 
     def build_task_class(self, task, A):
         if not isinstance(A, AnalysisModule):
             raise AnalysisModuleError("build_task_class need a AnalysisModule class")
-        self.task_class[task] = A
+        self._task_class[task] = A
     
     def get_task_module(self, task: int):
-        if task not in self.task_class:
+        if task not in self._task_class:
             return None
-        return self.task_class[task]
+        return self._task_class[task]
     
     def get_task_module_by_name(self, name):
         task = Task.TASK_ALL
@@ -30,19 +30,19 @@ class Task:
             task |= getattr(Task, name.upper())
         except:
             return None
-        if task not in self.task_class:
+        if task not in self._task_class:
             return None
-        return self.task_class[task]
+        return self._task_class[task]
     
     def iterate_all_tasks(self):
-        return self.task_value
+        return self._task_value
     
     def iterate_enabled_tasks(self):
-        return self.task_topological_order
+        return self._task_topological_order
     
-    def build_plugins_order(self):
+    def _build_plugins_order(self):
         try:
-            self.task_topological_order = list(toposort_flatten(self.ts))
+            self._task_topological_order = list(toposort_flatten(self.ts))
         except CircularDependencyError as e:
             message = "Loop dependency found among "
             l = []
@@ -50,7 +50,7 @@ class Task:
                 l.append(plugin)
             message += " and ".join(l)
             raise Exception(message)
-        for each in self.task_topological_order:
+        for each in self._task_topological_order:
             self.enable_tasks(each)
         return True
     
@@ -71,8 +71,8 @@ class Task:
                     continue
                 cap_text = "TASK_" + each.upper()
                 setattr(Task, cap_text, 1 << index)
-                self.task_value += (1 << index,)
-                self.logger.debug("Task: {} {}".format(cap_text, self.task_value))
+                self._task_value += (1 << index,)
+                self.logger.debug("Task: {} {}".format(cap_text, self._task_value))
                 index += 1
                 if getattr(self.args, each):
                     task |= getattr(Task, cap_text)
@@ -81,15 +81,15 @@ class Task:
                 continue
         return task
     
-    def module_name_to_task(self, dependency):
+    def module_name_to_task(self, module_name):
         cap_text = "TASK"
         start = 0
-        for i in range(len(dependency)):
-            c = dependency[i]
+        for i in range(len(module_name)):
+            c = module_name[i]
             if c.isupper():
-                cap_text += dependency[start:i].upper() + "_"
+                cap_text += module_name[start:i].upper() + "_"
                 start = i
-        cap_text += dependency[start:].upper()
+        cap_text += module_name[start:].upper()
         return cap_text
     
     def task_to_module_name(self, task):
@@ -106,5 +106,5 @@ class Task:
         return self.task & cap or self.task == Task.TASK_ALL
     
     def is_service(self, cap):
-        module_name = self.task_class[cap].NAME
+        module_name = self._task_class[cap].NAME
         return self.cfg.is_plugin_service(module_name)

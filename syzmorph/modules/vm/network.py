@@ -68,12 +68,16 @@ class Network:
         "-i", key, 
         "-p", str(port), "{}@{}".format(user, ip), command]
 
-        self.logger.debug(" ".join(cmd))
+        self.logger.info(" ".join(cmd))
         p = Popen(cmd,
         stdout=PIPE,
         stderr=STDOUT)
         if timeout != None:
             x = threading.Thread(target=set_timer, args=(timeout, p, ), name="ssh timer")
+            x.start()
+        else:
+            # Even timeout is not set, we still launch a timer thread to monitor whether the process is still alive
+            x = threading.Thread(target=set_timer, args=(-1, p, ), name="ssh timer")
             x.start()
         start = len(self.pipe_output)
         with p.stdout:

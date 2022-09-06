@@ -10,14 +10,10 @@ class VM(VMInstance, VMState):
     
     def kill(self):
         self.logger.info("Kill QEMU on demand")
-        self.kill_vm()
         if self.gdb != None:
             self.gdb.close()
         if self.mon != None:
             self.mon.close()
         if self.kernel != None and self.kernel.proj != None:
             del self.kernel.proj
-        if self._output_lock.locked():
-            self._output_lock.release()
-        if self.lock.locked():
-            self.lock.release()
+        self.kill_vm()

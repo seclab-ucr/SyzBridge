@@ -101,7 +101,7 @@ class RunCommand(Command):
             self.lock.acquire(blocking=True)
             try:
                 hash_val = self.queue.get(block=True, timeout=3)
-                #print("Thread {}: run case {} [{}/{}] left".format(index, hash_val, self.rest.value-1, self.total))
+                self.logger.info("Thread {}: run case {} [{}/{}] left".format(index, hash_val, self.rest.value-1, self.total))
                 self.rest.value -= 1
                 self.lock.release()
                 x = multiprocessing.Process(target=self.deploy_one_case, args=(index, hash_val,), name="lord-{}".format(index))
@@ -111,7 +111,7 @@ class RunCommand(Command):
             except Empty:
                 self.lock.release()
                 break
-        #print("Thread {} exit->".format(index))
+        self.logger.info("Thread {} exit->".format(index))
 
     def parse_config(self, config):
         from syzmorph.infra.config.config import Config

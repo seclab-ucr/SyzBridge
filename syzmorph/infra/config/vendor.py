@@ -6,11 +6,13 @@ from modules.reproducer import Reproducer
 
 class Vendor():
     def __init__(self, cfg):
-        self.keys_must_have = ["distro_image", "ssh_port", "ssh_key", "distro_name", "distro_code_name", "distro_version", "type"]
+        self.keys_must_have = ["distro_image", "ssh_port", "ssh_key", "distro_name", "distro_code_name", "distro_version", "type", "root_user", "normal_user"]
         self.default_modules = {}
         self.optional_modules = {}
         self.blacklist_modules = {}
         self.func2module = {}
+        self._root_user = None
+        self._normal_user = None
         self._ssh_port = None
         self._gdb_port = None
         self._mon_port = None
@@ -45,8 +47,8 @@ class Vendor():
         if self._read_modules_from_cache():
             return
         qemu = self.repro.launch_qemu()
-        _, queue = self.repro.run_qemu(qemu, self._get_modules)
-        queue.get(block=True)
+        self.repro.run_qemu(qemu, self._get_modules)
+        qemu.wait()
         qemu.kill()
         self.build_module_func_list()
         self._dump_modules_to_cache()
@@ -101,7 +103,7 @@ class Vendor():
             self.default_modules[each] = True
         for each in self._get_blacklist_modules(qemu):
             self.blacklist_modules[each] = True
-        qemu.alternative_func_output.put("done")
+        return True
     
     def _get_default_modules(self, qemu):
         res = []
@@ -162,6 +164,22 @@ class Vendor():
             raise TypeError("repro must be an instance of Reproducer")
         self._init = True
         self._repro = value
+    
+    @property
+    def root_user(self):
+        return self._root_user
+    
+    @root_user.setter
+    def root_user(self, user):
+        self._root_user = user
+
+    @property
+    def normal_user(self):
+        return self._normal_user
+    
+    @normal_user.setter
+    def normal_user(self, user):
+        self._normal_user = user
 
     @property
     def type(self):
@@ -206,16 +224,6 @@ class Vendor():
         if not os.path.exists(value):
             raise TargetFileNotExist(value)
         self._ssh_key = value
-    
-    @property
-    def upstream_src(self):
-        return self._upstream_src
-    
-    @upstream_src.setter
-    def upstream_src(self, value):
-        if not os.path.exists(value):
-            raise TargetFileNotExist(value)
-        self._upstream_src = value
     
     @property
     def distro_src(self):

@@ -38,11 +38,14 @@ class Deployer(Case, Task):
         self.analysis = AnalysisModule()
         self.analysis.init(self)
         self.analysis.setup()
-        self.build_analyzor_modules()
-        self.build_plugins_order()
+        self._build_analyzor_modules()
+        self._build_plugins_order()
         if self.console_mode:
-            self.send_plugins_order_to_console()
+            self._send_plugins_order_to_console()
     
+    # Install a analysis module(plugin) for next use. 
+    # This function must be called ahead of using that module(plugin). 
+    # It returns the same module object as the argument.
     def use_module(self, module):
         if not isinstance(module, AnalysisModule):
             raise AnalysisModuleError
@@ -51,6 +54,8 @@ class Deployer(Case, Task):
         module.init(self)
         return module
     
+    # Let deployer run a specific analysis task. Each task represents a specific plugin. 
+    # This function takes care of installing module, prepare analysis, running analysis, generating report and creating stamp.
     def do_task(self, task):
         analyzor_module = self.get_task_module(task)
         self.use_module(analyzor_module)
@@ -68,6 +73,8 @@ class Deployer(Case, Task):
                 self._success = self.analysis.success()
         return 0
     
+    # deploy is the main entrance of Deploy object. 
+    # This function iterates all enabled tasks, runs corresponding analysis and save bugs to their folders.
     def deploy(self):
         error = False
         for task in self.iterate_enabled_tasks():
@@ -84,6 +91,8 @@ class Deployer(Case, Task):
             self.logger.info("Copy to {}".format(folder))
             return False
     
+    # This function provides a interface that you can run another SyzMorph instance
+    # It returns the stnadar output of this instance
     def call_syzmorph(self, cmd, args):
         out = []
         run_cmd = ['python3', 'syzmorph', cmd]
@@ -102,7 +111,7 @@ class Deployer(Case, Task):
                     return out
         return out
     
-    def build_analyzor_modules(self):
+    def _build_analyzor_modules(self):
         res = []
         proj_dir = os.path.join(os.getcwd(), "syzmorph")
         modules_dir = os.path.join(proj_dir, "plugins")
@@ -118,7 +127,7 @@ class Deployer(Case, Task):
                 self._build_dependency_module(task_id, A)
                 self.build_task_class(task_id, A)
     
-    def send_plugins_order_to_console(self):
+    def _send_plugins_order_to_console(self):
         res = []
         order = self.iterate_enabled_tasks()
         for task in order:

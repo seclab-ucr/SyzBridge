@@ -5,9 +5,9 @@ from subprocess import Popen, PIPE, STDOUT
 from infra.tool_box import *
 
 class Build():
-    def __init__(self, cfg, manager):
+    def __init__(self, kernel_cfg, manager):
         self.logger = None
-        self.cfg = cfg
+        self.kernel = kernel_cfg
         self.image_path = None
         self.vmlinux = None
         self.ssh_key = None
@@ -22,7 +22,7 @@ class Build():
         self._mon_port = None
         self._gdb_port = None
         self.prepare()
-        self.setup()
+        self._setup()
     
     def log(self, msg):
         if self.logger != None:
@@ -34,32 +34,32 @@ class Build():
     def prepare(self):
         path_image = os.path.join(self.path_case, "img")
         os.makedirs(path_image, exist_ok=True)
-        if self.cfg.type == VMInstance.DISTROS:
-            self.create_snapshot(self.cfg.distro_image, path_image, self.cfg.distro_name)
-            self.symlink(self.cfg.ssh_key, os.path.join(path_image, "id_rsa_{}".format(self.cfg.distro_name)))
-        if self.cfg.type == VMInstance.UPSTREAM:
-            self.create_snapshot(self.cfg.distro_image, path_image, self.cfg.distro_name)
-            self.symlink(self.cfg.ssh_key, os.path.join(path_image, "stretch.img.key"))
+        if self.kernel.type == VMInstance.DISTROS:
+            self.create_snapshot(self.kernel.distro_image, path_image, self.kernel.distro_name)
+            self._symlink(self.kernel.ssh_key, os.path.join(path_image, "id_rsa_{}".format(self.kernel.distro_name)))
+        if self.kernel.type == VMInstance.UPSTREAM:
+            self.create_snapshot(self.kernel.distro_image, path_image, self.kernel.distro_name)
+            self._symlink(self.kernel.ssh_key, os.path.join(path_image, "stretch.img.key"))
     
-    def setup(self):
-        self.normal_user = self.cfg.normal_user
-        self.root_user = self.cfg.root_user
-        self.vmtype = self.cfg.type
-        self.ssh_port = self.cfg.ssh_port
-        if self.cfg.gdb_port != None:
-            self.gdb_port = self.cfg.gdb_port
-        if self.cfg.mon_port != None:
-            self.mon_port = self.cfg.mon_port
+    def _setup(self):
+        self.normal_user = self.kernel.normal_user
+        self.root_user = self.kernel.root_user
+        self.vmtype = self.kernel.type
+        self.ssh_port = self.kernel.ssh_port
+        if self.kernel.gdb_port != None:
+            self.gdb_port = self.kernel.gdb_port
+        if self.kernel.mon_port != None:
+            self.mon_port = self.kernel.mon_port
         if self.vmtype == VMInstance.DISTROS:
-            self.image_path = "{}/img/{}-snapshot.img".format(self.path_case, self.cfg.distro_name)
-            self.vmlinux = "{}/vmlinux".format(self.cfg.distro_src)
-            self.ssh_key = "{}/img/id_rsa_{}".format(self.path_case, self.cfg.distro_name)
-            self.distro_name = self.cfg.distro_name
+            self.image_path = "{}/img/{}-snapshot.img".format(self.path_case, self.kernel.distro_name)
+            self.vmlinux = "{}/vmlinux".format(self.kernel.distro_src)
+            self.ssh_key = "{}/img/id_rsa_{}".format(self.path_case, self.kernel.distro_name)
+            self.distro_name = self.kernel.distro_name
         if self.vmtype == VMInstance.UPSTREAM:
-            self.image_path = "{}/img/{}-snapshot.img".format(self.path_case, self.cfg.distro_name)
+            self.image_path = "{}/img/{}-snapshot.img".format(self.path_case, self.kernel.distro_name)
             self.vmlinux = "{}/linux/vmlinux".format(self.path_case)
             self.ssh_key = "{}/img/stretch.img.key".format(self.path_case)
-            self.distro_name = self.cfg.distro_name
+            self.distro_name = self.kernel.distro_name
 
     def create_snapshot(self, src, img, image_name):
         dst = "{}/{}-snapshot.img".format(img, image_name)
@@ -71,7 +71,7 @@ class Build():
         exitcode = p.wait()
         return exitcode
     
-    def symlink(self, src, dst):
+    def _symlink(self, src, dst):
         if os.path.islink(dst):
             os.remove(dst)
         os.symlink(src, dst)

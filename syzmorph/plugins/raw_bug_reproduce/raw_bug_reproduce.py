@@ -154,7 +154,10 @@ class RawBugReproduce(AnalysisModule):
         return feature
     
     def success(self):
-        return self._move_to_success
+        for key in self.results:
+            if self.results[key]['trigger']:
+                return True
+        return False
     
     def generate_report(self):
         final_report = "\n".join(self.report)
@@ -187,7 +190,7 @@ class RawBugReproduce(AnalysisModule):
                 qemu.instance.kill()
             res = []
             trigger_hunted_bug = False
-        qemu.alternative_func_output.put([res, trigger_hunted_bug, qemu.qemu_fail], block=False)
+        return [res, trigger_hunted_bug, qemu.qemu_fail]
 
     def set_history_status(self):
         for name in self.results:
@@ -224,8 +227,10 @@ class RawBugReproduce(AnalysisModule):
             for line in qemu.output[out_begin:]:
                 if regx_match(call_trace_regx, line) or \
                 regx_match(message_drop_regx, line) or \
-                self._crash_start(line):
+                (self._crash_start(line) and record_flag):
                     crash_flag = 1
+                if record_flag:
+                    crash.append(line)
                 if (regx_match(boundary_regx, line) and record_flag) or \
                 regx_match(panic_regx, line):
                     if crash_flag == 1:
@@ -236,10 +241,9 @@ class RawBugReproduce(AnalysisModule):
                     record_flag = 0
                     crash_flag = 0
                     continue
-                if regx_match(boundary_regx, line) and not record_flag:
-                    record_flag = 1
-                if record_flag:
-                    crash.append(line)
+                if regx_match(boundary_regx, line):
+                    record_flag ^= 1
+                    crash_flag = 0
             out_begin = out_end
         return res, trigger_hunted_bug
 

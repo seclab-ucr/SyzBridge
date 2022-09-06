@@ -72,7 +72,6 @@ class BugReproduce(AnalysisModule):
                     self.main_logger.info("{} triggers a bug: {} {}".format(key ,title, str_privilege))
                     self.report.append("{} triggers a bug: {} {}".format(key ,title, str_privilege))
                     self.set_stage_text("Triggered")
-                    self._move_to_success = True
                 else:
                     fail_name += key + " "
             if fail_name != "":
@@ -128,7 +127,7 @@ class BugReproduce(AnalysisModule):
         self.info_msg("{} does not trigger any bugs, try to enable missing modules".format(distro.distro_name))
         m = self.get_missing_modules(distro.distro_name)
         missing_modules = [e['name'] for e in m if e['type'] != 0 ]
-        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, [], ), root=True, log_prefix='missing-modules', timeout=MAX_BUG_REPRODUCE_TIMEOUT)
+        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, [], ), attempt=1, root=True, log_prefix='missing-modules', timeout=MAX_BUG_REPRODUCE_TIMEOUT)
         if success:
             self.results[distro.distro_name]['trigger'] = True
             tested_modules = t[0]
@@ -248,6 +247,7 @@ class BugReproduce(AnalysisModule):
 
     def tune_poc(self, root: bool, distro):
         feature = 0
+        # why don't we just enable namespace all the time?
         need_namespace = False
 
         if self.check_poc_capability() and not root:
@@ -285,7 +285,7 @@ class BugReproduce(AnalysisModule):
                         insert_line.remove(t)
             data.append(code[i])
             if regx_match(main_func, line):
-                if need_namespace and not root:
+                if need_namespace:
                     data.insert(len(data)-1, "#include \"sandbox.h\"\n")
                     insert_line.append([i+2, "setup_sandbox();\n"])
 
@@ -310,7 +310,7 @@ class BugReproduce(AnalysisModule):
         if data != []:
             fdst.writelines(data)
             fdst.close()
-            if not need_namespace:
+            if need_namespace:
                 src = os.path.join(self.path_package, "plugins/bug_reproduce/sandbox.h")
                 dst = os.path.join(self.path_case_plugin, "sandbox.h")
                 shutil.copyfile(src, dst)
@@ -333,7 +333,10 @@ class BugReproduce(AnalysisModule):
         return False
     
     def success(self):
-        return self._move_to_success
+        for key in self.results:
+            if self.results[key]['trigger']:
+                return True
+        return False
     
     def generate_report(self):
         final_report = "\n".join(self.report)
@@ -376,13 +379,11 @@ class BugReproduce(AnalysisModule):
             res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q)
             if trigger:
                 self.results[vm_tag]["repeat"] = False
-                qemu.alternative_func_output.put([res, trigger, qemu.qemu_fail, tested_modules], block=False)
-                return
+                return [res, trigger, qemu.qemu_fail, tested_modules]
             res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q, repeat=True)
             if trigger:
                 self.results[vm_tag]["repeat"] = True
-                qemu.alternative_func_output.put([res, trigger, qemu.qemu_fail, tested_modules], block=False)
-                return
+                return [res, trigger, qemu.qemu_fail, tested_modules]
         
         for module in missing_modules:
             self.set_stage_text("testing {} on {}".format(module, qemu.tag))
@@ -395,14 +396,12 @@ class BugReproduce(AnalysisModule):
             res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q)
             if trigger:
                 self.results[vm_tag]["repeat"] = False
-                qemu.alternative_func_output.put([res, trigger, qemu.qemu_fail, tested_modules], block=False)
-                return
+                return [res, trigger, qemu.qemu_fail, tested_modules]
             res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q, repeat=True)
             if trigger:
                 self.results[vm_tag]["repeat"] = True
-                qemu.alternative_func_output.put([res, trigger, qemu.qemu_fail, tested_modules], block=False)
-                return
-        qemu.alternative_func_output.put([[], False, False, []], block=False)
+                return [res, trigger, qemu.qemu_fail, tested_modules]
+        return [[], False, False, []]
     
     def capture_kasan(self, qemu, th_index, work_dir, root, poc_feature):
         if root:
@@ -420,13 +419,11 @@ class BugReproduce(AnalysisModule):
         res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q)
         if trigger:
             self.results[vm_tag]["repeat"] = False
-            qemu.alternative_func_output.put([res, trigger, qemu.qemu_fail], block=False)
-            return
+            return [res, trigger, qemu.qemu_fail]
         res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q, repeat=True)
         if trigger:
             self.results[vm_tag]["repeat"] = True
-        qemu.alternative_func_output.put([res, trigger, qemu.qemu_fail], block=False)
-        return
+        return [res, trigger, qemu.qemu_fail]
 
     def set_history_status(self):
         for name in self.results:
@@ -526,7 +523,8 @@ class BugReproduce(AnalysisModule):
                 regx_match(message_drop_regx, line) or \
                 (self._crash_start(line) and record_flag):
                     crash_flag = 1
-
+                if record_flag:
+                    crash.append(line)
                 if (regx_match(boundary_regx, line) and record_flag) or \
                 regx_match(panic_regx, line):
                     if crash_flag == 1:
@@ -539,20 +537,28 @@ class BugReproduce(AnalysisModule):
                     continue
                 if regx_match(boundary_regx, line):
                     record_flag ^= 1
-                if record_flag:
-                    crash.append(line)
+                    crash_flag = 0
             out_begin = out_end
         return res, trigger_hunted_bug
 
     def _enable_missing_modules(self, qemu, manual_enable_modules):
         failed = 0
         for each in manual_enable_modules:
-            out = qemu.command(cmds="modprobe {}".format(each), user=self.root_user, wait=True)
+            args = self._module_args(each)
+            out = qemu.command(cmds="modprobe {}{}".format(each, args), user=self.root_user, wait=True)
             for line in out:
                 if 'modprobe: FATAL:' in line or 'modprobe: ERROR:' in line:
                     failed += 1
         return failed != len(manual_enable_modules)
     
+    def _module_args(self, module):
+        # This is not perfect, nf_conntrack has arguments recently
+        # and we don't know what other modules have arguments and what to do with those arguments
+        # Not sure how big of a problem this is
+        if module == "nf_conntrack":
+            return " enable_hooks=1"
+        return ""
+
     def _check_poc_feature(self, poc_feature, qemu, user):
         script_name = "check-poc-feature.sh"
         script = os.path.join(self.path_package, "plugins/bug_reproduce", script_name)
@@ -613,17 +619,17 @@ class BugReproduce(AnalysisModule):
                             title = m.groups()[0]
                     if regx_match(double_free_regx, line) and not flag_double_free:
                             self.info_msg("Double free")
-                            self._write_to(self.path_project, "VendorDoubleFree")
+                            self._write_to(title, "VendorDoubleFree")
                             flag_double_free = True
                             break
                     if regx_match(kasan_write_addr_regx, line) and not flag_kasan_write:
                             self.info_msg("KASAN MemWrite")
-                            self._write_to(self.path_project, "VendorMemWrite")
+                            self._write_to(title, "VendorMemWrite")
                             flag_kasan_write = True
                             break
                     if regx_match(kasan_read_addr_regx, line) and not flag_kasan_read:
                             self.info_msg("KASAN MemRead")
-                            self._write_to(self.path_project, "VendorMemRead")
+                            self._write_to(title, "VendorMemRead")
                             flag_kasan_read = True
                             break
         return title

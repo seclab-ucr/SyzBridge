@@ -28,8 +28,8 @@ class Crawler:
             print("keyword must be a list")
         self.max_retrieve = max_retrieve
         self.cases = {}
-        self.patches = {}
-        self.patch_info = {}
+        self._patches = {}
+        self._patch_info = {}
         self.include_high_risk = include_high_risk
         self.logger = init_logger(log_path + "/syzbot.log", debug = debug, propagate=True)
         self.filter_by_reported = [-1, -1]
@@ -68,11 +68,11 @@ class Crawler:
         for each in cases_hash:
             if 'Patch' in each:
                 patch_url = each['Patch']
-                if patch_url in self.patches or \
+                if patch_url in self._patches or \
                     (patch_url in high_risk_impacts and not self.include_high_risk):
                     continue
-                self.patches[patch_url] = True
-            self.patch_info = {'url': None, 'fixes':[], 'date':None}
+                self._patches[patch_url] = True
+            self._patch_info = {'url': None, 'fixes':[], 'date':None}
             if self.filter_by_fixes_tag:
                 if not self.check_excluded_distro(each['Hash'], patch_url):
                     self.logger.debug("{} does not have a fixes tag".format(each['Hash']))
@@ -87,7 +87,7 @@ class Crawler:
                 else:
                     self.cases[each['Hash']]['affect'] = None
                 self.cases[each['Hash']]['title'] = each['Title']
-                self.cases[each['Hash']]['patch'] = self.patch_info
+                self.cases[each['Hash']]['patch'] = self._patch_info
 
     def get_patch_url(self, hash):
         url = syzbot_host_url + syzbot_bug_base_url + hash
@@ -125,7 +125,7 @@ class Crawler:
         if res == None:
             return None
         if self.filter_by_fixes_tag:
-            for fix in self.patch_info['fixes']:
+            for fix in self._patch_info['fixes']:
                 self.logger.debug("Exclude {}".format(fix))
                 for each in fix['exclude']:
                     if each in res:
@@ -136,16 +136,16 @@ class Crawler:
     def check_excluded_distro(self, hash_val, patch_url):
         req = requests.request(method='GET', url=patch_url)
         soup = BeautifulSoup(req.text, "html.parser")
-        self.patch_info['url'] = patch_url
+        self._patch_info['url'] = patch_url
         patch_hash = patch_url.split("id=")[1]
         patch_date = self.get_linux_commit_date_offline(patch_hash, soup)
         if patch_date == None:
-            self.patch_info['date'] = None
+            self._patch_info['date'] = None
         else:
-            self.patch_info['date'] = patch_date.strftime("%Y-%m-%d")
+            self._patch_info['date'] = patch_date.strftime("%Y-%m-%d")
         try:
             msg = soup.find('div', {'class': 'commit-msg'}).text
-            self.patch_info['fixes'] = []
+            self._patch_info['fixes'] = []
             for line in msg.split('\n'):
                 if line.startswith('Fixes:'):
                     fix_hash = regx_get(r'Fixes: ([a-z0-9]+)', line, 0)
@@ -170,18 +170,20 @@ class Crawler:
                                 commit_date_diff = today - commit_date.date()
                                 if commit_date_diff.days < effective_start_date_diff.days:
                                     fixes['exclude'].append(distro.distro_name)
-                    else:
-                        base_version = self.closest_tag(fix_hash, soup)
-                        if base_version == None:
-                            continue
-                        for distro in self.cfg.get_all_distros():
-                            if not self.is_newer_version(base_version, distro.distro_version):
-                                fixes['exclude'].append(distro.distro_name)
-                    self.patch_info['fixes'].append(fixes)
+                    # Even we filter by upstream commit date, can't garantee this commit
+                    # was ported to downstream in the end. Due to lack of git info(debian),
+                    # I choose to use a proximate kernel version to match downstream kernel.
+                    base_version = self.closest_tag(fix_hash, soup)
+                    if base_version == None:
+                        continue
+                    for distro in self.cfg.get_all_distros():
+                        if not self.is_newer_version(base_version, distro.distro_version):
+                            fixes['exclude'].append(distro.distro_name)
+                    self._patch_info['fixes'].append(fixes)
 
         except Exception as e:
             self.logger.exception("Error parsing fix tag for {}: {}".format(hash_val, e))
-        return self.patch_info['fixes'] != []
+        return self._patch_info['fixes'] != []
 
     def closest_tag(self, patch_hash, soup: BeautifulSoup):
         regx_kernel_version = r'^v(\d+\.\d+)'
@@ -264,7 +266,7 @@ class Crawler:
         patch_url = self.get_patch_url(hash_val)
         if self.retreive_case(hash_val) == -1:
             return
-        self.patch_info = {'url': None, 'fixes':[], 'date':None}
+        self._patch_info = {'url': None, 'fixes':[], 'date':None}
         if self.filter_by_fixes_tag:
             if not self.check_excluded_distro(hash_val, patch_url):
                 self.logger.error("{} does not have a fixes tag".format(hash_val))
@@ -279,7 +281,7 @@ class Crawler:
         else:
             self.cases[hash_val]['affect'] = None
         self.cases[hash_val]['title'] = self.get_title_of_case(hash_val)
-        self.cases[hash_val]['patch'] = self.patch_info
+        self.cases[hash_val]['patch'] = self._patch_info
         return self.cases[hash_val]
     
     def case_first_crash(self, hash_val):

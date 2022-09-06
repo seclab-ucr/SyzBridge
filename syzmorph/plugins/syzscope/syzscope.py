@@ -115,8 +115,8 @@ class Syzscope(AnalysisModule):
             sym = SymExec(syzscope=self, logger=sym_logger, workdir=self.path_case_plugin, index=0, debug=self.debug)
             qemu = sym.setup_vm(timeout=5*60, log_suffix="-{}".format(i), distro=distro, work_path=sub_dir)
             sym.prepare_angr()
-            _, qemu_queue = qemu.run(alternative_func=self._run_sym, args=(sym, sym_logger, ))
-            ready_for_sym_exec = qemu_queue.get(block=True)
+            qemu.run(alternative_func=self._run_sym, args=(sym, sym_logger, ))
+            ready_for_sym_exec = qemu.wait()
             sym.cleanup()
             del sym
             if not ready_for_sym_exec:
@@ -161,58 +161,48 @@ class Syzscope(AnalysisModule):
             sym.setup_gdb_and_monitor(qemu)
         except QemuIsDead:
             sym_logger.error("Error occur when executing symbolic tracing: QemuIsDead")
-            qemu.alternative_func_output.put(False)
             qemu.kill_proc_by_port(self.ssh_port)
-            return
+            return False
         except AngrRefuseToLoadKernel:
             sym_logger.error("Error occur when loading kernel into angr: AngrRefuseToLoadKernel")
-            qemu.alternative_func_output.put(False)
-            return
+            return False
         except KasanReportEntryNotFound:
             sym_logger.warning("Kasan report entry not found")
-            qemu.alternative_func_output.put(False)
-            return
+            return False
         except Exception as e:
             sym_logger.error("Unknown error occur: {}".format(e))
-            qemu.alternative_func_output.put(False)
-            return
+            return False
         sym_logger.info("Uploading poc and triggering the crash")
         self._run_poc(qemu, self.repro_mode)
         try:
             ret = sym.run_sym(timeout=self.timeout)
             if ret == None:
                 sym_logger.warning("Can not locate the vulnerable memory")
-                qemu.alternative_func_output.put(False)
-                return
+                return False
             self.result |= ret
             if ret == 0:
                 sym_logger.warning("No additional use")
         except VulnerabilityNotTrigger:
             sym_logger.warning("Can not trigger vulnerability. Abaondoned")
             self.exception_count += 1
-            qemu.alternative_func_output.put(False)
-            return
+            return False
         except AbnormalGDBBehavior:
             sym_logger.warning("Abnormal GDB behavior occured")
             self.exception_count += 1
-            qemu.alternative_func_output.put(False)
-            return
+            return False
         except QemuIsDead:
             sym_logger.error("Error occur when executing symbolic tracing: QemuIsDead")
             self.exception_count += 1
-            qemu.alternative_func_output.put(False)
-            return
+            return False
         except InvalidCPU:
             sym_logger.error("Fail to determine which cpu is using for current context")
             self.exception_count += 1
-            qemu.alternative_func_output.put(False)
-            return
+            return False
         except Exception as e:
             sym_logger.error("Unknown error occur: {}".format(e))
             self.exception_count += 1
-            qemu.alternative_func_output.put(False)
-            return
-        qemu.alternative_func_output.put(True)
+            return False
+        return True
 
     def _run_poc(self, qemu, mode=0):
         if mode == 0:

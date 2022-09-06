@@ -182,8 +182,8 @@ class ImageCommand(Command):
             log_name='vm.log', logger=self.logger, debug=True,
             port=self.ssh_port, key=self.ssh_key, image=self.image, mem=mem, cpu=cpu)
 
-        _, q = vm.run(alternative_func=self._deploy_image)
-        t = q.get(block=True)
+        vm.run(alternative_func=self._deploy_image)
+        t = vm.wait()
         vm.kill_vm()
         if not t:
             self.logger.error("Image build failed, check the log")
@@ -202,8 +202,8 @@ class ImageCommand(Command):
             return False
 
         time.sleep(3)
-        _, q = vm.run(alternative_func=self._check_kernel_version)
-        t = q.get(block=True)
+        vm.run(alternative_func=self._check_kernel_version)
+        t = vm.wait()
         vm.kill_vm()
         if not t:
             self.logger.error("Kernel version does not match {}, check grub".format(self.kernel_version))
@@ -232,35 +232,29 @@ class ImageCommand(Command):
                     if self._kernel_config_pre_check(qemu, 'CONFIG_KASAN=y'):
                         passed_check = True
                     else:
-                        qemu.alternative_func_output.put(False)
-                        return
+                        return False
                 if self.enable_feature & self.FEATURE_UBSAN != 0:
                     if self._kernel_config_pre_check(qemu, 'CONFIG_UBSAN=y'):
                         passed_check = True
                     else:
-                        qemu.alternative_func_output.put(False)
-                        return
+                        return False
                 if self.enable_feature & self.FEATURE_FAULT_INJECTION != 0:
                     if self._kernel_config_pre_check(qemu, 'CONFIG_FAULT_INJECTION=y'):
                         passed_check = True
                     else:
-                        qemu.alternative_func_output.put(False)
-                        return
+                        return False
                 if passed_check:
                     self._retrieve_modules(qemu)
                     qemu.command(user=self.ssh_user, cmds="shutdown -h now", wait=True)
                     time.sleep(10)
-                    qemu.alternative_func_output.put(True)
-                    return
+                    return False
                 else:
                     if self.enable_feature == 0:
-                        qemu.alternative_func_output.put(True)
+                        return True
                     else:
-                        qemu.alternative_func_output.put(False)
-                    return
+                        return False
         self.logger.error("Kernel version does not match {}, check grub".format(self.kernel_version))
-        qemu.alternative_func_output.put(False)
-        return
+        return False
     
     def _retrieve_modules(self, qemu: VM):
         qemu.command(user=self.ssh_user, cmds="tar -czf /tmp/modules.tar.gz -C /lib/modules/`uname -r`/kernel .", wait=True)
@@ -282,9 +276,7 @@ class ImageCommand(Command):
                 ret = qemu.upload(user=self.ssh_user, src=[disable_config_file], dst='~', wait=True)
                 if ret == None or ret != 0:
                     qemu.logger.error("Failed to upload {}".format(disable_config_file))
-                    qemu.kill_vm()
-                    qemu.alternative_func_output.put(False)
-                    return
+                    return False
         
         if self.args.enable_extra != None:
             enable_config_file = self.build_dir+'/enable_extra_config'
@@ -294,9 +286,7 @@ class ImageCommand(Command):
                 ret = qemu.upload(user=self.ssh_user, src=[enable_config_file], dst='~', wait=True)
                 if ret == None or ret != 0:
                     qemu.logger.error("Failed to upload {}".format(enable_config_file))
-                    qemu.kill_vm()
-                    qemu.alternative_func_output.put(False)
-                    return
+                    return False
 
         if self.distro == 'ubuntu':
             dkms_path_path = os.path.join(proj_path, "resources/dkms.patch")
@@ -304,9 +294,7 @@ class ImageCommand(Command):
             ret = qemu.upload(user=self.ssh_user, src=[image_building_script_path, dkms_path_path], dst='~', wait=True)
             if ret == None or ret != 0:
                 qemu.logger.error("Failed to upload {}".format(image_building_script_path))
-                qemu.kill_vm()
-                qemu.alternative_func_output.put(False)
-                return
+                return False
 
             if self.get == '':
                 qemu.command(user=self.ssh_user, cmds="chmod +x {0} && ./{0} '{1}' '{2}' {3}".format(image_building_script, 
@@ -328,9 +316,7 @@ class ImageCommand(Command):
 
             if not had_ddeb:
                 qemu.logger.error("Failed to build image, check the log")
-                qemu.kill_vm()
-                qemu.alternative_func_output.put(False)
-                return
+                return False
             
             qemu.download(user=self.ssh_user, src=["/boot/grub/grub.cfg"], dst=self.build_dir, wait=True)
             if os.path.exists(os.path.join(self.build_dir, "grub.cfg")):
@@ -343,9 +329,7 @@ class ImageCommand(Command):
             ret = qemu.upload(user=self.ssh_user, src=[image_building_script_path], dst='~', wait=True)
             if ret == None or ret != 0:
                 qemu.logger.error("Failed to upload {}".format(image_building_script_path))
-                qemu.kill_vm()
-                qemu.alternative_func_output.put(False)
-                return
+                return False
 
             # The dsc url should be like http://snapshot.debian.org/archive/debian/20190822T152536Z/pool/main/l/linux/linux_4.19.67-1.dsc
             try:
@@ -353,15 +337,11 @@ class ImageCommand(Command):
                 self.kernel_version = linux_folder.split('_')[1]
             except:
                 self.logger.error("Cannot parse this url {}, pick a .dsc file from http://snapshot.debian.org/package/linux/".format(self.get))
-                qemu.kill_vm()
-                qemu.alternative_func_output.put(False)
-                return
+                return False
             qemu.command(user=self.ssh_user, cmds="chmod +x {0} && ./{0} {1} {2} {3}".format(image_building_script, self.get, self.kernel_version, self.enable_feature), wait=True)
             if not os.path.exists(os.path.join(self.build_dir, "debian.tar.gz")) and not os.path.exists(os.path.join(self.build_dir, "debian-{}".format(self.code_name))):
                 if qemu.download(user=self.ssh_user, src=["/tmp/debian.tar.gz"], dst=self.build_dir, wait=True) != 0:
-                    qemu.kill_vm()
-                    qemu.alternative_func_output.put(False)
-                    return
+                    return False
                     
             qemu.download(user=self.ssh_user, src=["/boot/grub/grub.cfg"], dst=self.build_dir, wait=True)
             if os.path.exists(os.path.join(self.build_dir, "grub.cfg")):
@@ -379,18 +359,14 @@ class ImageCommand(Command):
             
             if self.code_name == "":
                 qemu.logger.error("Failed to get code name")
-                qemu.kill_vm()
-                qemu.alternative_func_output.put(False)
-                return
+                return False
 
             kernel_spec_patch_path = os.path.join(proj_path, "resources/kernel_spec.patch")
 
             ret = qemu.upload(user=self.ssh_user, src=[image_building_script_path, kernel_spec_patch_path], dst='~', wait=True)
             if ret == None or ret != 0:
                 qemu.logger.error("Failed to upload {}".format(image_building_script_path))
-                qemu.kill_vm()
-                qemu.alternative_func_output.put(False)
-                return
+                return False
 
             if self.get == '':
                 out = qemu.command(user=self.ssh_user, cmds="chmod +x {0} && ./{0} '{1}' '{2}' {3} {4}".format(image_building_script, 
@@ -404,9 +380,7 @@ class ImageCommand(Command):
             
             if not os.path.exists(os.path.join(self.build_dir, "fedora.tar.gz")) and not os.path.exists(os.path.join(self.build_dir, "fedora-{}".format(self.code_name))):
                 if qemu.download(user=self.ssh_user, src=["/tmp/fedora.tar.gz"], dst=self.build_dir, wait=True) != 0:
-                    qemu.kill_vm()
-                    qemu.alternative_func_output.put(False)
-                    return
+                    return False
 
             out = qemu.command(user=self.ssh_user, cmds="ls -l /boot/vmlinuz-*".format(self.kernel_version), wait=True)
             for line in out:
@@ -418,8 +392,7 @@ class ImageCommand(Command):
             qemu.command(user=self.ssh_user, cmds="shutdown -h now", wait=True)
 
         time.sleep(10) # Wait for normally shutdown
-        qemu.alternative_func_output.put(True)
-        return
+        return True
     
     def grub_order(self, grub_path):
         with open(grub_path, 'r') as f:

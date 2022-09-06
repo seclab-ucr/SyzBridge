@@ -21,24 +21,25 @@ class Case:
         self.path_project = owner.proj_dir
         self.path_package = os.path.join(self.path_syzmorph, "syzmorph")
         self.path_case = self._get_case_path()
-        self.path_ori = self.path_case
+        self.path_ori_case = self.path_case
         self.case = case
-        self.lts = None
         self.has_c_repro = True
         self.path_linux = ""
         self.console_mode = self.args.console
         self._init_case(case_hash)
-        #if self.lts != None:
-        #    self.path_linux = os.path.join(self.path_case, "linux/linux-{}".format(self.lts["version"]))
     
+    # Parse a config file
+    # Return a Config() object
     def parse_config(self, config):
         cfg = Config()
         cfg.load_from_file(config)
 
         return cfg
 
+    # Save current bug case into other folders including 'complete' and 'error'. 
+    # Return the folder name
     def save_to_others(self, error):
-        dirname = os.path.dirname(self.path_ori)
+        dirname = os.path.dirname(self.path_ori_case)
         folder = os.path.basename(dirname)
         if folder == 'incomplete':
             folder = 'completed'
@@ -93,8 +94,7 @@ class Case:
 
         for kernel in self.cfg.get_all_kernels():
             if self.need_repro(kernel.distro_name) or kernel.type == 1: # If need reproduce or type is upstream kernel
-                kernel.repro = Reproducer(cfg=kernel, manager=self)
-        #self.lts = self._determine_lts()
+                kernel.repro = Reproducer(kernel_cfg=kernel, manager=self)
     """
     def _determine_lts(self):
         distro_name = self.cfg.distro_name.lower()
@@ -120,6 +120,7 @@ class Case:
                 return each
     """
 
+    # Check whether current bug affects a particular distro 
     def need_repro(self, distro_name):
         if self.case['affect'] != None:
             if distro_name in self.case['affect']:

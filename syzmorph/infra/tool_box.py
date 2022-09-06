@@ -473,7 +473,7 @@ def syzrepro_convert_format(line, repeat):
     
 def set_timer(timeout, p):
     count = 0
-    while (count < timeout):
+    while (count != timeout):
         count += 1
         sleep(1)
         if p.poll() != None:

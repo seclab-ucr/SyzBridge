@@ -1,4 +1,5 @@
 import threading
+from tkinter.tix import Tree
 import traceback
 import time
 import os, queue
@@ -32,6 +33,8 @@ class VMInstance(Network):
         self.alternative_func = None
         self.alternative_func_args = None
         self.alternative_func_output = None
+        self.alternative_func_finished = False
+        self._qemu_return = queue.Queue()
         log_name += log_suffix
         self.reset()
         self.logger = utilities.init_logger(os.path.join(work_path, log_name), debug=debug, propagate=debug)
@@ -91,11 +94,39 @@ class VMInstance(Network):
         x2.start()
 
         return p, self.alternative_func_output
+    
+    def send(self, data):
+        self.alternative_func_output.put(data)
+    
+    def _send_return_value(self, ret):
+        self._qemu_return.put(ret)
+    
+    def recv(self, block=False, timeout=None):
+        return self.alternative_func_output.get(block=block, timeout=timeout)
+    
+    def recvall(self):
+        res = []
+        while True:
+            try:
+                r = self.alternative_func_output.get(block=False)
+                res.append(r)
+            except queue.Empty:
+                break
+        return res
+    
+    def wait(self):
+        ret = self._qemu_return.get(block=True)
+        return ret
 
     def kill_vm(self):
         self.logger.info('Kill VM pid: {}'.format(self.instance.pid))
+        if self._output_lock.locked():
+            self._output_lock.release()
+        if self.lock.locked():
+            self.lock.release()
         try:
             self.instance.kill()
+            time.sleep(3)
         except:
             self.logger.error("VM exit abnormally")
     
@@ -129,7 +160,7 @@ class VMInstance(Network):
         self.timer = 0
         run_alternative_func = False
         error_count = 0
-        while self.timeout == None or self.timer <self.timeout:
+        while not self.func_finished() and (self.timeout == None or self.timer <self.timeout):
             if self.kill_qemu:
                 self.case_logger.info('Signal kill qemu received.')
                 self.kill_vm()
@@ -156,10 +187,9 @@ class VMInstance(Network):
                         self.case_logger.error('QEMU: Upstream image need a reboot')
                         break
                     self.qemu_fail = True
-                    self.alternative_func_output.put([False])
                 if self._output_lock.locked():
                     self._output_lock.release()
-                self.reset()
+                self.kill_vm()
                 return
             if not self.qemu_ready and self.is_qemu_ready():
                 self.qemu_ready = True
@@ -169,19 +199,22 @@ class VMInstance(Network):
                     x = threading.Thread(target=self._prepare_alternative_func, name="{} qemu call back".format(self.tag))
                     x.start()
                     run_alternative_func = True
-        if self._reboot_once:
+        if self._reboot_once and not run_alternative_func:
             self.case_logger.debug('QEMU: Try to reboot the image')
             # Disable snapshot and reboot the image
             self._disable_snapshot_in_cmd()
+            self.kill_vm()
             self.run(self.alternative_func, self.alternative_func_output, self.alternative_func_args)
             return
-        self.case_logger.info('Time out, kill qemu')
+        self.case_logger.info('Finished alternative function, kill qemu')
         if not self.qemu_ready:
             self.qemu_fail = True
-            self.alternative_func_output.put([False])
         self.kill_vm()
         return
     
+    def func_finished(self):
+        return self.alternative_func_finished
+
     def kill_proc_by_port(self, ssh_port):
         p = Popen("lsof -i :{} | awk '{{print $2}}'".format(ssh_port), shell=True, stdout=PIPE, stderr=PIPE)
         is_pid = False
@@ -204,7 +237,7 @@ class VMInstance(Network):
     def need_reboot(self):
         if self.cfg.type != VMInstance.UPSTREAM:
             return False
-        return 'reboot' in self.output[-1]
+        return 'reboot: machine restart' in self.output[-1]
 
     def is_qemu_ready(self):
         output = self.command("uname -r", "root", wait=True, timeout=5)
@@ -300,16 +333,18 @@ class VMInstance(Network):
     
     def _prepare_alternative_func(self):
         try:
-            self.alternative_func(self, *self.alternative_func_args)
+            ret = self.alternative_func(self, *self.alternative_func_args)
+            self._send_return_value(ret)
         except Exception as e:
             self.logger.error("alternative_func failed: {}".format(e))
-            self.alternative_func_output.put([False])
+            self._send_return_value(False)
             tb = traceback.format_exc()
             self.logger.error(tb)
+        self.alternative_func_finished = True
         return
     
     def _new_output_timer(self):
-        while (self.instance.poll() is None):
+        while (not self.func_finished() and self.instance.poll() is None):
             while (self._output_timer > 0):
                 self.lock.acquire()
                 self._output_timer -= 1
@@ -341,6 +376,8 @@ class VMInstance(Network):
                     self.case_logger.error("Booting qemu-{} failed".format(self.log_name))
                 if 'Dumping ftrace buffer' in line:
                     self.dumped_ftrace = True
+                if utilities.regx_match(r'Rebooting in \d+ seconds', line):
+                    self.kill_qemu = True
                 self.logger.info(line)
                 self.output.append(line)
         except EOFError:

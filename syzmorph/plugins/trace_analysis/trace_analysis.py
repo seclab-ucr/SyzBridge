@@ -20,7 +20,6 @@ class TraceAnalysis(AnalysisModule):
     def __init__(self):
         super().__init__()
         self.syzcall2syscall = {}
-        self.syscall_prefix = '__x64_sys_'
         
     def prepare(self):
         if not self.manager.has_c_repro:
@@ -207,9 +206,8 @@ class TraceAnalysis(AnalysisModule):
             if self._save_dumped_ftrace(qemu, "{}/raw-{}.report".format(self.path_case_plugin, trace_filename)):
                 self._convert_raw_ftrace("{}/raw-{}.report".format(self.path_case_plugin, trace_filename),
                     "{}/{}.report".format(self.path_case_plugin, trace_filename), syscalls)
-                qemu.alternative_func_output.put(True)
-                return
-        qemu.alternative_func_output.put(True)
+                return True
+        return True
     
     def prepare_syzkaller(self):
         i386 = None
@@ -224,7 +222,7 @@ class TraceAnalysis(AnalysisModule):
     
     def _save_dumped_ftrace(self, qemu: VMInstance, save_to):
         res = []
-        kernel_log_regx = r'\[(( )+)?\d+\.\d+\]\[(( )+)?T(\d+)\] (.+)'
+        kernel_log_regx = r'\[(( )+)?\d+\.\d+\]\[(( )+)?(T|C|P)(\d+)\] (.+)'
         begin_ftrace = False
         separate_line = 0
         for line in qemu.output:
@@ -234,7 +232,7 @@ class TraceAnalysis(AnalysisModule):
                 continue
             if begin_ftrace:
                 if regx_match(kernel_log_regx, line):
-                    text = regx_get(kernel_log_regx, line, 5)
+                    text = regx_get(kernel_log_regx, line, 6)
                     if text == '---------------------------------':
                         separate_line ^= 1
                         continue
@@ -330,15 +328,17 @@ exit $EXIT_CODE""".format(cmd)
                 self.err_msg("Failed to build upstream environment")
                 return None
 
-        qemu = cfg.repro.launch_qemu(self.case_hash, tag=cfg.distro_name, work_path=self.path_case_plugin, log_name="qemu-{}.log".format(cfg.repro.distro_name), timeout=TIMEOUT_TRACE_ANALYSIS, snapshot=False)
-        _, qemu_queue = qemu.run(alternative_func=self._run_trace_cmd, args=("trace-{}".format(cfg.repro.distro_name), ))
-        done = qemu_queue.get(block=True)
+        qemu = cfg.repro.launch_qemu(self.case_hash, tag=cfg.distro_name, work_path=self.path_case_plugin, log_name="qemu-{}.log".format(cfg.repro.distro_name), 
+            timeout=TIMEOUT_TRACE_ANALYSIS, snapshot=False, vm_tag="upstream-trace")
+        qemu.run(alternative_func=self._run_trace_cmd, args=("trace-{}".format(cfg.repro.distro_name), ))
+        done = qemu.wait()
         qemu.kill()
         if not done:
             return None
         return trace_path
     
     def _tune_poc(self, qemu):
+        syscall_prefix = '__x64_sys_'
         insert_exit_line = -1
         common_entries = ['process_one_work', '__do_softirq', 'do_kern_addr_fault']
         enabled_syscalls = []
@@ -356,10 +356,10 @@ exit $EXIT_CODE""".format(cmd)
         
         syscalls = []
         if "386" in self.case['manager']:
-            self.syscall_prefix = "__ia32_sys_"
-        output = qemu.command(cmds="trace-cmd list -f | grep -E  \"^{}\"".format(self.syscall_prefix), user="root", wait=True)
+            syscall_prefix = "__ia32_sys_"
+        output = qemu.command(cmds="trace-cmd list -f | grep -E  \"^{}\"".format(syscall_prefix), user="root", wait=True)
         for line in output:
-            if line.startswith(self.syscall_prefix):
+            if line.startswith(syscall_prefix):
                 syscalls.append(line.strip())
         if len(syscalls) == 0:
             # try SyS_ prefix
@@ -367,8 +367,8 @@ exit $EXIT_CODE""".format(cmd)
             for line in output:
                 if line.startswith("SyS_"):
                     syscalls.append(line.strip())
-                    self.syscall_prefix = 'SyS_'
-        common_entries.append(self._syscall_add_prefix('exit_group'))
+                    syscall_prefix = 'SyS_'
+        common_entries.append(self._syscall_add_prefix(syscall_prefix, 'exit_group'))
         for each in common_entries:
             output = qemu.command(cmds="trace-cmd list -f | grep -E  \"^{}\"".format(each), user="root", wait=True)
             for line in output:
@@ -453,25 +453,25 @@ exit $EXIT_CODE""".format(cmd)
             else:
                 syscall = each
             
-            if self._syscall_add_prefix(syscall) in syscalls: 
-                syscall = self._syscall_add_prefix(syscall)
+            if self._syscall_add_prefix(syscall_prefix, syscall) in syscalls: 
+                syscall = self._syscall_add_prefix(syscall_prefix, syscall)
                 group = [syscall]
-                if syscall == self._syscall_add_prefix('recv'):
-                    group = [self._syscall_add_prefix('recv'), self._syscall_add_prefix('recvfrom')]
-                if syscall == self._syscall_add_prefix('send'):
-                    group = [self._syscall_add_prefix('send'), self._syscall_add_prefix('sendto')]
+                if syscall == self._syscall_add_prefix(syscall_prefix, 'recv'):
+                    group = [self._syscall_add_prefix(syscall_prefix, 'recv'), self._syscall_add_prefix(syscall_prefix, 'recvfrom')]
+                if syscall == self._syscall_add_prefix(syscall_prefix, 'send'):
+                    group = [self._syscall_add_prefix(syscall_prefix, 'send'), self._syscall_add_prefix(syscall_prefix, 'sendto')]
                 if syscall not in enabled_syscalls:
                     enabled_syscalls.extend(group)
             if syscall.startswith("syz_"):
                 if syscall in self.syzcall2syscall:
                     for each in self.syzcall2syscall[syscall]:
-                        enabled_syscalls.append(self._syscall_add_prefix(each))
+                        enabled_syscalls.append(self._syscall_add_prefix(syscall_prefix, each))
                 else:
                     self.logger.error("Cannot find {} in syzcall2syscall".format(syscall))
         return unique(enabled_syscalls)
     
-    def _syscall_add_prefix(self, syscall):
-        return self.syscall_prefix+syscall
+    def _syscall_add_prefix(self, syscall_prefix, syscall):
+        return syscall_prefix+syscall
     
     def _extract_syscall_from_template(self, testcase):
         res = []

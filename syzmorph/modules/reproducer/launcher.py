@@ -7,17 +7,16 @@ from modules.vm import VM
 from .build import Build
 
 class Launcher(Build):
-    def __init__(self, cfg, manager):
-        Build.__init__(self, cfg, manager)
+    def __init__(self, kernel_cfg, manager):
+        Build.__init__(self, kernel_cfg, manager)
         self.manager = manager
         self.case_logger = manager.case_logger
         self.debug = manager.debug
-        self.kill_qemu = False
         self.queue = multiprocessing.Queue()
         
-    def save_crash_log(self, log, name):
+    def save_crash_log(self, log_msg, name):
         with open("{}/crash_log-{}".format(self.path_case, name), "w+") as f:
-            for each in log:
+            for each in log_msg:
                 for line in each:
                     f.write(line+"\n")
                 f.write("\n")
@@ -36,7 +35,6 @@ class Launcher(Build):
             return True
     
     def reproduce(self, func, func_args, root, work_dir, vm_tag, attempt=3, **kwargs):
-        self.kill_qemu = False
         res = []
         trigger = False
         ever_success = False
@@ -45,7 +43,7 @@ class Launcher(Build):
         i = 0
         while i < attempt:
             args = {'th_index':i, 'func':func, 'args':func_args, 'root':root, 'work_dir':work_dir, 'vm_tag':vm_tag + '-' + str(i), **kwargs}
-            x = multiprocessing.Process(target=self._reproduce, kwargs=args, name="{}-{} trigger-{}".format(self.manager.case_hash, self.cfg.distro_name, i))
+            x = multiprocessing.Process(target=self._reproduce, kwargs=args, name="{}-{} trigger-{}".format(self.manager.case_hash, self.kernel.distro_name, i))
             x.start()
             self.log("Start reproducing {}, args {}".format(vm_tag + str(i), args))
             
@@ -66,7 +64,6 @@ class Launcher(Build):
             if not trigger and crashes != []:
                 trigger = True
                 res = crashes
-                self.kill_qemu = True
                 self.save_crash_log(res, self.distro_name)
                 if res == []:
                     res = crashes
@@ -82,7 +79,7 @@ class Launcher(Build):
         self.log("Launched qemu {}".format(vm_tag))
         
         self.run_qemu(qemu, func, th_index, work_dir, root, *args)
-        res = qemu.alternative_func_output.get(block=True)
+        res = qemu.wait()
         self.log("Qemu {} exit".format(vm_tag))
         if len(res) == 1 and qemu.qemu_fail:
             self.case_logger.error("Error occur when reproducing {}".format(vm_tag))
@@ -104,7 +101,7 @@ class Launcher(Build):
             self.gdb_port = gdb_port
         if mon_port != None:
             self.mon_port = mon_port
-        qemu = VM(linux=self.path_linux, cfg=self.cfg, hash_tag=c_hash, vmlinux=self.vmlinux, port=self.ssh_port, 
+        qemu = VM(linux=self.path_linux, cfg=self.kernel, hash_tag=c_hash, vmlinux=self.vmlinux, port=self.ssh_port, 
             image=self.image_path, log_name=log_name, log_suffix=log_suffix, mon_port=self.mon_port, gdb_port=self.gdb_port,
             key=self.ssh_key, timeout=timeout, debug=self.debug, **kwargs)
         qemu.logger.info("QEMU-{} launched.\n".format(log_suffix))
