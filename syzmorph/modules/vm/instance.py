@@ -344,11 +344,13 @@ class VMInstance(Network):
         return
     
     def _new_output_timer(self):
-        while (not self.func_finished() and self.instance.poll() is None):
+        while not self.func_finished():
             while (self._output_timer > 0):
                 self.lock.acquire()
                 self._output_timer -= 1
                 self.lock.release()
+                if self.instance.poll() is not None:
+                    return
                 sleep(1)
             self._output_lock.acquire(blocking=True)
         #if not self._has_new_output:

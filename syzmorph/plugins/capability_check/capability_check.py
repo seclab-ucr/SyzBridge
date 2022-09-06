@@ -51,7 +51,7 @@ class CapabilityCheck(AnalysisModule):
         self.set_stage_text("Getting capabilities")
         upstream = self.cfg.get_upstream()
         qemu = upstream.repro.launch_qemu(self.case_hash, work_path=self.path_case_plugin\
-            , log_name="qemu-{}.log".format(upstream.repro.distro_name), timeout=3*60, vm_tag="capability_check")
+            , log_name="qemu-{}.log".format(upstream.repro.distro_name), timeout=3*60, tag="capability_check")
         qemu.run(alternative_func=self._run_poc, args=())
         qemu.wait()
         report = self._parse_capability_log(qemu.output)

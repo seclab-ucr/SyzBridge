@@ -328,8 +328,8 @@ exit $EXIT_CODE""".format(cmd)
                 self.err_msg("Failed to build upstream environment")
                 return None
 
-        qemu = cfg.repro.launch_qemu(self.case_hash, tag=cfg.distro_name, work_path=self.path_case_plugin, log_name="qemu-{}.log".format(cfg.repro.distro_name), 
-            timeout=TIMEOUT_TRACE_ANALYSIS, snapshot=False, vm_tag="upstream-trace")
+        qemu = cfg.repro.launch_qemu(self.case_hash, tag="{}-trace".format(cfg.distro_name), work_path=self.path_case_plugin, log_name="qemu-{}.log".format(cfg.repro.distro_name), 
+            timeout=TIMEOUT_TRACE_ANALYSIS, snapshot=False)
         qemu.run(alternative_func=self._run_trace_cmd, args=("trace-{}".format(cfg.repro.distro_name), ))
         done = qemu.wait()
         qemu.kill()
