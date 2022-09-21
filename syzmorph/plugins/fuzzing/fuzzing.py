@@ -50,6 +50,7 @@ class Fuzzing(AnalysisModule):
         self.syz = None
         self.enable_syscalls = []
         self._syzlang_func_regx = r'^(\w+(\$\w+)?)\('
+        self._cur_distro = None
         
     def prepare(self):
         try:
@@ -82,7 +83,10 @@ class Fuzzing(AnalysisModule):
             self.port = distro.repro.ssh_port
             self.path_kernel = distro.distro_src
             self.ssh_key = distro.ssh_key
+            self._cur_distro = distro
             self.prepare_config()
+            self.logger.info("===============================================")
+            self.logger.info("Running fuzzing on {}".format(distro.distro_name))
             if self.run_syzkaller() != 0:
                 self.main_logger.error("Failed to run syzkaller")
                 return False
@@ -125,8 +129,11 @@ class Fuzzing(AnalysisModule):
         return 0
     
     def prepare_config(self):
-        self.create_snapshot(self.path_image, self.path_syzkaller+"/workdir", "ubuntu")
-        self.path_image = self.path_syzkaller+"/workdir/ubuntu-snapshot.img"
+        if os.path.exists(os.path.join(self.path_syzkaller, "workdir/crashes")):
+            shutil.rmtree(os.path.join(self.path_syzkaller, "workdir/crashes"))
+
+        self.create_snapshot(self.path_image, self.path_syzkaller+"/workdir", self._cur_distro.distro_name)
+        self.path_image = self.path_syzkaller+"/workdir/{}-snapshot.img".format(self._cur_distro.distro_name)
         config = syz_config_template.format(self.arch, self.port, 
             self.path_syzkaller, self.path_kernel, self.path_image, 
             self.ssh_key, self.path_case_plugin, self.time_limit, self.enable_syscalls)
@@ -226,7 +233,7 @@ class Fuzzing(AnalysisModule):
     
     def _copy_crashes(self):
         crash_path = "{}/workdir/crashes".format(self.path_syzkaller)
-        dest_path = "{}/crashes".format(self.path_case_plugin)
+        dest_path = "{}/crashes-{}".format(self.path_case_plugin, self._cur_distro.distro_name)
         i = 0
         if os.path.isdir(crash_path) and len(os.listdir(crash_path)) > 0:
             while(1):
@@ -242,25 +249,6 @@ class Fuzzing(AnalysisModule):
     def _write_to(self, content, name):
         file_path = "{}/{}".format(self.path_case_plugin, name)
         super()._write_to(content, file_path)
-    
-    def _ubuntu_reproducible(self):
-        reproducable_regx = r'(.*) triggers a (Kasan )?bug: ([A-Za-z0-9_: -/]+) (by normal user|by root user)'
-        failed_regx = r'(.+) fail to trigger the bug'
-        path_report = os.path.join(self.path_case, "BugReproduce", "Report_BugReproduce")
-        if os.path.exists(path_report):
-            with open(path_report, "r") as f:
-                report = f.readlines()
-                for line in report:
-                    if regx_match(reproducable_regx, line):
-                        distro = regx_get(reproducable_regx, line, 0)
-                        privilege = regx_get(reproducable_regx, line, 3)
-                        if privilege == 'by normal user' and distro == 'ubuntu':
-                            return True
-                        if privilege == 'by root user' and distro == 'ubuntu':
-                            return True
-                    if regx_match(failed_regx, line):
-                        return False
-        return False
     
     def _check_log_for_panic(self):
         d = {}

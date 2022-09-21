@@ -42,8 +42,8 @@ class SyzbotCommand(Command):
                             e.g., --filter-by-kernel=upstream --filter-by-kernel=linux-next')
         parser.add_argument('--filter-by-c-prog', action='store_true',
                             help='[bool] filter bugs that do not have a c reproducer\n')
-        parser.add_argument('--filter-by-fixes-tag', action='store_true',
-                            help='[bool] filter bugs that do not have fixes tag\n')
+        parser.add_argument('--filter-by-closest-version-tag', action='store_true',
+                            help='[bool] filter bugs that their fixes tag are in a newer LTS\n')
         parser.add_argument('--filter-by-distro-effective-cycle', action='store_true',
                             help='[bool] filter bugs by distro effective cycle\n'
                             'Use \'effective_cycle_start\' and \'effective_cycle_end\' in config file')
@@ -95,7 +95,7 @@ class SyzbotCommand(Command):
         crawler = Crawler(url=self.args.url, keyword=self.args.key, max_retrieve=int(self.args.max_retrieval), 
             filter_by_reported=self.args.filter_by_reported, filter_by_closed=self.args.filter_by_closed, 
             filter_by_c_prog=self.args.filter_by_c_prog, filter_by_kernel=self.args.filter_by_kernel,
-            filter_by_fixes_tag=self.args.filter_by_fixes_tag, filter_by_distro_effective_cycle=self.args.filter_by_distro_effective_cycle,
+            filter_by_closest_version_tag=self.args.filter_by_closest_version_tag, filter_by_distro_effective_cycle=self.args.filter_by_distro_effective_cycle,
             cfg=self.cfg, debug=self.args.debug, log_path = self.proj_dir)
         
         try:
@@ -124,7 +124,7 @@ class SyzbotCommand(Command):
         else:
             self.cases = crawler.cases
         self.logger.info("Cases info saved in {}".format(os.path.join(self.proj_dir, "cases.json")))
-        self.save_cases(crawler.cases, args.proj) 
+        self.save_cases(self.cases, args.proj) 
     
     def check_essential_args(self):
         if self.args.proj == None:
@@ -165,7 +165,7 @@ class SyzbotCommand(Command):
         self.logger.info("[*] filter_by_closed: {}".format(self.args.filter_by_closed))
         self.logger.info("[*] filter_by_kernel: {}".format(self.args.filter_by_kernel))
         self.logger.info("[*] filter_by_c_prog: {}".format(self.args.filter_by_c_prog))
-        self.logger.info("[*] filter_by_fixes_tag: {}".format(self.args.filter_by_fixes_tag))
+        self.logger.info("[*] filter_by_closest_version_tag: {}".format(self.args.filter_by_closest_version_tag))
 
     def save_cases(self, cases, name):
         cases_json_path = os.path.join(self.proj_dir, "cases.json")

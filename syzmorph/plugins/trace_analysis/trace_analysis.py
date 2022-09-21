@@ -340,7 +340,9 @@ exit $EXIT_CODE""".format(cmd)
     def _tune_poc(self, qemu):
         syscall_prefix = '__x64_sys_'
         insert_exit_line = -1
-        common_entries = ['process_one_work', '__do_softirq', 'do_kern_addr_fault']
+        common_entries = ['process_one_work', '__do_softirq', 'do_kern_addr_fault', 
+                'exit_to_usermode_loop', #Ubuntu
+                'exit_to_user_mode_prepare'] #Fedora
         enabled_syscalls = []
         skip_funcs = [r"setup_usb\(\);", r"setup_leak\(\);", r"setup_cgroups\(\);", r"initialize_cgroups\(\);", r"setup_cgroups_loop\(\);"]
         data = []

@@ -35,8 +35,16 @@ class VMInstance(Network):
         self.alternative_func_output = None
         self.alternative_func_finished = False
         self._qemu_return = queue.Queue()
+        self.qemu_ready = False
+        self.kill_qemu = False
+        self.qemu_fail = False
+        self.dumped_ftrace = False
+        self.output = []
+        self._output_timer = default_output_timer
+        self._output_lock = None
+        self._reboot_once = False
+        self.lock = None
         log_name += log_suffix
-        self.reset()
         self.logger = utilities.init_logger(os.path.join(work_path, log_name), debug=debug, propagate=debug)
         self.case_logger = self.logger
         self.timer = 0
@@ -58,6 +66,7 @@ class VMInstance(Network):
         self._output_lock = threading.Lock()
         self._reboot_once = False
         self.lock = threading.Lock()
+        self.alternative_func_finished = False
 
     def setup(self, cfg, **kwargs):
         self.cfg = cfg
@@ -76,6 +85,7 @@ class VMInstance(Network):
             p: process of qemu
             queue: queue of alternative_func's custom output
         """
+        self.reset()
         p = Popen(self.cmd_launch, stdout=PIPE, stderr=STDOUT)
         self.instance = p
 
@@ -209,6 +219,8 @@ class VMInstance(Network):
         self.case_logger.info('Finished alternative function, kill qemu')
         if not self.qemu_ready:
             self.qemu_fail = True
+        if self.qemu_fail:
+            self._send_return_value(False)
         self.kill_vm()
         return
     

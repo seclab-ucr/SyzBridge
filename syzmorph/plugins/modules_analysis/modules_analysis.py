@@ -113,7 +113,7 @@ class ModulesAnalysis(AnalysisModule):
         check_map = {}
         all_distros = self.cfg.get_distros()
         for distro in all_distros:
-            distro.build_module_list()
+            distro.build_module_list(vm_tag="{} build module".format(distro.distro_name), work_path=self.path_case_plugin)
             check_map[distro.distro_name] = {}
 
         trace.add_filter("task", "==\"poc\"")

@@ -27,10 +27,7 @@ class AnalysisModule:
         self._move_to_success = False
         self._analyzor = None
     
-    def init(self, manager: Case):
-        if not isinstance(manager, Case):
-            raise AnalysisModuleError("setup() requires class Case")
-
+    def init(self, manager):
         self.manager = manager
         self.case = manager.case
         self.args = manager.args
@@ -142,6 +139,9 @@ class AnalysisModule:
         if plugin == None:
             return False
         return plugin.instance.finish
+    
+    def plugin_capable(self, plugin_name):
+        return self.manager.module_capable(plugin_name)
 
     def cleanup(self):
         pass

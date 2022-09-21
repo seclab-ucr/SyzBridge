@@ -451,6 +451,13 @@ class BugReproduce(AnalysisModule):
                 return True
         return False
     
+    def _check_poc_existence(self, qemu, user):
+        out = qemu.command(cmds="ls poc", user=user, wait=True)
+        for line in out:
+            if "No such file or directory" in line:
+                return False
+        return True
+
     def _execute_poc(self, root, qemu, work_dir, poc_feature, qemu_queue, repeat=False):
         if root:
             user = self.root_user
@@ -467,6 +474,9 @@ class BugReproduce(AnalysisModule):
             qemu.command(cmds="gcc -m32 -pthread -o poc {}".format(poc_src), user=user, wait=True)
         else:
             qemu.command(cmds="gcc -pthread -o poc {}".format(poc_src), user=user, wait=True)
+        if not self._check_poc_existence(qemu, user):
+            self.logger.fatal("Fail to compile poc!")
+            return [[], False]
 
         n = 3
         if repeat:
@@ -502,7 +512,7 @@ class BugReproduce(AnalysisModule):
                 if qemu.no_new_output() and not repeat:
                     break
         if repeat:
-            qemu.command(cmds="killall poc && killall run.sh", user=self.root_user, wait=True)
+            qemu.command(cmds="killall run.sh && killall poc", user=self.root_user, wait=True)
         return [], False
                 
     def _qemu_capture_kasan(self, qemu, th_index):
@@ -526,7 +536,8 @@ class BugReproduce(AnalysisModule):
                 if record_flag:
                     crash.append(line)
                 if (regx_match(boundary_regx, line) and record_flag) or \
-                regx_match(panic_regx, line):
+                        regx_match(panic_regx, line) or \
+                        (self._crash_start(line) and record_flag):
                     if crash_flag == 1:
                         res.append(crash)
                         crash = []

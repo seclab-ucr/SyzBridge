@@ -94,6 +94,7 @@ class ImageCommand(Command):
         cfg['ssh_key'] = self.ssh_key
         cfg['ssh_port'] = self.ssh_port
         cfg['root_user'] = self.ssh_user
+        cfg['normal_user'] = "etenal"
         cfg['distro_code_name'] = "unknown"
         cfg['distro_version'] = "unknown"
         cfg['distro_name'] = self.distro
@@ -170,8 +171,6 @@ class ImageCommand(Command):
             if mem / 2 < 2:
                 mem = str(2)+"G"
             elif mem / 2 > 8:
-                mem = str(8)+"G"
-            else:
                 mem = str(int(mem / 2))+"G"
         
         cpu = self.get_cpu_count()
@@ -247,7 +246,7 @@ class ImageCommand(Command):
                     self._retrieve_modules(qemu)
                     qemu.command(user=self.ssh_user, cmds="shutdown -h now", wait=True)
                     time.sleep(10)
-                    return False
+                    return True
                 else:
                     if self.enable_feature == 0:
                         return True

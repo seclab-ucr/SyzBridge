@@ -40,13 +40,13 @@ class Vendor():
         for key in cfg:
             setattr(self, key, cfg[key])
     
-    def build_module_list(self):
+    def build_module_list(self, vm_tag='', work_path="/tmp"):
         if self._built_modules:
             return
         self._built_modules = True
         if self._read_modules_from_cache():
             return
-        qemu = self.repro.launch_qemu()
+        qemu = self.repro.launch_qemu(tag=vm_tag, work_path=work_path)
         self.repro.run_qemu(qemu, self._get_modules)
         qemu.wait()
         qemu.kill()
@@ -88,7 +88,10 @@ class Vendor():
             cache_file = os.path.join(self.distro_src, name+".json")
             if not os.path.exists(cache_file):
                 return False
-            setattr(self, name, json.load(open(cache_file, "r")))
+            data = json.load(open(cache_file, "r"))
+            setattr(self, name, data)
+            if data == {}:
+                return False
         return True
     
     def _dump_modules_to_cache(self):

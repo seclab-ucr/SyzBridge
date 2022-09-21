@@ -232,7 +232,8 @@ class RawBugReproduce(AnalysisModule):
                 if record_flag:
                     crash.append(line)
                 if (regx_match(boundary_regx, line) and record_flag) or \
-                regx_match(panic_regx, line):
+                        regx_match(panic_regx, line) or \
+                        (self._crash_start(line) and record_flag):
                     if crash_flag == 1:
                         res.append(crash)
                         crash = []

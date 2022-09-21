@@ -8,7 +8,7 @@ from syzmorph.infra.config.config import Config
 from syzmorph.infra.tool_box import clone_repo, init_logger, regx_get, regx_match, request_get, extract_vul_obj_offset_and_size
 from bs4 import BeautifulSoup
 from bs4 import element
-from datetime import date
+from datetime import date, timedelta
 from .error import *
 
 syzbot_bug_base_url = "bug?id="
@@ -19,7 +19,7 @@ class Crawler:
     def __init__(self,
                  url="https://syzkaller.appspot.com/upstream/fixed",
                  keyword=[], max_retrieve=99999, filter_by_reported="", log_path = ".", cfg=None,
-                 filter_by_closed="", filter_by_c_prog=False, filter_by_fixes_tag=False, filter_by_kernel=[], 
+                 filter_by_closed="", filter_by_c_prog=False, filter_by_closest_version_tag=False, filter_by_kernel=[], 
                  filter_by_distro_effective_cycle=False, include_high_risk=True, debug=False):
         self.url = url
         if type(keyword) == list:
@@ -56,7 +56,10 @@ class Crawler:
                 self.filter_by_closed[0] = n[0]
                 self.filter_by_closed[1] = n[1]
         self.filter_by_c_prog = filter_by_c_prog
-        self.filter_by_fixes_tag = filter_by_fixes_tag
+        self.filter_by_fixes_tag = False
+        self.filter_by_closest_version_tag = filter_by_closest_version_tag
+        if self.filter_by_closest_version_tag or self.filter_by_distro_effective_cycle:
+            self.filter_by_fixes_tag = True
         self.filter_by_kernel = filter_by_kernel
         if cfg != None:
             self.cfg: Config = cfg
@@ -107,6 +110,8 @@ class Crawler:
         if self.cfg == None or date_diff == None:
             return None
         today = date.today()
+        report_date = today-timedelta(days=date_diff)
+        self.logger.debug("bug was reported {} days ago ({})".format(date_diff, report_date))
         for distro in self.cfg.get_all_distros():
             if distro.effective_cycle_start != "":
                 effective_start_date_diff = today - pd.to_datetime(distro.effective_cycle_start).date()
@@ -173,12 +178,14 @@ class Crawler:
                     # Even we filter by upstream commit date, can't garantee this commit
                     # was ported to downstream in the end. Due to lack of git info(debian),
                     # I choose to use a proximate kernel version to match downstream kernel.
-                    base_version = self.closest_tag(fix_hash, soup)
-                    if base_version == None:
-                        continue
-                    for distro in self.cfg.get_all_distros():
-                        if not self.is_newer_version(base_version, distro.distro_version):
-                            fixes['exclude'].append(distro.distro_name)
+                    if self.filter_by_closest_version_tag:
+                        base_version = self.closest_tag(fix_hash, soup)
+                        self.logger.debug("Fixes tag closest version: {}".format(base_version))
+                        if base_version == None:
+                            continue
+                        for distro in self.cfg.get_all_distros():
+                            if not self.is_newer_version(base_version, distro.distro_version):
+                                fixes['exclude'].append(distro.distro_name)
                     self._patch_info['fixes'].append(fixes)
 
         except Exception as e:
