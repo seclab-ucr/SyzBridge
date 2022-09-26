@@ -20,7 +20,7 @@ class BitcodeCommand(Command):
         super().add_arguments(parser)
         parser.add_argument('--source', action='store', nargs='?', help='Kernel source path')
         parser.add_argument('--config', action='store', nargs='?', help='Config file for kernel compilation')
-        parser.add_argument('--llvm', action='store', nargs='?', help='llvm build path')
+        parser.add_argument('--llvm', action='store', nargs='?', help='llvm binary path')
 
     def custom_subparser(self, parser, cmd):
         return parser.add_parser(cmd, help='Build kernel bitcode for static analysis')
@@ -30,7 +30,13 @@ class BitcodeCommand(Command):
         if self.have_clang_log() != 0:
             print("Cannot get clang log")
             return
+        self.adjust_kernel_for_clang()
         self.compile_bc_extra()
+    
+    def adjust_kernel_for_clang(self):
+        opts = ["-fno-inline-functions", "-fno-builtin-bcmp"]
+        self._fix_asm_volatile_goto()
+        self._add_extra_options(opts)
     
     def have_clang_log(self):
         self.source_path = self.args.source
@@ -39,7 +45,7 @@ class BitcodeCommand(Command):
         exitcode = 0
 
         if not os.path.exists(os.path.join(self.source_path, 'clang_log')):
-            proj_path = os.path.join(os.getcwd(), "`syzmorph`")
+            proj_path = os.path.join(os.getcwd(), "syzmorph")
             script_path = os.path.join(proj_path, "scripts/deploy-bc.sh")
             st = os.stat(script_path)
             os.chmod(script_path, st.st_mode | stat.S_IEXEC)
@@ -139,6 +145,49 @@ class BitcodeCommand(Command):
                 # get() is multithreads safe
                 # 
                 break
+    
+    def _fix_asm_volatile_goto(self):
+        regx = r'#define asm_volatile_goto'
+        linux_repo = self.source_path
+        compiler_gcc = os.path.join(linux_repo, "include/linux/compiler-gcc.h")
+        buf = ''
+        if os.path.exists(compiler_gcc):
+            with open(compiler_gcc, 'r') as f_gcc:
+                lines = f_gcc.readlines()
+                for line in lines:
+                    if regx_match(regx, line):
+                        buf = line
+                        break
+            if buf != '':
+                compiler_clang = os.path.join(linux_repo, "include/linux/compiler-clang.h")
+                with open(compiler_clang, 'r+') as f_clang:
+                    lines = f_clang.readlines()
+                    data = [buf]
+                    data.extend(lines)
+                    f_clang.seek(0)
+                    f_clang.writelines(data)
+                    f_clang.truncate()
+        return
+
+    def _add_extra_options(self, opts):
+        regx = r'KBUILD_CFLAGS[ \t]+:='
+        linux_repo = self.source_path
+        makefile = os.path.join(linux_repo, "Makefile")
+        data = []
+        with open(makefile, 'r+') as f:
+            lines = f.readlines()
+            for i in range(0, len(lines)):
+                line = lines[i]
+                if regx_match(regx, line):
+                    parts = line.split(':=')
+                    opts_str = " ".join(opts)
+                    data.extend(lines[:i])
+                    data.append(parts[0] + ":= " + opts_str + " " + parts[1])
+                    data.extend(lines[i+1:])
+                    f.seek(0)
+                    f.writelines(data)
+                    f.truncate()
+                    break
     
     def _log_subprocess_output(self, pipe):
         try:
