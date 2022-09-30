@@ -68,11 +68,11 @@ class VMInstance(Network):
         self.lock = threading.Lock()
         self.alternative_func_finished = False
 
-    def setup(self, cfg, **kwargs):
-        self.cfg = cfg
-        if cfg.type == VMInstance.DISTROS:
+    def setup(self, kernel, **kwargs):
+        self.kernel = kernel
+        if kernel.type == VMInstance.DISTROS:
             self.setup_distros(**kwargs)
-        if cfg.type == VMInstance.UPSTREAM:
+        if kernel.type == VMInstance.UPSTREAM:
             self.setup_upstream(**kwargs)
         return
         
@@ -247,7 +247,7 @@ class VMInstance(Network):
         return self._output_lock.locked()
     
     def need_reboot(self):
-        if self.cfg.type != VMInstance.UPSTREAM:
+        if self.kernel.type != VMInstance.UPSTREAM:
             return False
         return 'reboot: machine restart' in self.output[-1]
 
@@ -279,7 +279,7 @@ class VMInstance(Network):
             self.cmd_launch.extend(["-net", "nic,model=e1000", "-net", "user,host=10.0.2.10,hostfwd=tcp::{}-:22".format(self.port)])
         self.cmd_launch.extend(["-display", "none", "-serial", "stdio", "-no-reboot", "-enable-kvm", "-cpu", "host,migratable=off",  
                     "-drive", "file={},format=qcow2,cache=writeback,l2-cache-size=6553600,cache-clean-interval=900".format(self.image)])
-        self.write_cmd_to_script(self.cmd_launch, "launch_{}.sh".format(self.cfg.distro_name))
+        self.write_cmd_to_script(self.cmd_launch, "launch_{}.sh".format(self.kernel.distro_name))
     
     def setup_upstream(self, port, image, linux, mem="2G", cpu="2", key=None, gdb_port=None, mon_port=None, opts=None, timeout=None, kasan_multi_shot=0, snapshot=True):
         #self.qemu_ready_bar = r'Debian GNU\/Linux \d+ syzkaller ttyS\d+'

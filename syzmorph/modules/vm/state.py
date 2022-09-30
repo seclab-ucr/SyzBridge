@@ -13,7 +13,7 @@ class VMState:
         self._kasan_report = 0
         self._kasan_ret = 0
         self._proj_path = work_path
-        self.kernel = None
+        self.gdb_kernel = None
         self.addr_bytes = 8
         self.log_suffix = log_suffix
         self.gdb = None
@@ -34,9 +34,9 @@ class VMState:
         if self.__check_initialization():
             return
         if self.debug:
-            print("Loading kernel, this process may take a while")
-        self.kernel = Kernel(self.vmlinux, self.addr_bytes, self._proj_path, self.log_suffix, self.debug)
-        self.gdb = self.kernel.gdbhelper
+            print("Loading gdb_kernel, this process may take a while")
+        self.gdb_kernel = Kernel(self.vmlinux, self.addr_bytes, self._proj_path, self.log_suffix, self.debug)
+        self.gdb = self.gdb_kernel.gdbhelper
         self.waitfor_pwndbg(timeout=60)
 
     def gdb_connect(self, port):
@@ -55,7 +55,7 @@ class VMState:
     def set_checkpoint(self):
         if self.__check_initialization():
             return False
-        kasan_report, kasan_ret = self.kernel.getKasanReport()
+        kasan_report, kasan_ret = self.gdb_kernel.getKasanReport()
         if kasan_report == None:
             return False
         self.gdb.set_breakpoint(kasan_report)
