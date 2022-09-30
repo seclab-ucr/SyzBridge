@@ -45,7 +45,7 @@ class Launcher(Build):
             args = {'th_index':i, 'func':func, 'args':func_args, 'root':root, 'work_dir':work_dir, 'vm_tag':vm_tag + '-' + str(i), **kwargs}
             x = multiprocessing.Process(target=self._reproduce, kwargs=args, name="{}-{} trigger-{}".format(self.manager.case_hash, self.kernel.distro_name, i))
             x.start()
-            self.log("Start reproducing {}, args {}".format(vm_tag + str(i), args))
+            self.log("Start reproducing {} in process {}, args {}".format(vm_tag + '-' + str(i), x.pid, args))
             
             t = self.queue.get(block=True)
             if len(t) >= 3:
@@ -74,6 +74,7 @@ class Launcher(Build):
         return res, trigger, remain
     
     def _reproduce(self, th_index, func, args, root, work_dir, vm_tag, **kwargs):
+        self.log("New Process for reproducing {}".format(vm_tag))
         self.prepare()
         qemu = self.launch_qemu(tag=vm_tag, log_suffix=str(th_index), work_path=work_dir, **kwargs)
         self.log("Launched qemu {}".format(vm_tag))
@@ -81,7 +82,7 @@ class Launcher(Build):
         self.run_qemu(qemu, func, th_index, work_dir, root, *args)
         res = qemu.wait()
         self.log("Qemu {} exit".format(vm_tag))
-        if len(res) == 1 and qemu.qemu_fail:
+        if type(res) == bool or (len(res) == 1 and qemu.qemu_fail):
             self.case_logger.error("Error occur when reproducing {}".format(vm_tag))
             self.queue.put([[], False, True])
         else:
@@ -101,7 +102,7 @@ class Launcher(Build):
             self.gdb_port = gdb_port
         if mon_port != None:
             self.mon_port = mon_port
-        qemu = VM(linux=self.path_linux, cfg=self.kernel, hash_tag=c_hash, vmlinux=self.vmlinux, port=self.ssh_port, 
+        qemu = VM(linux=self.path_linux, kernel=self.kernel, hash_tag=c_hash, vmlinux=self.vmlinux, port=self.ssh_port, 
             image=self.image_path, log_name=log_name, log_suffix=log_suffix, mon_port=self.mon_port, gdb_port=self.gdb_port,
             key=self.ssh_key, timeout=timeout, debug=self.debug, **kwargs)
         qemu.logger.info("QEMU-{} launched.\n".format(log_suffix))
