@@ -82,6 +82,7 @@ class RawBugReproduce(AnalysisModule):
             self.info_msg("start reproducing bugs on {}".format(distro.distro_name))
             x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="{} reproduce_async-{}".format(self.case_hash, distro.distro_name))
             x.start()
+            time.sleep(1)
             if self.debug:
                 x.join()
 
@@ -97,12 +98,12 @@ class RawBugReproduce(AnalysisModule):
         res["bug_title"] = ""
         res["root"] = True
         
-        success, _ = self.reproduce(distro, func=self.capture_kasan, root=True, timeout=self.repro_timeout)
+        success, _ = self.reproduce(distro, func=self.capture_kasan, root=True, timeout=self.repro_timeout, logger=self.logger)
         if success:
             res["triggered"] = True
             res["bug_title"] = self.bug_title
             res["root"] = True
-            success, _ = self.reproduce(distro, func=self.capture_kasan, root=False, timeout=self.repro_timeout)
+            success, _ = self.reproduce(distro, func=self.capture_kasan, root=False, timeout=self.repro_timeout, logger=self.logger)
             if success:
                 res["triggered"] = True
                 res["bug_title"] = self.bug_title
@@ -113,6 +114,7 @@ class RawBugReproduce(AnalysisModule):
             return
         
         q.put([distro.distro_name, res])
+        self.logger.info("Thread for {} finished".format(distro.distro_name))
         return
 
     def reproduce(self, distro, root: bool, func, func_args=(), log_prefix= "qemu", **kwargs):

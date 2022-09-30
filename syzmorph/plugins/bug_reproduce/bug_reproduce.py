@@ -89,6 +89,7 @@ class BugReproduce(AnalysisModule):
             self.info_msg("Reproducing bugs on {}".format(distro.distro_name))
             x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="{} reproduce_async-{}".format(self.case_hash, distro.distro_name))
             x.start()
+            time.sleep(1)
             if self.debug:
                 x.join()
 
