@@ -5,6 +5,7 @@ from infra.tool_box import *
 from subprocess import Popen, PIPE, STDOUT
 from plugins import AnalysisModule
 from plugins.syzkaller_interface import SyzkallerInterface 
+from plugins.bug_reproduce import BugReproduce
 
 syz_config_template="""
 {{ 
@@ -37,7 +38,7 @@ class Fuzzing(AnalysisModule):
     REPORT_START = "======================Fuzzing Report======================"
     REPORT_END =   "==================================================================="
     REPORT_NAME = "Report_Fuzzing"
-    DEPENDENCY_PLUGINS = []
+    DEPENDENCY_PLUGINS = ['BugReproduce']
 
     def __init__(self):
         super().__init__()
@@ -74,11 +75,21 @@ class Fuzzing(AnalysisModule):
         return self._move_to_success
 
     def run(self):
+        br_results = None
         if self.prepare_custom_syzkaller() != 0:
             self.err_msg("Failed to prepare syzkaller, stop fuzzing.")
             return False
         self.find_support_syscalls()
+        if self.plugin_finished("BugReproduce"):
+            bug_reproduce = self.cfg.get_plugin(BugReproduce.NAME)
+            br_results = bug_reproduce.instance.results
+        else:
+            self.logger.info("Bug reproduce not finished, all affected distro will run fuzzing")
         for distro in self.cfg.get_distros():
+            if br_results != None:
+                if br_results[distro.distro_name]['trigger']:
+                    self.logger.info("{} triggers bugs, will be skipped".format(distro.distro_name))
+                    continue
             self.path_image = distro.distro_image
             self.port = distro.repro.ssh_port
             self.path_kernel = distro.distro_src
