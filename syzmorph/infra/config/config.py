@@ -81,9 +81,9 @@ class Config:
         return res
 
     def get_distro_by_name(self, name):
-        distro = getattr(self.kernel, name)
-        if distro.type == VMInstance.DISTROS:
-            return distro
+        for distro in self.get_all_distros():
+            if distro.distro_name == name and distro.type == VMInstance.DISTROS:
+                return distro
         return None
     
     # get_all_distros ignore is_inited() and need_repro()
