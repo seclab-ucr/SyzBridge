@@ -1,11 +1,15 @@
+from ast import Pass
 from subprocess import Popen, PIPE, STDOUT
+import threading
 import requests
 import time
 import pandas as pd
 import re, os
 from syzmorph.infra.config.config import Config
+from syzmorph.infra.config.vendor import Vendor
+from syzmorph.modules.vm import VM
 
-from syzmorph.infra.tool_box import clone_repo, init_logger, regx_get, regx_match, request_get, extract_vul_obj_offset_and_size
+from syzmorph.infra.tool_box import clone_repo, init_logger, regx_get, regx_getall, regx_match, request_get, extract_vul_obj_offset_and_size
 from bs4 import BeautifulSoup
 from bs4 import element
 from datetime import date, timedelta
@@ -19,7 +23,8 @@ class Crawler:
     def __init__(self,
                  url="https://syzkaller.appspot.com/upstream/fixed",
                  keyword=[], max_retrieve=99999, filter_by_reported="", log_path = ".", cfg=None,
-                 filter_by_closed="", filter_by_c_prog=False, filter_by_closest_version_tag=False, filter_by_kernel=[], 
+                 filter_by_closed="", filter_by_c_prog=False, filter_by_kernel=[], 
+                 check_vul_exist=False,
                  filter_by_distro_effective_cycle=False, include_high_risk=True, debug=False):
         self.url = url
         if type(keyword) == list:
@@ -31,10 +36,13 @@ class Crawler:
         self._patches = {}
         self._patch_info = {}
         self.include_high_risk = include_high_risk
+        self._log_path = log_path
+        self._debug = debug
         self.logger = init_logger(log_path + "/syzbot.log", debug = debug, propagate=True)
         self.filter_by_reported = [-1, -1]
         self.filter_by_closed = [-1, -1]
         self.filter_by_distro_effective_cycle = filter_by_distro_effective_cycle
+        self.distro_vm = {}
         if filter_by_reported != "":
             n = filter_by_reported.split('-')
             n[0] = int(n[0])
@@ -56,30 +64,31 @@ class Crawler:
                 self.filter_by_closed[0] = n[0]
                 self.filter_by_closed[1] = n[1]
         self.filter_by_c_prog = filter_by_c_prog
-        self.filter_by_fixes_tag = False
-        self.filter_by_closest_version_tag = filter_by_closest_version_tag
-        if self.filter_by_closest_version_tag or self.filter_by_distro_effective_cycle:
-            self.filter_by_fixes_tag = True
+        self.check_vul_exist = check_vul_exist
         self.filter_by_kernel = filter_by_kernel
+        self._fixes = {}
         if cfg != None:
             self.cfg: Config = cfg
         else:
             self.cfg = None
 
     def run(self):
+        self.logger.info("Wait for distro VMs are ready")
+        if not self.wait_for_distro_vm_ready():
+            return
         cases_hash, high_risk_impacts = self.gather_cases()
         for each in cases_hash:
+            self._patch_info = {'url': None, 'fixes':[]}
             if 'Patch' in each:
                 patch_url = each['Patch']
                 if patch_url in self._patches or \
                     (patch_url in high_risk_impacts and not self.include_high_risk):
                     continue
                 self._patches[patch_url] = True
-            self._patch_info = {'url': None, 'fixes':[], 'date':None}
-            if self.filter_by_fixes_tag:
-                if not self.check_excluded_distro(each['Hash'], patch_url):
-                    self.logger.debug("{} does not have a fixes tag".format(each['Hash']))
-                    continue
+                if self.check_vul_exist:
+                    if not self.check_excluded_distro(each['Hash'], patch_url):
+                        self.logger.debug("{} does not have a fixes tag".format(each['Hash']))
+                        continue
             if self.retreive_case(each['Hash']) != -1:
                 if self.filter_by_distro_effective_cycle:
                     self.cases[each['Hash']]['affect'] = self.get_affect_distro(int(each['Reported']))
@@ -91,6 +100,97 @@ class Crawler:
                     self.cases[each['Hash']]['affect'] = None
                 self.cases[each['Hash']]['title'] = each['Title']
                 self.cases[each['Hash']]['patch'] = self._patch_info
+        self.distro_vm_kill()
+        return
+    
+    def wait_for_distro_vm_ready(self):
+        for distro in self.cfg.get_all_distros():
+            if 'ubuntu' not in distro.distro_name.lower():
+                continue
+            new_image = self.create_snapshot(distro.distro_image, self._log_path, distro.distro_name)
+            vm = VM(linux=None, kernel=distro, hash_tag="syzbot {}".format(distro.distro_name), work_path=self._log_path, 
+                log_name='syzbot-{}.log'.format(distro.distro_name), logger=None,
+                port=distro.ssh_port, key=distro.ssh_key, image=new_image, mem='2G', cpu='2')
+            vm.run()
+            self.distro_vm[distro.distro_name] = vm
+        
+        for distro_name in self.distro_vm:
+            while not self.distro_vm[distro_name].qemu_ready:
+                if self.distro_vm[distro_name].instance.poll() != None:
+                    self.logger.error("VM {} exit abnormally".format(distro_name))
+                    return False
+                time.sleep(3)
+        return True
+
+    def distro_vm_kill(self):
+        for distro_name in self.distro_vm:
+            self.distro_vm[distro_name].kill()
+    
+    def create_snapshot(self, src, img, image_name):
+        dst = "{}/{}-snapshot.img".format(img, image_name)
+        self.logger.debug("Create image {} from {}".format(dst, src))
+        if os.path.isfile(dst):
+            os.remove(dst)
+        cmd = ["qemu-img", "create", "-f", "qcow2", "-b", src, dst]
+        p = Popen(cmd, stderr=STDOUT, stdout=PIPE)
+        p.wait()
+        return dst
+
+    def distro_is_vulnerable(self, distro: Vendor, fixes_commit_msg, patch_commit_msg):
+        vm = self.distro_vm[distro.distro_name]
+        os.path.basename(distro.distro_src)
+
+        # Fedora has different kernel folder name, use * to match it
+        kernel_folder = "~/{}/*kernel".format(os.path.basename(distro.distro_src))
+
+        blame_commits = self._get_commit_from_msg(distro, vm, kernel_folder, fixes_commit_msg)
+        self.logger.debug("Buggy commit blames to commits: {}".format(blame_commits))
+        for hash_val in blame_commits:
+            ret = self._commit_is_ancestor(distro, vm, kernel_folder, hash_val, 'HEAD')
+            self.logger.debug("Commit {} is ancestor of HEAD: {}".format(hash_val, ret))
+            if not ret:
+                self.logger.debug('Buggy commit does not exist in {}'.format(distro.distro_name))
+                return False
+        
+        if len(blame_commits) == 0:
+            return False
+
+        blame_commits = self._get_commit_from_msg(distro, vm, kernel_folder, patch_commit_msg)
+        self.logger.debug("Patch commit blames to commits: {}".format(blame_commits))
+        for hash_val in blame_commits:
+            ret = self._commit_is_ancestor(distro, vm, kernel_folder, hash_val, 'HEAD')
+            self.logger.debug("Commit {} is ancestor of HEAD: {}".format(hash_val, ret))
+            if ret:
+                self.logger.debug('Patch commit exists in {}'.format(distro.distro_name))
+                return False
+        
+        self.logger.debug('{} is vulnerable'.format(distro.distro_name))
+        return True
+    
+    def _commit_is_ancestor(self, distro: Vendor, vm, kernel_folder, ancestor_commit, cur_commit):
+        out = vm.command(user=distro.root_user, 
+            cmds="cd {} && git merge-base --is-ancestor {} {}; echo $?".format(kernel_folder, ancestor_commit, cur_commit), 
+            wait=True)
+        for line in out:
+            line = line.strip()
+            if line == "0":
+                return True
+        return False
+    
+    def _get_commit_from_msg(self, distro: Vendor, vm: VM, kernel_folder, msg):
+        res = []
+        out = vm.command(user=distro.root_user, 
+            cmds="cd {} && git log --pretty=format:\"%H %s\" | grep \"{}\" | awk '{{print $1}}'".format(kernel_folder, msg), 
+            wait=True)
+        for line in out:
+            line = line.strip()
+            if len(line) == 40:
+                res.append(line)
+        return res
+
+    def get_linux_commit_msg(self, commit, soup):
+        m = self.get_linux_commit_date_offline(commit, soup)
+        return m
 
     def get_patch_url(self, hash):
         url = syzbot_host_url + syzbot_bug_base_url + hash
@@ -105,7 +205,7 @@ class Crawler:
             res=None
         return res
     
-    def distro_in_effective_cycle(self, date_diff):
+    def distro_affect_by_time(self, date_diff):
         res = []
         if self.cfg == None or date_diff == None:
             return None
@@ -113,10 +213,13 @@ class Crawler:
         report_date = today-timedelta(days=date_diff)
         self.logger.debug("bug was reported {} days ago ({})".format(date_diff, report_date))
         for distro in self.cfg.get_all_distros():
+            """
             if distro.effective_cycle_start != "":
                 effective_start_date_diff = today - pd.to_datetime(distro.effective_cycle_start).date()
                 if date_diff > effective_start_date_diff.days:
                     continue
+            """
+            # As long as distro is still in support, we should pick them.
             if distro.effective_cycle_end != "":
                 effective_end_date_diff = today - pd.to_datetime(distro.effective_cycle_end).date()
                 if date_diff <= effective_end_date_diff.days:
@@ -125,11 +228,11 @@ class Crawler:
         return res
 
     def get_affect_distro(self, reported_date: int):
-        res = self.distro_in_effective_cycle(reported_date)
+        res = self.distro_affect_by_time(reported_date)
         self.logger.debug("Bug might affects {}".format(res))
         if res == None:
             return None
-        if self.filter_by_fixes_tag:
+        if self.check_vul_exist:
             for fix in self._patch_info['fixes']:
                 self.logger.debug("Exclude {}".format(fix))
                 for each in fix['exclude']:
@@ -143,54 +246,67 @@ class Crawler:
         soup = BeautifulSoup(req.text, "html.parser")
         self._patch_info['url'] = patch_url
         patch_hash = patch_url.split("id=")[1]
-        patch_date = self.get_linux_commit_date_offline(patch_hash, soup)
-        if patch_date == None:
-            self._patch_info['date'] = None
-        else:
-            self._patch_info['date'] = patch_date.strftime("%Y-%m-%d")
         try:
             msg = soup.find('div', {'class': 'commit-msg'}).text
             self._patch_info['fixes'] = []
             for line in msg.split('\n'):
                 if line.startswith('Fixes:'):
                     fix_hash = regx_get(r'Fixes: ([a-z0-9]+)', line, 0)
-                    commit_date = self.get_linux_commit_date_offline(fix_hash, soup)
-                    if commit_date == None:
-                        commit_date = self.get_linux_commit_date_online(fix_hash)
-                        if commit_date == None:
-                            continue
-                    fixes = {'hash': fix_hash, 'date': commit_date.strftime("%Y-%m-%d"), 'exclude': []}
-                    self.logger.debug("Fix tag {}: {}".format(fix_hash, commit_date))
+                    self._fixes = {'hash': fix_hash, 'exclude': []}
+                    self.logger.debug("Fix tag {}".format(fix_hash))
 
                     # We want to save all fixes tag info
                     # don't return too early
                     if self.cfg == None:
                         continue
+
+                    threads = []
+                    for distro in self.cfg.get_all_distros():
+                        t = threading.Thread(target=self._check_distro_vulnerable, args=(distro, fix_hash, patch_hash, soup))
+                        t.start()
+                        threads.append(t)
                     
-                    if self.filter_by_distro_effective_cycle:
-                        today = date.today()
-                        for distro in self.cfg.get_all_distros():
-                            if distro.effective_cycle_start != "":
-                                effective_start_date_diff = today - pd.to_datetime(distro.effective_cycle_start).date()
-                                commit_date_diff = today - commit_date.date()
-                                if commit_date_diff.days < effective_start_date_diff.days:
-                                    fixes['exclude'].append(distro.distro_name)
-                    # Even we filter by upstream commit date, can't garantee this commit
-                    # was ported to downstream in the end. Due to lack of git info(debian),
-                    # I choose to use a proximate kernel version to match downstream kernel.
-                    if self.filter_by_closest_version_tag:
-                        base_version = self.closest_tag(fix_hash, soup)
-                        self.logger.debug("Fixes tag closest version: {}".format(base_version))
-                        if base_version == None:
-                            continue
-                        for distro in self.cfg.get_all_distros():
-                            if not self.is_newer_version(base_version, distro.distro_version):
-                                fixes['exclude'].append(distro.distro_name)
-                    self._patch_info['fixes'].append(fixes)
+                    for t in threads:
+                        while t.is_alive():
+                            time.sleep(3)
+                    self._patch_info['fixes'].append(self._fixes)
 
         except Exception as e:
             self.logger.exception("Error parsing fix tag for {}: {}".format(hash_val, e))
         return self._patch_info['fixes'] != []
+
+    def _check_distro_vulnerable(self, distro: Vendor, fix_hash, patch_hash, soup):
+        vul_version = self.closest_tag(fix_hash, soup)
+        patched_version = self.closest_tag(patch_hash, soup)
+        fixes_commit_msg = self.get_linux_commit_msg(fix_hash, soup)
+        patch_commit_msg = self.get_linux_commit_msg(patch_hash, soup)
+        if fixes_commit_msg == None:
+            self.logger.error("Can't get commit msg for {}. ".format(fix_hash))
+            return
+        if patch_commit_msg == None:
+            self.logger.error("Can't get commit msg for {}. ".format(patch_hash))
+            return
+        if vul_version == None:
+            self.logger.error("Can't get vulnerable version for {}. ".format(fix_hash))
+            return
+        if patched_version == None:
+            self.logger.error("Can't get patched version for {}. ".format(patch_hash))
+            return
+        self.logger.debug("Check distro {}".format(distro.distro_name))
+        if 'ubuntu' in distro.distro_name.lower():
+            if not self.distro_is_vulnerable(distro, fixes_commit_msg, patch_commit_msg):
+                self.logger.debug("{} is not vulnerable to this bug".format(distro.distro_name))
+                self._fixes['exclude'].append(distro.distro_name)
+        if 'fedora' in distro.distro_name.lower():
+            self.logger.debug("Compare buggy version {} and distro version {}".format(vul_version, distro.distro_version))
+            if not self.is_newer_version(vul_version, distro.distro_version):
+                self.logger.debug("{} is not vulnerable to this bug".format(distro.distro_name))
+                self._fixes['exclude'].append(distro.distro_name)
+            self.logger.debug("Compare patched version {} and distro version {}".format(patched_version, distro.distro_version))
+            if self.is_newer_version(patched_version, distro.distro_version):
+                if distro.distro_name not in self._fixes['exclude']:
+                    self.logger.debug("{} is not vulnerable to this bug".format(distro.distro_name))
+                    self._fixes['exclude'].append(distro.distro_name)
 
     def closest_tag(self, patch_hash, soup: BeautifulSoup):
         regx_kernel_version = r'^v(\d+\.\d+)'
@@ -228,18 +344,18 @@ class Crawler:
         repo_path = self._clone_target_repo(soup)
         if repo_path == None:
             return None
-        return self.get_linux_commit_date_in_repo(repo_path, hash_val)
+        return self.get_linux_commit_info_in_repo(repo_path, hash_val)
     
-    def get_linux_commit_date_in_repo(self, repo_path, hash_val):
-        p = Popen(["git", "log", hash_val, "--pretty=format:\"%H %ad\"", "--date=short", "-n", "1"],
+    def get_linux_commit_info_in_repo(self, repo_path, hash_val):
+        p = Popen(["git", "log", hash_val, "--pretty=format:\"%H {->%s<-} %ad\"", "--date=short", "-n", "1"],
             cwd=repo_path,
             stdout=PIPE, 
             stderr=STDOUT)
         with p.stdout as pipe:
             for line in iter(pipe.readline, b''):
                 line = line.strip().decode('utf-8')
-                time_stamp = regx_get(r'[a-z0-9]{40} (\d{4}-\d{2}-\d{2})', line, 0)
-                return pd.to_datetime(time_stamp)
+                m = regx_get(r'[a-z0-9]{40} {->(.*)<-} (\d{4}-\d{2}-\d{2})', line, 0)
+                return m
         return None
 
     def get_linux_commit_date_online(self, hash_val):
@@ -269,12 +385,15 @@ class Crawler:
         return None
 
     def run_one_case(self, hash_val):
+        self.logger.info("Wait for distro VMs are ready")
+        if not self.wait_for_distro_vm_ready():
+            return
         self.logger.info("retreive one case: %s",hash_val)
         patch_url = self.get_patch_url(hash_val)
         if self.retreive_case(hash_val) == -1:
             return
-        self._patch_info = {'url': None, 'fixes':[], 'date':None}
-        if self.filter_by_fixes_tag:
+        self._patch_info = {'url': None, 'fixes':[]}
+        if self.check_vul_exist:
             if not self.check_excluded_distro(hash_val, patch_url):
                 self.logger.error("{} does not have a fixes tag".format(hash_val))
                 return
@@ -289,6 +408,7 @@ class Crawler:
             self.cases[hash_val]['affect'] = None
         self.cases[hash_val]['title'] = self.get_title_of_case(hash_val)
         self.cases[hash_val]['patch'] = self._patch_info
+        self.distro_vm_kill()
         return self.cases[hash_val]
     
     def case_first_crash(self, hash_val):
