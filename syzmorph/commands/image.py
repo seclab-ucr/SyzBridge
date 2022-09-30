@@ -6,9 +6,24 @@ from secrets import choice
 from commands import Command
 from modules.vm import VM
 from infra.config.vendor import Vendor
+from infra.config.config import Config
 from subprocess import call
-from infra.tool_box import STREAM_HANDLER, regx_match, regx_get, init_logger
+from infra.tool_box import STREAM_HANDLER, FILE_HANDLER, regx_match, regx_get, init_logger
 
+from rich.console import Group
+from rich.panel import Panel
+from rich.live import Live
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+)
+
+image_inspection_step_actions = ["Checking kernel version", "Checking KASAN", "Checking trace-cmd"]
+run_script_step_actions = ["Uploading script", "Running script"]
+qemu_boot_progress_percentage = 40
 class ImageCommand(Command):
     FEATURE_KASAN = 1 << 0
     FEATURE_UBSAN = 1 << 1
@@ -27,10 +42,12 @@ class ImageCommand(Command):
         self.version_since = None
         self.version_until = None
         self.get = None
-        self.cfg = None
+        self.kernel = None
         self.logger = None
         self.kernel_version = None
         self.kernel_package_version = None
+        self._step_actions = ["Booting"]
+        self._each_step_progress_percentage = (100 - qemu_boot_progress_percentage)
         self.enable_feature = 0
 
     def add_arguments(self, parser):
@@ -51,6 +68,14 @@ class ImageCommand(Command):
                             help='ssh key for distro image')
         
         # optional options
+        parser.add_argument('--config', nargs='?', action='store',
+                            help='Check kernel image in config file')
+        parser.add_argument('--check-distro', nargs='?', action='store',
+                            help='Check a specific distro image in config file.\n'
+                                'You can also set --check-distro to \"all\"')
+        parser.add_argument('--run-script', nargs='?', action='store',
+                            help='Run script on one or more distros.\n'
+                                'If no --check-distro is specified, run script on all distros in config file.')
         parser.add_argument('--write-config', nargs='?', action='store',
                             help='Write complete image info to config file')
         parser.add_argument('--enable-kasan', action='store_true',
@@ -79,7 +104,11 @@ class ImageCommand(Command):
 
     def run(self, args):
         self.args = args
-        self.check_options()
+        if not self.check_options():
+            return
+        if self.args.check_distro != None or self.args.run_script != None:
+            self.inspect_kernels()
+            return
         self.logger.info("Build image for {}".format(self.distro))
         self.build_vendor_cfg()
         if not self.build_distro_image():
@@ -104,7 +133,7 @@ class ImageCommand(Command):
         print("[ssh_key]: {}".format(self.ssh_key))
         print("[ssh_port]: {}".format(self.ssh_port))
         print("[root_user]: {}".format(self.ssh_user))
-        self.cfg = Vendor(cfg)
+        self.kernel = Vendor(cfg)
 
     def write2config(self):
         config = self.args.write_config
@@ -117,21 +146,29 @@ class ImageCommand(Command):
         if 'kernel' not in cfg:
             cfg['kernel'] = {}
         distro_cfg = {}
-        distro_cfg['distro_image'] = self.cfg.distro_image
+        distro_cfg['distro_image'] = self.kernel.distro_image
         distro_cfg['distro_src'] = os.path.join(self.build_dir, "ubuntu-{}".format(self.code_name))
-        distro_cfg['distro_name'] = self.cfg.distro_name
+        distro_cfg['distro_name'] = self.kernel.distro_name
         distro_cfg['distro_code_name'] = self.code_name
         distro_cfg['distro_version'] = self.kernel_package_version
-        distro_cfg['ssh_key'] = self.cfg.ssh_key
-        distro_cfg['ssh_port'] = self.cfg.ssh_port
-        distro_cfg['type'] = self.cfg.type
-        distro_cfg['root_user'] = self.cfg.root_user
+        distro_cfg['ssh_key'] = self.kernel.ssh_key
+        distro_cfg['ssh_port'] = self.kernel.ssh_port
+        distro_cfg['type'] = self.kernel.type
+        distro_cfg['root_user'] = self.kernel.root_user
         distro_cfg['normal_user'] = 'syzmorph'
         cfg['kernel']["{}-{}".format(self.distro, self.kernel_package_version)] = distro_cfg
 
         json.dump(cfg, open(config, 'w'), indent=4)
 
     def check_options(self):
+        if self.args.check_distro != None and self.args.config == None:
+            print("--check-distro must come with --config")
+            return False
+        if self.args.run_script != None and self.args.config == None:
+            print("--run-script must come with --config")
+            return False
+        if self.args.config != None:
+            return True
         self.ssh_port = int(self.args.ssh_port[0])
         self.ssh_key = self.args.ssh_key[0]
         self.build_dir = self.args.build_dir[0]
@@ -149,6 +186,7 @@ class ImageCommand(Command):
         if self.args.enable_fault_injection:
             self.enable_feature |= self.FEATURE_FAULT_INJECTION
         self.logger = init_logger(logger_id=os.path.join(self.build_dir, "build.log") ,debug=True, propagate=False, handler_type=STREAM_HANDLER)
+        return True
     
     def get_mem_free(self):
         with open('/proc/meminfo') as f:
@@ -170,14 +208,14 @@ class ImageCommand(Command):
         else:
             if mem / 2 < 2:
                 mem = str(2)+"G"
-            elif mem / 2 > 8:
+            elif mem / 2 >= 8:
                 mem = str(int(mem / 2))+"G"
         
         cpu = self.get_cpu_count()
         if cpu > 1:
             cpu = str(int(cpu / 2))
 
-        vm = VM(linux=None, cfg=self.cfg, hash_tag="building {}".format(self.distro), work_path=self.build_dir, 
+        vm = VM(linux=None, kernel=self.kernel, hash_tag="building {}".format(self.distro), work_path=self.build_dir, 
             log_name='vm.log', logger=self.logger, debug=True,
             port=self.ssh_port, key=self.ssh_key, image=self.image, mem=mem, cpu=cpu)
 
@@ -221,6 +259,200 @@ class ImageCommand(Command):
             return False
 
         return True
+    
+    def inspect_kernels(self):
+        if self.args.run_script != None:
+            self._step_actions.extend(run_script_step_actions)
+        self._step_actions.extend(image_inspection_step_actions)
+        self._step_actions.append("Shutdown")
+        self._each_step_progress_percentage = (100 - qemu_boot_progress_percentage) / (len(self._step_actions) -1 )
+        
+        self.cfg = Config()
+        self.cfg.load_from_file(self.args.config)
+        self.logger = init_logger(logger_id=os.path.join(os.getcwd(), "image_inspection.log") ,debug=False, propagate=False, handler_type=FILE_HANDLER)
+        
+        if self.args.check_distro == None or self.args.check_distro == "all":
+            all_distros = self.cfg.get_all_distros()
+        else:
+            all_distros = [self.cfg.get_distro_by_name(self.args.check_distro)]
+        n_distro = len(all_distros)
+        mem = self.get_mem_free()
+        if mem == 0:
+            self.logger.error("Building image requires at least 2GB of RAM")
+            exit(0)
+        else:
+            if mem / n_distro < 2:
+                mem = "1G"
+            elif mem / n_distro >= 2:
+                mem = "2G"
+        
+        cpu = self.get_cpu_count()
+        if cpu > n_distro*2:
+            cpu = "2"
+        else:
+            cpu = "1"
+            
+        self._init_progress_bar()
+        
+        overall_task_id = self.overall_progress.add_task("", total=n_distro)
+        
+        with Live(self.progress_group):
+            idx = 0
+            for distro in all_distros:
+                work_dir = os.path.dirname(distro.distro_image)
+                vm = VM(linux=None, kernel=distro, hash_tag="inspecting {}".format(distro.distro_name), work_path=work_dir, 
+                    log_name='vm_inspection.log', logger=self.logger, debug=False,
+                    port=distro.ssh_port, key=distro.ssh_key, image=distro.distro_image, mem=mem, cpu=cpu)
+                
+                top_descr = "[bold #AAAAAA](%d out of %d distros inspected)" % (idx, n_distro)
+                self.overall_progress.update(overall_task_id, description=top_descr)
+
+                # add progress bar for steps of this app, and run the steps
+                current_task_id = self.current_app_progress.add_task("Insepcting distro {}".format(distro.distro_name))
+                app_steps_task_id = self.app_steps_progress.add_task(
+                    "", total=100, name=distro.distro_name
+                )
+                step_task_id = self.step_progress.add_task("", action=self._step_actions[0], name=distro.distro_name)
+                vm.run(alternative_func=self._do_inspection, args=(app_steps_task_id, self.app_steps_progress, step_task_id))
+                self._progress_while_booting(vm, app_steps_task_id, self.app_steps_progress)
+                
+                res = vm.wait()
+                step_task_id = res[-1]
+                self._step_progress_finish(step_task_id)
+                res = res[:len(res)-1]
+                self.app_steps_progress.update(app_steps_task_id, completed=100)
+                while vm.instance.poll() == None:
+                    time.sleep(1)
+                vm.kill()
+                # stop and hide steps progress bar for this specific app
+                self.app_steps_progress.update(app_steps_task_id, visible=False)
+                self.current_app_progress.stop_task(current_task_id)
+                if res == []:
+                    self.current_app_progress.update(
+                        current_task_id, description="[bold green]{} PASS!".format(distro.distro_name)
+                    )
+                else:
+                    self.current_app_progress.update(
+                        current_task_id, description="[bold red]{} {}".format(distro.distro_name, " | ".join(res))
+                    )
+
+                # increase overall progress now this task is done
+                self.overall_progress.update(overall_task_id, advance=1)
+                idx += 1
+
+            # final update for message on overall progress bar
+            self.overall_progress.update(
+                overall_task_id, description="[bold green] {} distros inspected!".format(n_distro)
+            )
+    
+    def _step_progress_finish(self, step_task_id, idx=None):
+        self.step_progress.update(step_task_id, advance=1)
+        self.step_progress.stop_task(step_task_id)
+        self.step_progress.update(step_task_id, visible=False)
+        if idx != None:
+            return idx + 1
+        return None
+                
+    def _progress_while_booting(self, vm, job, job_progress):
+        while not vm.qemu_ready:
+            completed = len(vm.output)/10
+            if completed > qemu_boot_progress_percentage:
+                completed = qemu_boot_progress_percentage
+            job_progress.update(job, completed=int(completed))
+            time.sleep(1)
+        return
+            
+    def _init_progress_bar(self):
+        # progress bar for current app showing only elapsed time,
+        # which will stay visible when app is installed
+        self.current_app_progress = Progress(
+            TimeElapsedColumn(),
+            TextColumn("{task.description}"),
+        )
+
+        # progress bars for single app steps (will be hidden when step is done)
+        self.step_progress = Progress(
+            TextColumn("  "),
+            TimeElapsedColumn(),
+            TextColumn("[bold purple]{task.fields[action]}"),
+            SpinnerColumn("simpleDots"),
+        )
+        # progress bar for current app (progress in steps)
+        self.app_steps_progress = Progress(
+            TextColumn(
+                "[bold blue]Progress for insepcting {task.fields[name]}: {task.percentage:.0f}%"
+            ),
+            BarColumn()
+        )
+        # overall progress bar
+        self.overall_progress = Progress(
+            TimeElapsedColumn(), BarColumn(), TextColumn("{task.description}")
+        )
+        
+        self.progress_group = Group(
+            Panel(Group(self.current_app_progress, self.step_progress, self.app_steps_progress)),
+            self.overall_progress,
+        )
+        
+        return
+            
+    def _do_inspection(self, qemu: VM, job, job_progress: Progress, last_step_task_id):
+        res = []
+        distro = qemu.kernel
+        job_progress.update(job, completed=qemu_boot_progress_percentage)
+        idx_step = self._step_progress_finish(last_step_task_id, 0)
+        
+        if self.args.run_script != None:
+            step_task_id = self.step_progress.add_task("", action=self._step_actions[idx_step], name=distro.distro_name)
+            ret = qemu.upload(user=self.ssh_user, src=[self.args.run_script], dst='/tmp/myscript.sh', wait=True)
+            if ret == None or ret != 0:
+                qemu.logger.error("Failed to upload {}".format(self.args.run_script))
+                return False
+            job_progress.update(job, advance=self._each_step_progress_percentage)
+            idx_step = self._step_progress_finish(step_task_id, idx_step)
+            
+            step_task_id = self.step_progress.add_task("", action=self._step_actions[idx_step], name=distro.distro_name)
+            out = qemu.command(user=self.ssh_user, cmds="chmod +x /tmp/myscript.sh && /tmp/myscript.sh", wait=True)
+            job_progress.update(job, advance=self._each_step_progress_percentage)
+            idx_step = self._step_progress_finish(step_task_id, idx_step)
+        
+        step_task_id = self.step_progress.add_task("", action=self._step_actions[idx_step], name=distro.distro_name)
+        out = qemu.command(user=self.ssh_user, cmds="uname -r", wait=True)
+        
+        pass_version_check = False
+        if regx_match(r'^(\d+\.\d+\.\d+-\d+)', out[1]):
+            pass_version_check = True
+        if not pass_version_check:
+            res.append("Kernel Version Check Failed, {} != {}".format(out[1], distro.distro_version))
+        
+        job_progress.update(job, advance=self._each_step_progress_percentage)
+        idx_step = self._step_progress_finish(step_task_id, idx_step)
+        
+        step_task_id = self.step_progress.add_task("", action=self._step_actions[idx_step], name=distro.distro_name)
+        pass_kasan_check = False
+        if self._kernel_config_pre_check(qemu, 'CONFIG_KASAN=y'):
+            pass_kasan_check = True
+        if not pass_kasan_check:
+            res.append("KASAN Check Failed")
+        
+        job_progress.update(job, advance=self._each_step_progress_percentage)
+        idx_step = self._step_progress_finish(step_task_id, idx_step)
+        
+        step_task_id = self.step_progress.add_task("", action=self._step_actions[idx_step], name=distro.distro_name)
+        pass_trace_cmd_check = True
+        out = qemu.command(user=self.ssh_user, cmds="trace-cmd", wait=True)
+        for line in out:
+            if "command not found" in line:
+                pass_trace_cmd_check = False
+        if not pass_trace_cmd_check:
+            res.append("trace-cmd does not installed")
+        job_progress.update(job, advance=self._each_step_progress_percentage)
+        idx_step = self._step_progress_finish(step_task_id, idx_step)
+        
+        step_task_id = self.step_progress.add_task("", action=self._step_actions[idx_step], name=distro.distro_name)
+        qemu.command(user=self.ssh_user, cmds="shutdown -h now", wait=True)
+        res.append(step_task_id)
+        return res
     
     def _check_kernel_version(self, qemu: VM):
         out = qemu.command(user=self.ssh_user, cmds="uname -r", wait=True)
