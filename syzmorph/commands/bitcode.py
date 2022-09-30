@@ -118,6 +118,7 @@ class BitcodeCommand(Command):
             if os.path.exists(os.path.join(self.source_path,'one.bc')):
                 os.remove(os.path.join(self.source_path,'one.bc'))
             link_cmd = '{}/bin/llvm-link -o one.bc `find ./ -name "*.bc" ! -name "timeconst.bc" ! -name "*.mod.bc"`'.format(self.llvm_build_path)
+            print(link_cmd)
             p = Popen(['/bin/bash','-c', link_cmd], stdout=PIPE, stderr=STDOUT, cwd=base)
             with p.stdout:
                 self._log_subprocess_output(p.stdout)
