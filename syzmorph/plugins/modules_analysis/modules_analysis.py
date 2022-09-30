@@ -382,7 +382,7 @@ class ModulesAnalysis(AnalysisModule):
         vmlinux = distro.repro.vmlinux
         image = distro.repro.image_path
         key = distro.repro.ssh_key
-        vm = VM(linux=distro.distro_src, cfg=distro, vmlinux=vmlinux, key=key,
+        vm = VM(linux=distro.distro_src, kernel=distro, vmlinux=vmlinux, key=key,
             port=random.randint(1024, 65535), image=image, hash_tag=self.case_hash)
         vm.gdb_attach_vmlinux()
         return vm
