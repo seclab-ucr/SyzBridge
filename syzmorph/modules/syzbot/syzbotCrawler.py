@@ -9,7 +9,7 @@ from syzmorph.infra.config.config import Config
 from syzmorph.infra.config.vendor import Vendor
 from syzmorph.modules.vm import VM
 
-from syzmorph.infra.tool_box import clone_repo, init_logger, regx_get, regx_getall, regx_match, request_get, extract_vul_obj_offset_and_size
+from syzmorph.infra.tool_box import *
 from bs4 import BeautifulSoup
 from bs4 import element
 from datetime import date, timedelta
@@ -71,6 +71,7 @@ class Crawler:
             self.cfg: Config = cfg
         else:
             self.cfg = None
+        self.thread_lock = None
 
     def run(self):
         self.logger.info("Wait for distro VMs are ready")
@@ -136,7 +137,7 @@ class Crawler:
         p.wait()
         return dst
 
-    def distro_is_vulnerable(self, distro: Vendor, fixes_commit_msg, patch_commit_msg):
+    def ubuntu_is_vulnerable(self, distro: Vendor, fixes_commit_msg, patch_commit_msg):
         vm = self.distro_vm[distro.distro_name]
         os.path.basename(distro.distro_src)
 
@@ -165,6 +166,62 @@ class Crawler:
                 return False
         
         self.logger.debug('{} is vulnerable'.format(distro.distro_name))
+        return True
+
+    def fedora_is_vulnerable(self, distro: Vendor, vul_version, patched_version):
+        self.logger.debug("Compare buggy version {} and distro version {}".format(vul_version, distro.distro_version))
+        if not self.is_newer_version(vul_version, distro.distro_version):
+            return False
+        self.logger.debug("Compare patched version {} and distro version {}".format(patched_version, distro.distro_version))
+        if self.is_newer_version(patched_version, distro.distro_version):
+            if distro.distro_name not in self._fixes['exclude']:
+                return False
+        return True
+
+    def debian_is_vulnerable(self, distro: Vendor, fixes_hash, patch_hash):
+        repo_path = os.getcwd()+"/tools/linux-stable-0"
+        cur_commit = None
+        if not os.path.exists(repo_path):
+            ret = clone_repo("https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git", repo_path)
+            if ret != 0:
+                self.logger.error("Fail to clone kernel repo stable")
+                return None
+        
+        in_branch = False
+        major_version = regx_get(r'^(\d+\.\d+)', distro.distro_version, 0)
+        out = local_command(command="git checkout origin/linux-{}.y".format(major_version), cwd=repo_path, shell=True, redir_err=False)
+        for line in out:
+            if regx_match(r'HEAD is now at [a-z0-9]+ Linux {}\.\d+'.format(major_version), line):
+                in_branch = True
+                break
+        if not in_branch:
+            self.logger.error("Fail to checkout branch linux-{}.y".format(major_version))
+            return False
+        
+        out = local_command(command="git log --oneline --grep \"Linux {}\" -1 | awk '{{print $1}}'".format(distro.distro_version),
+                            cwd=repo_path, shell=True)
+        for line in out:
+            line = line.strip()
+            if line != "":
+                cur_commit = line
+        if cur_commit == None:
+            self.logger.error("Fail to get current commit for {}".format(distro.distro_version))
+            return False
+
+        out = local_command(command="git merge-base --is-ancestor {} {}; echo $?".format(fixes_hash, cur_commit), 
+                      cwd=repo_path, shell=True)
+        for line in out:
+            line = line.strip()
+            if line == "1":
+                return False
+        
+        out = local_command(command="git merge-base --is-ancestor {} {}; echo $?".format(patch_hash, cur_commit), 
+                      cwd=repo_path, shell=True)
+        for line in out:
+            line = line.strip()
+            if line == "0":
+                return False
+        
         return True
     
     def _commit_is_ancestor(self, distro: Vendor, vm, kernel_folder, ancestor_commit, cur_commit):
@@ -246,6 +303,7 @@ class Crawler:
         soup = BeautifulSoup(req.text, "html.parser")
         self._patch_info['url'] = patch_url
         patch_hash = patch_url.split("id=")[1]
+        self.thread_lock = threading.Lock()
         try:
             msg = soup.find('div', {'class': 'commit-msg'}).text
             self._patch_info['fixes'] = []
@@ -294,19 +352,21 @@ class Crawler:
             return
         self.logger.debug("Check distro {}".format(distro.distro_name))
         if 'ubuntu' in distro.distro_name.lower():
-            if not self.distro_is_vulnerable(distro, fixes_commit_msg, patch_commit_msg):
+            if not self.ubuntu_is_vulnerable(distro, fixes_commit_msg, patch_commit_msg):
                 self.logger.debug("{} is not vulnerable to this bug".format(distro.distro_name))
                 self._fixes['exclude'].append(distro.distro_name)
         if 'fedora' in distro.distro_name.lower():
-            self.logger.debug("Compare buggy version {} and distro version {}".format(vul_version, distro.distro_version))
-            if not self.is_newer_version(vul_version, distro.distro_version):
+            if not self.fedora_is_vulnerable(distro, vul_version, patched_version):
                 self.logger.debug("{} is not vulnerable to this bug".format(distro.distro_name))
                 self._fixes['exclude'].append(distro.distro_name)
-            self.logger.debug("Compare patched version {} and distro version {}".format(patched_version, distro.distro_version))
-            if self.is_newer_version(patched_version, distro.distro_version):
-                if distro.distro_name not in self._fixes['exclude']:
-                    self.logger.debug("{} is not vulnerable to this bug".format(distro.distro_name))
-                    self._fixes['exclude'].append(distro.distro_name)
+        if 'debian' in distro.distro_name.lower():
+            # Debian kernel check local stable linux repo
+            # Use a lock to prevent operating on the same repo at the same time
+            self.thread_lock.acquire()
+            if not self.debian_is_vulnerable(distro, fix_hash, patch_hash):
+                self.logger.debug("{} is not vulnerable to this bug".format(distro.distro_name))
+                self._fixes['exclude'].append(distro.distro_name)
+            self.thread_lock.release()
 
     def closest_tag(self, patch_hash, soup: BeautifulSoup):
         regx_kernel_version = r'^v(\d+\.\d+)'
