@@ -173,6 +173,7 @@ class CapabilityCheck(AnalysisModule):
             poc_func = r"^(static )?void loop\(.*\)\n"
         if text.find("void execute_one") != -1:
             non_thread_func = r"^(static )?void loop\(.*\)\n"
+            poc_func = r"^(static )?void loop\(.*\)\n"
         if text.find("void execute_call") != -1:
             poc_func = r"^(static )?void execute_call\(.*\)\n"
 

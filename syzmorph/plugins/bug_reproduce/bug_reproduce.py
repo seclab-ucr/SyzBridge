@@ -1,5 +1,5 @@
 from audioop import reverse
-import queue
+import queue, multiprocessing
 import re, os, time, shutil, threading
 
 from plugins import AnalysisModule
@@ -10,9 +10,6 @@ from infra.config.vendor import Vendor
 from subprocess import Popen, STDOUT, PIPE, call
 from plugins.modules_analysis import ModulesAnalysis
 from .error import *
-
-BUG_REPRODUCE_TIMEOUT = 5*60
-MAX_BUG_REPRODUCE_TIMEOUT = 4*60*60
 
 class BugReproduce(AnalysisModule):
     NAME = "BugReproduce"
@@ -30,7 +27,7 @@ class BugReproduce(AnalysisModule):
         self.root_user = None
         self.normal_user = None
         self.distro_lock = threading.Lock()
-        self.repro_timeout = BUG_REPRODUCE_TIMEOUT
+        self.repro_timeout = None
         self._skip_regular_reproduce = False
         
     def prepare(self):
@@ -128,7 +125,7 @@ class BugReproduce(AnalysisModule):
         self.info_msg("{} does not trigger any bugs, try to enable missing modules".format(distro.distro_name))
         m = self.get_missing_modules(distro.distro_name)
         missing_modules = [e['name'] for e in m if e['type'] != 0 ]
-        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, [], ), attempt=1, root=True, log_prefix='missing-modules', timeout=MAX_BUG_REPRODUCE_TIMEOUT)
+        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, [], ), attempt=1, root=True, log_prefix='missing-modules', timeout=len(tested_modules) * self.repro_timeout + 300)
         if success:
             self.results[distro.distro_name]['trigger'] = True
             tested_modules = t[0]
@@ -178,7 +175,7 @@ class BugReproduce(AnalysisModule):
     def minimize_modules(self, distro, tested_modules: list, essential_modules: list):
         tested_modules = tested_modules[::-1][1:]
         self.info_msg("{} is minimizing modules list {}, current essential list {}".format(distro.distro_name, tested_modules, essential_modules))
-        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(tested_modules, essential_modules), root=True, attempt=1, log_prefix='minimize', timeout=MAX_BUG_REPRODUCE_TIMEOUT)
+        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(tested_modules, essential_modules), root=True, attempt=1, log_prefix='minimize', timeout=len(tested_modules) * self.repro_timeout + 300)
         if success:
             tested_modules = t[0]
             if tested_modules != []:
@@ -200,11 +197,14 @@ class BugReproduce(AnalysisModule):
             log_name = "{}-{}-root".format(log_prefix, distro.distro_name)
         else:
             log_name = "{}-{}-normal".format(log_prefix, distro.distro_name)
-        func_args += (poc_feature,)
+        result_queue = multiprocessing.Queue()
+        func_args += (poc_feature, result_queue)
         distro.repro.init_logger(self.logger)
         self.root_user = distro.repro.root_user
         self.normal_user = distro.repro.normal_user
         report, triggered, t = distro.repro.reproduce(func=func, func_args=func_args, root=root, work_dir=self.path_case_plugin, vm_tag=distro.distro_name, attempt=attempt, c_hash=self.case_hash, log_name=log_name, **kwargs)
+        if not result_queue.empty():
+            self.results = result_queue.get()
         if triggered:
             title = self._BugChecker(report)
             self.bug_title = title
@@ -360,7 +360,7 @@ class BugReproduce(AnalysisModule):
             # Will solve this problem if this race happens in real world
             q.put([res, trigger_hunted_bug])
 
-    def tweak_modules(self, qemu: VMInstance, th_index, work_dir, root, missing_modules: list, essential_modules: list, poc_feature: int):
+    def tweak_modules(self, qemu: VMInstance, th_index, work_dir, root, missing_modules: list, essential_modules: list, poc_feature: int, result_queue: queue.Queue):
         threading.Thread(target=self._update_qemu_timer_status, args=(th_index, qemu), name="update_qemu_timer_status").start()
         
         tested_modules = []
@@ -380,10 +380,12 @@ class BugReproduce(AnalysisModule):
             res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q)
             if trigger:
                 self.results[vm_tag]["repeat"] = False
+                result_queue.put(self.results)
                 return [res, trigger, qemu.qemu_fail, tested_modules]
             res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q, repeat=True)
             if trigger:
                 self.results[vm_tag]["repeat"] = True
+                result_queue.put(self.results)
                 return [res, trigger, qemu.qemu_fail, tested_modules]
         
         for module in missing_modules:
@@ -397,14 +399,17 @@ class BugReproduce(AnalysisModule):
             res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q)
             if trigger:
                 self.results[vm_tag]["repeat"] = False
+                result_queue.put(self.results)
                 return [res, trigger, qemu.qemu_fail, tested_modules]
             res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q, repeat=True)
             if trigger:
                 self.results[vm_tag]["repeat"] = True
+                result_queue.put(self.results)
                 return [res, trigger, qemu.qemu_fail, tested_modules]
+        result_queue.put(self.results)
         return [[], False, False, []]
     
-    def capture_kasan(self, qemu, th_index, work_dir, root, poc_feature):
+    def capture_kasan(self, qemu, th_index, work_dir, root, poc_feature, result_queue: queue.Queue):
         if root:
             self.set_stage_text("\[root] Reproducing on {}".format(qemu.tag))
         else:
@@ -420,10 +425,12 @@ class BugReproduce(AnalysisModule):
         res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q)
         if trigger:
             self.results[vm_tag]["repeat"] = False
+            result_queue.put(self.results)
             return [res, trigger, qemu.qemu_fail]
         res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q, repeat=True)
         if trigger:
             self.results[vm_tag]["repeat"] = True
+            result_queue.put(self.results)
         return [res, trigger, qemu.qemu_fail]
 
     def set_history_status(self):
@@ -488,7 +495,7 @@ class BugReproduce(AnalysisModule):
                 stderr=STDOUT,
                 stdout=PIPE)
             with p.stdout:
-                log_anything(p.stdout, self.logger, self.debug)
+                log_anything(p.stdout, qemu.logger, self.debug)
             # It looks like scp returned without waiting for all file finishing uploading.
             # Sleeping for 1 second to ensure everything is ready in vm
             time.sleep(1)
@@ -497,10 +504,10 @@ class BugReproduce(AnalysisModule):
         qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user=self.root_user, wait=True)
         self._check_poc_feature(poc_feature, qemu, user)
         if repeat:
-            qemu.command(cmds="chmod +x run.sh && ./run.sh", user=user, wait=False, timeout=BUG_REPRODUCE_TIMEOUT)
+            qemu.command(cmds="chmod +x run.sh && ./run.sh", user=user, wait=False, timeout=self.repro_timeout)
         else:
             qemu.command(cmds="rm -rf ./tmp", user=user, wait=True)
-            qemu.command(cmds="mkdir ./tmp && mv ./poc ./tmp && cd ./tmp && chmod +x poc && ./poc", user=user, wait=True, timeout=BUG_REPRODUCE_TIMEOUT)
+            qemu.command(cmds="mkdir ./tmp && mv ./poc ./tmp && cd ./tmp && chmod +x poc && ./poc", user=user, wait=True, timeout=self.repro_timeout)
             qemu.logger.info("Killing PoC")
             qemu.command(cmds="killall poc", user=self.root_user, wait=True)
         self.set_stage_text("gathering output")
