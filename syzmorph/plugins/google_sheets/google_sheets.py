@@ -21,6 +21,7 @@ class GoogleSheets(AnalysisModule):
     def __init__(self):
         super().__init__()
         self.sh = None
+        self.idx = 0
         self.case_type = self.TYPE_FAILED
         
     def prepare(self):
@@ -65,6 +66,7 @@ class GoogleSheets(AnalysisModule):
         self.data = {}
         wks = sh.sheet1
         self.create_banner(wks)
+        self.idx = self.case_in_sheets(wks)
         self._write_hash(wks)
         self._write_title(wks)
         self._write_url(wks)
@@ -73,33 +75,33 @@ class GoogleSheets(AnalysisModule):
         if self.plugin_finished("BugReproduce"):
             self._write_reproducable(wks)
         else:
-            self.write_failed_str_to_cell('E2', wks)
-            self.write_failed_str_to_cell('F2', wks)
-            self.write_failed_str_to_cell('G2', wks)
+            self.write_failed_str_to_cell('E'+str(self.idx), wks)
+            self.write_failed_str_to_cell('F'+str(self.idx), wks)
+            self.write_failed_str_to_cell('G'+str(self.idx), wks)
 
         if self.plugin_finished("ModulesAnalysis"):
             self._write_module_analysis(wks)
         else:
-            self.write_failed_str_to_cell('H2', wks)
+            self.write_failed_str_to_cell('H'+str(self.idx), wks)
 
         if self.plugin_finished("CapabilityCheck"):
             self._write_capability_check(wks)
         else:
-            self.write_failed_str_to_cell('I2', wks)
+            self.write_failed_str_to_cell('I'+str(self.idx), wks)
 
         if self.plugin_finished("SyzScope"):
             self._write_syzscope(wks)
         else:
-            self.write_failed_str_to_cell('J2', wks)
+            self.write_failed_str_to_cell('J'+str(self.idx), wks)
         if self.plugin_finished("Fuzzing"):
             self._write_fuzzing(wks)
         else:
-            self.write_failed_str_to_cell('K2', wks)
+            self.write_failed_str_to_cell('K'+str(self.idx), wks)
         if self.plugin_finished("RawBugReproduce"):
             self._write_raw_reproducable(wks)
         else:
-            self.write_failed_str_to_cell('L2', wks)
-        self._render_cell_color('A2', self.case_type, wks)
+            self.write_failed_str_to_cell('L'+str(self.idx), wks)
+        self._render_cell_color('A'+str(self.idx), self.case_type, wks)
         #self._render_row_coloer(wks)
         try:
             if self.manager.module_capable("SlackBot") and \
@@ -137,27 +139,39 @@ class GoogleSheets(AnalysisModule):
         else:
             self.set_stage_text("Failed")
     
+    def case_in_sheets(self, wks: pygsheets.Worksheet):
+        hash_value = self.case['hash']
+        i = 2
+        while i >= 0:
+            val = wks.get_value('A'+str(i))
+            if val == hash_value:
+                return i
+            if val == "":
+                wks.insert_rows(1)
+                return 2
+            i+= 1 
+    
     def _write_hash(self, wks: pygsheets.Worksheet):
         hash_value = self.case['hash']
         self.data['hash'] = hash_value
-        wks.insert_rows(1)
-        wks.update_value('A2', hash_value)
+        wks.update_value('A'+str(self.idx), hash_value)
     
     def _write_title(self, wks: pygsheets.Worksheet):
         title = self.case['title']
         self.data['title'] = title
-        wks.update_value('B2', title)
+        wks.update_value('B'+str(self.idx), title)
     
     def _write_url(self, wks: pygsheets.Worksheet):
         url = "https://syzkaller.appspot.com/bug?id=" + self.data['hash']
         self.data['url'] = url
-        wks.update_value('C2', "=HYPERLINK(\"https://syzkaller.appspot.com/bug?id=\"&A2, \"url\")")
+        wks.update_value('C'+str(self.idx), "=HYPERLINK(\"https://syzkaller.appspot.com/bug?id=\"&A{}, \"url\")".format(self.idx))
     
     def _write_affect_distro(self, wks: pygsheets.Worksheet):
         l = []
         for distro in self.cfg.get_distros():
             l.append(distro.distro_name)
-        wks.update_value('D2', "\n".join(l))
+        old_val = wks.get_value('D'+str(self.idx)) + '\n'
+        wks.update_value('D'+str(self.idx), old_val+"\n".join(l))
     
     def _write_reproducable(self, wks: pygsheets.Worksheet):
         self.data['reproduce-by-normal'] = ""
@@ -192,16 +206,22 @@ class GoogleSheets(AnalysisModule):
         if normal_text != '' or root_text != '':
             self.case_type = self.TYPE_SUCCEED
 
-        wks.update_value('E2', normal_text)
-        wks.update_value('F2', root_text)
-        wks.update_value('G2', fail_text)
+        old_val = wks.get_value('E'+str(self.idx)) + '\n'
+        wks.update_value('E'+str(self.idx), old_val + normal_text)
+        old_val = wks.get_value('F'+str(self.idx)) + '\n'
+        wks.update_value('F'+str(self.idx), old_val + root_text)
+        old_val = wks.get_value('G'+str(self.idx)) + '\n'
+        wks.update_value('G'+str(self.idx), old_val + fail_text)
 
     def _write_module_analysis(self, wks: pygsheets.Worksheet):
         self.data['modules-analysis'] = ""
         path_result = os.path.join(self.path_case, "ModulesAnalysis", "results.json")
         result_json = json.load(open(path_result, 'r'))
         v = json.dumps(result_json)
-        wks.update_value('H2', v)
+        if len(v) > 50000:
+            v = v[:49999]
+        old_val = wks.get_value('H'+str(self.idx)) + '\n'
+        wks.update_value('H2', old_val + v)
 
     def _write_capability_check(self, wks: pygsheets.Worksheet):
         res = {}
@@ -223,7 +243,7 @@ class GoogleSheets(AnalysisModule):
                         if cap_name not in res:
                             res[cap_name] = 'nope'
                             t += line
-                wks.update_value('I2', t)
+                wks.update_value('I'+str(self.idx), t)
                 self.data['capability-check'] = t
     
     def _write_syzscope(self, wks: pygsheets.Worksheet):
@@ -233,7 +253,7 @@ class GoogleSheets(AnalysisModule):
             with open(path_report, "r") as f:
                 report = f.readlines()
                 t = ''.join(report)
-                wks.update_value('J2', t)
+                wks.update_value('J'+str(self.idx), t)
                 self.data['syzscope'] = t
     
     def _write_fuzzing(self, wks: pygsheets.Worksheet):
@@ -243,7 +263,8 @@ class GoogleSheets(AnalysisModule):
             with open(path_report, "r") as f:
                 report = f.readlines()
                 t = ''.join(report)
-                wks.update_value('K2', t)
+                old_val = wks.get_value('K'+str(self.idx)) + '\n'
+                wks.update_value('K'+str(self.idx), old_val + t)
                 self.data['fuzzing'] = t
     
     def _write_raw_reproducable(self, wks: pygsheets.Worksheet):
@@ -278,9 +299,11 @@ class GoogleSheets(AnalysisModule):
                         fail_text += "{}\n".format(distros)
                         self.data['raw-failed-on'] += "{} ".format(distros)
         if root_text != '':
-            wks.update_value('L2', root_text)
+            old_val = wks.get_value('L'+str(self.idx)) + '\n'
+            wks.update_value('L'+str(self.idx), old_val + root_text)
         if normal_text != '':
-            wks.update_value('L2', normal_text)
+            old_val = wks.get_value('L'+str(self.idx)) + '\n'
+            wks.update_value('L'+str(self.idx), old_val + normal_text)
         if self.case_type == self.TYPE_SUCCEED:
             if not triggered:
                 self.case_type = self.TYPE_SUCCEED_NEED_ADAPTATION
@@ -294,7 +317,7 @@ class GoogleSheets(AnalysisModule):
     def _render_row_coloer(self, wks: pygsheets.Worksheet):
         for i in range(0, 26):
             ch = chr(ord('A') + i)
-            cell = wks.cell(ch+'2')
+            cell = wks.cell(ch+str(self.idx))
             cell.color = self.case_type
     
     def _render_cell_color(self, pos, color, wks: pygsheets.Worksheet):
