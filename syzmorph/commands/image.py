@@ -419,10 +419,11 @@ class ImageCommand(Command):
         step_task_id = self.step_progress.add_task("", action=self._step_actions[idx_step], name=distro.distro_name)
         out = qemu.command(user=self.ssh_user, cmds="uname -r", wait=True)
         
-        pass_version_check = False
+        if regx_match(r'^(\d+\.\d+\.\d+)', out[1]):
+            kerenl_version = regx_get(r'^(\d+\.\d+\.\d+)', out[1], 0)
         if regx_match(r'^(\d+\.\d+\.\d+-\d+)', out[1]):
-            pass_version_check = True
-        if not pass_version_check:
+            kerenl_version = regx_get(r'^(\d+\.\d+\.\d+-\d+)', out[1], 0)
+        if kerenl_version != distro.distro_version:
             res.append("Kernel Version Check Failed, {} != {}".format(out[1], distro.distro_version))
         
         job_progress.update(job, advance=self._each_step_progress_percentage)
