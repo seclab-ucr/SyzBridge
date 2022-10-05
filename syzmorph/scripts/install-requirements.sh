@@ -37,6 +37,7 @@ if [ ! -f "$TOOLS_PATH/.stamp/BUILD_IMAGE" ]; then
     cp $PROJECT_PATH/syzmorph/scripts/create-image.sh ./
     chmod +x ./create-image.sh
     ./create-image.sh -s 10240
+    rm stretch.img.key || true
     mv stretch.id_rsa stretch.img.key
     chmod 400 stretch.img.key
     touch $TOOLS_PATH/.stamp/BUILD_IMAGE

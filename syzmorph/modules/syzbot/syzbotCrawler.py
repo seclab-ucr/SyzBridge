@@ -191,6 +191,7 @@ class Crawler:
         out = local_command(command="git checkout origin/linux-{}.y".format(major_version), cwd=repo_path, shell=True, redir_err=False)
         for line in out:
             if regx_match(r'HEAD is now at [a-z0-9]+ Linux {}\.\d+'.format(major_version), line):
+                self.logger.debug(line)
                 in_branch = True
                 break
         if not in_branch:
@@ -207,6 +208,7 @@ class Crawler:
             self.logger.error("Fail to get current commit for {}".format(distro.distro_version))
             return False
 
+        self.logger.debug("{}: current commit is {}".format(distro.distro_name, cur_commit))
         out = local_command(command="git merge-base --is-ancestor {} {}; echo $?".format(fixes_hash, cur_commit), 
                       cwd=repo_path, shell=True)
         for line in out:
@@ -214,12 +216,14 @@ class Crawler:
             if line == "1":
                 return False
         
+        self.logger.debug("{}: fixes tag is ancestor of current commit".format(distro.distro_name))
         out = local_command(command="git merge-base --is-ancestor {} {}; echo $?".format(patch_hash, cur_commit), 
                       cwd=repo_path, shell=True)
         for line in out:
             line = line.strip()
             if line == "0":
                 return False
+        self.logger.debug("{}: patch is not ancestor of current commit".format(distro.distro_name))
         
         return True
     
@@ -337,6 +341,8 @@ class Crawler:
         patched_version = self.closest_tag(patch_hash, soup)
         fixes_commit_msg = self.get_linux_commit_msg(fix_hash, soup)
         patch_commit_msg = self.get_linux_commit_msg(patch_hash, soup)
+        self.logger.debug("fixes commit: {}".format(fix_hash))
+        self.logger.debug("patch commit: {}".format(patch_hash))
         if fixes_commit_msg == None:
             self.logger.error("Can't get commit msg for {}. ".format(fix_hash))
             return
