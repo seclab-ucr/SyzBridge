@@ -184,7 +184,6 @@ class Crawler:
         if not os.path.exists(repo_path):
             ret = clone_repo("https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git", repo_path)
             if ret != 0:
-                self.logger.error("Fail to clone kernel repo stable")
                 return None
         
         in_branch = False
@@ -700,11 +699,14 @@ class Crawler:
         if repo_name == 'linux':
             repo_name = 'upstream'
         repo_path = os.getcwd()+"/tools/linux-{}-0".format(repo_name)
+        self.thread_lock.acquire()
         if not os.path.exists(repo_path):
             ret = clone_repo(repo_url, repo_path)
             if ret != 0:
                 self.logger.error("Fail to clone kernel repo {}".format(repo_name))
+                self.thread_lock.release()
                 return None
+        self.thread_lock.release()
         return repo_path
 
     def __get_table(self, url):
