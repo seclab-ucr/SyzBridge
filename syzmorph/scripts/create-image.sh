@@ -173,13 +173,12 @@ cat $RELEASE.id_rsa.pub | sudo tee $DIR/root/.ssh/authorized_keys
 if [ $PERF = "true" ]; then
     cp -r $KERNEL $DIR/tmp/
     BASENAME=$(basename $KERNEL)
-    sudo chroot $DIR /bin/bash -c "apt-get update; apt-get install -y flex bison python-dev libelf-dev libunwind8-dev libaudit-dev libslang2-dev libperl-dev binutils-dev liblzma-dev libnuma-dev"
+    sudo chroot $DIR /bin/bash -c "apt-get update; apt-get install -y flex bison python-dev libelf-dev libunwind8-dev libaudit-dev libslang2-dev libperl-dev binutils-dev liblzma-dev libnuma-dev trace-cmd vim"
     sudo chroot $DIR /bin/bash -c "cd /tmp/$BASENAME/tools/perf/; make"
     sudo chroot $DIR /bin/bash -c "cp /tmp/$BASENAME/tools/perf/perf /usr/bin/"
     rm -r $DIR/tmp/$BASENAME
 fi
 
-sudo chroot $DIR /bin/bash -c "trace-cmd vim"
 
 # Add udev rules for custom drivers.
 # Create a /dev/vim2m symlink for the device managed by the vim2m driver
