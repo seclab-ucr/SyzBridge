@@ -130,15 +130,15 @@ class VMInstance(Network):
 
     def kill_vm(self):
         self.logger.info('Kill VM pid: {}'.format(self.instance.pid))
-        if self._output_lock.locked():
-            self._output_lock.release()
-        if self.lock.locked():
-            self.lock.release()
         try:
             self.instance.kill()
             time.sleep(3)
         except:
             self.logger.error("VM exit abnormally")
+        if self._output_lock.locked():
+            self._output_lock.release()
+        if self.lock.locked():
+            self.lock.release()
     
     def write_cmd_to_script(self, cmd, name, build_append=False):
         path_name = os.path.join(self.work_path, name)
@@ -364,6 +364,8 @@ class VMInstance(Network):
                 if self.instance.poll() is not None:
                     return
                 sleep(1)
+            if self.instance.poll() is not None:
+                return
             self._output_lock.acquire(blocking=True)
         #if not self._has_new_output:
         return

@@ -450,11 +450,13 @@ class Crawler:
         self.logger.info("retreive one case: %s",hash_val)
         patch_url = self.get_patch_url(hash_val)
         if self.retreive_case(hash_val) == -1:
+            self.distro_vm_kill()
             return
         self._patch_info = {'url': None, 'fixes':[]}
         if self.check_vul_exist:
             if not self.check_excluded_distro(hash_val, patch_url):
                 self.logger.error("{} does not have a fixes tag".format(hash_val))
+                self.distro_vm_kill()
                 return
         if self.filter_by_distro_effective_cycle:
             report_date = self.case_first_crash(hash_val)
@@ -462,6 +464,7 @@ class Crawler:
             if len(self.cases[hash_val]['affect']) == 0:
                 self.logger.error("{} does not affect any distro within its life cycle".format(hash_val))
                 self.cases.pop(hash_val)
+                self.distro_vm_kill()
                 return
         else:
             self.cases[hash_val]['affect'] = None
