@@ -125,7 +125,7 @@ class BugReproduce(AnalysisModule):
         self.info_msg("{} does not trigger any bugs, try to enable missing modules".format(distro.distro_name))
         m = self.get_missing_modules(distro.distro_name)
         missing_modules = [e['name'] for e in m if e['type'] != 0 ]
-        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, [], ), attempt=1, root=True, log_prefix='missing-modules', timeout=len(tested_modules) * self.repro_timeout + 300)
+        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, [], ), attempt=1, root=True, log_prefix='missing-modules', timeout=len(missing_modules) * self.repro_timeout + 300)
         if success:
             self.results[distro.distro_name]['trigger'] = True
             tested_modules = t[0]
