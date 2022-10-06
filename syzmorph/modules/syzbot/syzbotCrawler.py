@@ -1,10 +1,9 @@
-from ast import Pass
 from subprocess import Popen, PIPE, STDOUT
 import threading
 import requests
 import time
 import pandas as pd
-import re, os
+import re, os, shutil
 from syzmorph.infra.config.config import Config
 from syzmorph.infra.config.vendor import Vendor
 from syzmorph.modules.vm import VM
@@ -145,24 +144,24 @@ class Crawler:
         kernel_folder = "~/{}/*kernel".format(os.path.basename(distro.distro_src))
 
         blame_commits = self._get_commit_from_msg(distro, vm, kernel_folder, fixes_commit_msg)
-        self.logger.debug("Buggy commit blames to commits: {}".format(blame_commits))
+        self.logger.debug("{}: Buggy commit blames to commits: {}".format(distro.distro_name, blame_commits))
         for hash_val in blame_commits:
             ret = self._commit_is_ancestor(distro, vm, kernel_folder, hash_val, 'HEAD')
             self.logger.debug("Commit {} is ancestor of HEAD: {}".format(hash_val, ret))
             if not ret:
-                self.logger.debug('Buggy commit does not exist in {}'.format(distro.distro_name))
+                self.logger.debug('{}: Buggy commit does not exist'.format(distro.distro_name))
                 return False
         
         if len(blame_commits) == 0:
             return False
 
         blame_commits = self._get_commit_from_msg(distro, vm, kernel_folder, patch_commit_msg)
-        self.logger.debug("Patch commit blames to commits: {}".format(blame_commits))
+        self.logger.debug("{}: Patch commit blames to commits: {}".format(distro.distro_name, blame_commits))
         for hash_val in blame_commits:
             ret = self._commit_is_ancestor(distro, vm, kernel_folder, hash_val, 'HEAD')
-            self.logger.debug("Commit {} is ancestor of HEAD: {}".format(hash_val, ret))
+            self.logger.debug("{}: Commit {} is ancestor of HEAD: {}".format(distro.distro_name, hash_val, ret))
             if ret:
-                self.logger.debug('Patch commit exists in {}'.format(distro.distro_name))
+                self.logger.debug('{}: Patch commit exists in'.format(distro.distro_name))
                 return False
         
         self.logger.debug('{} is vulnerable'.format(distro.distro_name))
@@ -178,27 +177,21 @@ class Crawler:
                 return False
         return True
 
-    def debian_is_vulnerable(self, distro: Vendor, fixes_hash, patch_hash):
+    def debian_is_vulnerable(self, distro: Vendor, fixes_commit_msg, patch_commit_msg):
         repo_path = os.getcwd()+"/tools/linux-stable-0"
         cur_commit = None
+        self.thread_lock.acquire()
         if not os.path.exists(repo_path):
             ret = clone_repo("https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git", repo_path)
             if ret != 0:
+                self.thread_lock.release()
                 return None
+        self.thread_lock.release()
         
         in_branch = False
         major_version = regx_get(r'^(\d+\.\d+)', distro.distro_version, 0)
-        out = local_command(command="git checkout origin/linux-{}.y".format(major_version), cwd=repo_path, shell=True, redir_err=False)
-        for line in out:
-            if regx_match(r'HEAD is now at [a-z0-9]+ Linux {}\.\d+'.format(major_version), line):
-                self.logger.debug(line)
-                in_branch = True
-                break
-        if not in_branch:
-            self.logger.error("Fail to checkout branch linux-{}.y".format(major_version))
-            return False
         
-        out = local_command(command="git log --oneline --grep \"Linux {}\" -1 | awk '{{print $1}}'".format(distro.distro_version),
+        out = local_command(command="git log origin/linux-{}.y --oneline --grep \"Linux {}\" -1 | awk '{{print $1}}'".format(major_version, distro.distro_version),
                             cwd=repo_path, shell=True)
         for line in out:
             line = line.strip()
@@ -209,39 +202,69 @@ class Crawler:
             return False
 
         self.logger.debug("{}: current commit is {}".format(distro.distro_name, cur_commit))
-        out = local_command(command="git merge-base --is-ancestor {} {}; echo $?".format(fixes_hash, cur_commit), 
-                      cwd=repo_path, shell=True)
+        
+        blame_fixes_commits = self._get_commit_from_msg(distro, None, repo_path, fixes_commit_msg, "origin/linux-{}.y".format(major_version))
+        blame_patch_commits = self._get_commit_from_msg(distro, None, repo_path, patch_commit_msg, "origin/linux-{}.y".format(major_version))
+        
+        self.thread_lock.acquire()
+        out = local_command(command="git stash -u && git checkout origin/linux-{}.y".format(major_version), cwd=repo_path, shell=True, redir_err=False)
         for line in out:
-            line = line.strip()
-            if line == "1":
+            if regx_match(r'HEAD is now at [a-z0-9]+ Linux {}\.\d+'.format(major_version), line):
+                self.logger.debug(line)
+                in_branch = True
+                break
+        if not in_branch:
+            self.logger.error("Fail to checkout branch linux-{}.y".format(major_version))
+            self.thread_lock.release()
+            return False
+        for hash_val in blame_fixes_commits:
+            ret = self._commit_is_ancestor(distro, None, repo_path, hash_val, cur_commit)
+            self.logger.debug("{}: Commit {} is ancestor of {}: {}".format(distro.distro_name, hash_val, cur_commit, ret))
+            if not ret:
+                self.logger.debug('{}: Buggy commit exists'.format(distro.distro_name))
+                self.thread_lock.release()
                 return False
         
         self.logger.debug("{}: fixes tag is ancestor of current commit".format(distro.distro_name))
-        out = local_command(command="git merge-base --is-ancestor {} {}; echo $?".format(patch_hash, cur_commit), 
-                      cwd=repo_path, shell=True)
-        for line in out:
-            line = line.strip()
-            if line == "0":
+        
+        for hash_val in blame_patch_commits:
+            ret = self._commit_is_ancestor(distro, None, repo_path, hash_val, cur_commit)
+            self.logger.debug("{}: Commit {} is ancestor of {}: {}".format(distro.distro_name, hash_val, cur_commit, ret))
+            if ret:
+                self.logger.debug('{}: Patch commit exists'.format(distro.distro_name))
+                self.thread_lock.release()
                 return False
         self.logger.debug("{}: patch is not ancestor of current commit".format(distro.distro_name))
+        self.thread_lock.release()
         
+        self.logger.debug('{} is vulnerable'.format(distro.distro_name))
         return True
     
     def _commit_is_ancestor(self, distro: Vendor, vm, kernel_folder, ancestor_commit, cur_commit):
-        out = vm.command(user=distro.root_user, 
-            cmds="cd {} && git merge-base --is-ancestor {} {}; echo $?".format(kernel_folder, ancestor_commit, cur_commit), 
-            wait=True)
+        if vm != None:
+            out = vm.command(user=distro.root_user, 
+                cmds="cd {} && git merge-base --is-ancestor {} {}; echo $?".format(kernel_folder, ancestor_commit, cur_commit), 
+                wait=True)
+        else:
+            out = local_command(command="cd {} && git merge-base --is-ancestor {} {}; echo $?".format(kernel_folder, ancestor_commit, cur_commit), shell=True)
         for line in out:
             line = line.strip()
             if line == "0":
                 return True
         return False
     
-    def _get_commit_from_msg(self, distro: Vendor, vm: VM, kernel_folder, msg):
+    def _get_commit_from_msg(self, distro: Vendor, vm: VM, kernel_folder, msg, branch=None):
         res = []
-        out = vm.command(user=distro.root_user, 
-            cmds="cd {} && git log --pretty=format:\"%H %s\" | grep \"{}\" | awk '{{print $1}}'".format(kernel_folder, msg), 
-            wait=True)
+        if branch == None:
+            cmds = "cd {} && git log --pretty=format:\"%H %s\" --grep \"^{}$\" -1 | awk '{{print $1}}'".format(kernel_folder, msg)
+        else:
+            cmds = "cd {} && git log {} --pretty=format:\"%H %s\" --grep \"^{}$\" -1 | awk '{{print $1}}'".format(kernel_folder, branch, msg)
+        if vm != None:
+            out = vm.command(user=distro.root_user, 
+                cmds=cmds, 
+                wait=True)
+        else:
+            out = local_command(command=cmds, shell=True)
         for line in out:
             line = line.strip()
             if len(line) == 40:
@@ -365,13 +388,9 @@ class Crawler:
                 self.logger.debug("{} is not vulnerable to this bug".format(distro.distro_name))
                 self._fixes['exclude'].append(distro.distro_name)
         if 'debian' in distro.distro_name.lower():
-            # Debian kernel check local stable linux repo
-            # Use a lock to prevent operating on the same repo at the same time
-            self.thread_lock.acquire()
-            if not self.debian_is_vulnerable(distro, fix_hash, patch_hash):
+            if not self.debian_is_vulnerable(distro, fixes_commit_msg, patch_commit_msg):
                 self.logger.debug("{} is not vulnerable to this bug".format(distro.distro_name))
                 self._fixes['exclude'].append(distro.distro_name)
-            self.thread_lock.release()
 
     def closest_tag(self, patch_hash, soup: BeautifulSoup):
         regx_kernel_version = r'^v(\d+\.\d+)'
