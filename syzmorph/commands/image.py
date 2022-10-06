@@ -21,7 +21,7 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
-image_inspection_step_actions = ["Checking kernel version", "Checking KASAN", "Checking trace-cmd"]
+image_inspection_step_actions = ["Checking kernel version", "Checking KASAN", "Checking trace-cmd", "Check kernel source", "Check kernel modules"]
 run_script_step_actions = ["Uploading script", "Running script"]
 qemu_boot_progress_percentage = 40
 class ImageCommand(Command):
@@ -447,6 +447,26 @@ class ImageCommand(Command):
                 pass_trace_cmd_check = False
         if not pass_trace_cmd_check:
             res.append("trace-cmd does not installed")
+        job_progress.update(job, advance=self._each_step_progress_percentage)
+        idx_step = self._step_progress_finish(step_task_id, idx_step)
+        
+        step_task_id = self.step_progress.add_task("", action=self._step_actions[idx_step], name=distro.distro_name)
+        pass_kernel_source = False
+        config_path = os.path.join(distro.distro_src, "config")
+        vmlinux_path = os.path.join(distro.distro_src, "vmlinux")
+        if os.path.exists(config_path) and os.path.exists(vmlinux_path):
+            pass_kernel_source = True
+        if not pass_kernel_source:
+            res.append("{} does not contains kernel source".format(distro.distro_src))
+        job_progress.update(job, advance=self._each_step_progress_percentage)
+        idx_step = self._step_progress_finish(step_task_id, idx_step)
+        
+        step_task_id = self.step_progress.add_task("", action=self._step_actions[idx_step], name=distro.distro_name)
+        base_dir = os.path.dirname(distro.distro_src)
+        modules_dir = os.path.join(base_dir, "modules")
+        pass_kernel_modules = os.path.exists(modules_dir)
+        if not pass_kernel_modules:
+            res.append("Can't find kernel modules")
         job_progress.update(job, advance=self._each_step_progress_percentage)
         idx_step = self._step_progress_finish(step_task_id, idx_step)
         
