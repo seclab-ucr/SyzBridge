@@ -182,10 +182,6 @@ class VMInstance(Network):
                 if not self.qemu_ready:
                     self.kill_proc_by_port(self.port)
                     self.case_logger.error('QEMU: Error occur at booting qemu')
-                    error_count += 1
-                    if error_count > 5:
-                        self.case_logger.error('QEMU: Reach the maximum attempts to boot qemu')
-                        return
                     if self.need_reboot():
                         if self._reboot_once:
                             self.case_logger.debug('QEMU: Image reboot already')
@@ -199,6 +195,8 @@ class VMInstance(Network):
                     self.qemu_fail = True
                 if self._output_lock.locked():
                     self._output_lock.release()
+                if self.qemu_fail:
+                    self._send_return_value(False)
                 self.kill_vm()
                 return
             if not self.qemu_ready and self.is_qemu_ready():
