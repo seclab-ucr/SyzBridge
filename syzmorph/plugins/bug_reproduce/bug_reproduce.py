@@ -125,7 +125,7 @@ class BugReproduce(AnalysisModule):
         self.info_msg("{} does not trigger any bugs, try to enable missing modules".format(distro.distro_name))
         m = self.get_missing_modules(distro.distro_name)
         missing_modules = [e['name'] for e in m if e['type'] != 0 ]
-        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, [], ), attempt=1, root=True, log_prefix='missing-modules', timeout=len(missing_modules) * self.repro_timeout + 300)
+        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, [], ), attempt=1, root=True, log_prefix='missing-modules', timeout=len(missing_modules) * 2 * self.repro_timeout + 300)
         if success:
             self.results[distro.distro_name]['trigger'] = True
             tested_modules = t[0]
@@ -204,7 +204,8 @@ class BugReproduce(AnalysisModule):
         self.normal_user = distro.repro.normal_user
         report, triggered, t = distro.repro.reproduce(func=func, func_args=func_args, root=root, work_dir=self.path_case_plugin, vm_tag=distro.distro_name, attempt=attempt, c_hash=self.case_hash, log_name=log_name, **kwargs)
         if not result_queue.empty():
-            self.results = result_queue.get()
+            new_results = result_queue.get()
+            self.results[distro.distro_name] = new_results[distro.distro_name]
         if triggered:
             title = self._BugChecker(report)
             self.bug_title = title
