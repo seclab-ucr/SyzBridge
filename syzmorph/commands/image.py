@@ -8,7 +8,7 @@ from modules.vm import VM
 from infra.config.vendor import Vendor
 from infra.config.config import Config
 from subprocess import call
-from infra.tool_box import STREAM_HANDLER, FILE_HANDLER, regx_match, regx_get, init_logger
+from infra.tool_box import STREAM_HANDLER, FILE_HANDLER, local_command, regx_match, regx_get, init_logger
 
 from rich.console import Group
 from rich.panel import Panel
@@ -254,6 +254,8 @@ class ImageCommand(Command):
             shutil.move(src, dst)
             call(args=['tar', 'xf', './modules.tar.gz'], cwd=dst)
             os.remove(os.path.join(dst, './modules.tar.gz'.format(self.distro)))
+            if self.distro == "fedora":
+                self._decompress_ko(dst)
         elif not os.path.exists(dst):
             self.logger.error("Cannot find modules.tar.gz, please make sure the building is succeed")
             return False
@@ -656,6 +658,10 @@ class ImageCommand(Command):
             self.logger.error("Failed to find grub.cfg")
             return None
         return grub_str[1:]
+
+    def _decompress_ko(self, module_path):
+        local_command(command="xz --decompress `find ./ -name \"*.ko.xz\"`", shell=True, cwd=module_path)
+        return
     
     def _kernel_config_pre_check(self, qemu, config):
         out = qemu.command(cmds="grep {} /boot/config-`uname -r`".format(config), user=self.ssh_user, wait=True)
