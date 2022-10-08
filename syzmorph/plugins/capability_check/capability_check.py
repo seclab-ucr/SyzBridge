@@ -195,7 +195,7 @@ class CapabilityCheck(AnalysisModule):
             
             if write_monitor_controller:
                 data.append("int debug = {};\n".format(int(debug)))
-                data.append("ioctl(-1, 0x37778, &debug);\n")
+                data.append("ioctl(0, 0x37778, &debug);\n")
                 write_monitor_controller = False
             
             if regx_match(poc_func, line):
