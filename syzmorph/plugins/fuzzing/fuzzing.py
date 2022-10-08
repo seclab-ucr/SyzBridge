@@ -170,7 +170,8 @@ class Fuzzing(AnalysisModule):
         crash_path = self._copy_crashes()
         if not os.path.exists(crash_path):
             return
-        self.results['crash'] = []
+        if self._cur_distro.distro_name not in self.results:
+            self.results[self._cur_distro.distro_name] = []
         for crash in os.listdir(crash_path):
             subcrash_path = os.path.join(crash_path, crash)
             self.report_new_impact(subcrash_path)
@@ -184,8 +185,8 @@ class Fuzzing(AnalysisModule):
             if files == "description":
                 with open(os.path.join(crash_path, files), "r") as f:
                     line = f.readline()
-                    self.results['crash'].append(line)
-                    self.report.append(line)
+                    self.results[self._cur_distro.distro_name].append(line)
+                    self.report.append("{}: {}".format(self._cur_distro.distro_name, line))
 
     def create_snapshot(self, src, img, distro_name):
         dst = "{}/{}-snapshot.img".format(img, distro_name)
