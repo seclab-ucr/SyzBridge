@@ -56,9 +56,9 @@ class VMInstance(Network):
         Network.__init__(self, self.case_logger, self.debug, self.debug)
     
     def log_thread(func):
-        def inner(self):
+        def inner(self, *args):
             self.logger.info("Start thread: {}".format(func.__name__))
-            ret = func(self)
+            ret = func(self, *args)
             self.logger.info("Exit thread: {}".format(func.__name__))
             return ret
         return inner
