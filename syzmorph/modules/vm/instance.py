@@ -55,6 +55,14 @@ class VMInstance(Network):
         self.instance = None
         Network.__init__(self, self.case_logger, self.debug, self.debug)
     
+    def log_thread(func):
+        def inner(self):
+            self.logger.info("Start thread: {}".format(func.__name__))
+            ret = func(self)
+            self.logger.info("Exit thread: {}".format(func.__name__))
+            return ret
+        return inner
+        
     def reset(self):
         self.qemu_ready = False
         self.kill_qemu = False
@@ -166,6 +174,7 @@ class VMInstance(Network):
         ret = self.ssh("localhost", user, self.port, self.key, cmds, wait, timeout)
         return ret
 
+    @log_thread
     def monitor_execution(self):
         self.timer = 0
         run_alternative_func = False
@@ -207,6 +216,8 @@ class VMInstance(Network):
                     x = threading.Thread(target=self._prepare_alternative_func, name="{} qemu call back".format(self.tag))
                     x.start()
                     run_alternative_func = True
+        if run_alternative_func:
+            self.case_logger.info('Finished alternative function, kill qemu')
         if self._reboot_once and not run_alternative_func:
             self.case_logger.debug('QEMU: Try to reboot the image')
             # Disable snapshot and reboot the image
@@ -214,7 +225,6 @@ class VMInstance(Network):
             self.kill_vm()
             self.run(self.alternative_func, self.alternative_func_output, self.alternative_func_args)
             return
-        self.case_logger.info('Finished alternative function, kill qemu')
         if not self.qemu_ready:
             self.qemu_fail = True
         if self.qemu_fail:
@@ -341,6 +351,7 @@ class VMInstance(Network):
             cmd.append(key)
         self.cmd_launch = cmd
     
+    @log_thread
     def _prepare_alternative_func(self):
         try:
             ret = self.alternative_func(self, *self.alternative_func_args)
@@ -353,6 +364,7 @@ class VMInstance(Network):
         self.alternative_func_finished = True
         return
     
+    @log_thread
     def _new_output_timer(self):
         while not self.func_finished():
             while (self._output_timer > 0):
@@ -373,6 +385,7 @@ class VMInstance(Network):
         self._output_timer = default_output_timer
         self.lock.release()
     
+    @log_thread
     def __log_qemu(self, pipe):
         try:
             self.logger.info("\n".join(self.cmd_launch)+"\n")
