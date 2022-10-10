@@ -88,6 +88,7 @@ class Crawler:
                 if self.check_vul_exist:
                     if not self.check_excluded_distro(each['Hash'], patch_url):
                         self.logger.debug("{} does not have a fixes tag".format(each['Hash']))
+                        self.cases.pop(each['Hash'])
                         continue
             if self.retreive_case(each['Hash']) != -1:
                 if self.filter_by_distro_effective_cycle:
@@ -204,7 +205,12 @@ class Crawler:
         self.logger.debug("{}: current commit is {}".format(distro.distro_name, cur_commit))
         
         blame_fixes_commits = self._get_commit_from_msg(distro, None, repo_path, fixes_commit_msg, "origin/linux-{}.y".format(major_version))
+        if len(blame_fixes_commits) == 0:
+            return False
+        
         blame_patch_commits = self._get_commit_from_msg(distro, None, repo_path, patch_commit_msg, "origin/linux-{}.y".format(major_version))
+        if len(blame_patch_commits) == 0:
+            return False
         
         self.thread_lock.acquire()
         out = local_command(command="git stash -u && git checkout origin/linux-{}.y".format(major_version), cwd=repo_path, shell=True, redir_err=False)
@@ -481,6 +487,7 @@ class Crawler:
         if self.check_vul_exist:
             if not self.check_excluded_distro(hash_val, patch_url):
                 self.logger.error("{} does not have a fixes tag".format(hash_val))
+                self.cases.pop(hash_val)
                 self.distro_vm_kill()
                 return
         if self.filter_by_distro_effective_cycle:
