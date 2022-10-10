@@ -131,7 +131,7 @@ class ModulesAnalysis(AnalysisModule):
     
     def determine_module_attr(self, src_file, begin_node, distro: Vendor, hook_end_node, skip_src_check=False):
         ret = self.module_check(distro, src_file, skip_src_check=skip_src_check)
-        self.info_msg("Module {} in {} {}".format(self.vul_module, distro.distro_name, ret))
+        self.info_msg("({})Module {} in {} {}".format(begin_node.function_name, self.vul_module, distro.distro_name, ret))
         if ret == None or ret == self.MODULE_ENABLED:
             return
         if self.vul_module not in self.results:
