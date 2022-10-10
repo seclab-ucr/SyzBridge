@@ -88,7 +88,8 @@ class Crawler:
                 if self.check_vul_exist:
                     if not self.check_excluded_distro(each['Hash'], patch_url):
                         self.logger.debug("{} does not have a fixes tag".format(each['Hash']))
-                        self.cases.pop(each['Hash'])
+                        if each['Hash'] in self.cases:
+                            self.cases.pop(each['Hash'])
                         continue
             if self.retreive_case(each['Hash']) != -1:
                 if self.filter_by_distro_effective_cycle:
