@@ -34,6 +34,7 @@ class Deployer(Case, Task):
         self.logger = init_logger(__name__+str(self.index), 
             cus_format='%(asctime)s Thread {}: {}[{}] %(message)s'.format(self.index, self.case_hash, kernel).format(self.index),
             debug=self.debug, propagate=self.debug, handler_type=handler_type)
+        self.case_logger.info("Initializing deployer")
         Task.__init__(self, self.args)
         self.analysis = AnalysisModule()
         self.analysis.init(self)
@@ -58,6 +59,7 @@ class Deployer(Case, Task):
     # This function takes care of installing module, prepare analysis, running analysis, generating report and creating stamp.
     def do_task(self, task):
         analyzor_module = self.get_task_module(task)
+        self.case_logger.info("Start task {}".format(analyzor_module.NAME))
         self.use_module(analyzor_module)
         if not self.analysis.check_stamp():
             analyzor_module.setup()
@@ -69,6 +71,7 @@ class Deployer(Case, Task):
                 self.analysis.create_stamp()
             else:
                 self.analysis.null_results()
+            self.case_logger.info("task {} has finished".format(analyzor_module.NAME))
             if not self._success:
                 self._success = self.analysis.success()
         return 0
@@ -82,6 +85,7 @@ class Deployer(Case, Task):
                 if self.do_task(task) == 1:
                     error = True
 
+        self.case_logger.info("Case finished")
         if self._success:
             self.save_to_succeed()
             self.logger.info("Copy to succeed")

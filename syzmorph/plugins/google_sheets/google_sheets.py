@@ -218,10 +218,11 @@ class GoogleSheets(AnalysisModule):
         path_result = os.path.join(self.path_case, "ModulesAnalysis", "results.json")
         result_json = json.load(open(path_result, 'r'))
         v = json.dumps(result_json)
-        if len(v) > 50000:
-            v = v[:49999]
         old_val = wks.get_value('H'+str(self.idx)) + '\n'
-        wks.update_value('H2', old_val + v)
+        new_data = old_val + v
+        if len(new_data) > 50000:
+            new_data = new_data[:49999]
+        wks.update_value('H2', new_data)
 
     def _write_capability_check(self, wks: pygsheets.Worksheet):
         res = {}
