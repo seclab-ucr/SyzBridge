@@ -121,6 +121,7 @@ class BugReproduce(AnalysisModule):
         
         if not self.plugin_finished("ModulesAnalysis"):
             self.info_msg("BugReproduce will not locate missing modules due to incorrectly results from ModulesAnslysis")
+            q.put([distro.distro_name, res])
             return
         self.info_msg("{} does not trigger any bugs, try to enable missing modules".format(distro.distro_name))
         m = self.get_missing_modules(distro.distro_name)
