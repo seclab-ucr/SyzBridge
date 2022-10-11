@@ -1,7 +1,6 @@
-from distutils.dist import Distribution
 import multiprocessing, threading
 import os, importlib
-import json, gc, copy
+import json, gc, time
 
 from commands import Command
 from infra.error import *
@@ -245,3 +244,4 @@ class RunCommand(Command):
                 index = i
             x = threading.Thread(target=self.prepare_cases, args=(index,), name="dispatcher-{}".format(i))
             x.start()
+            time.sleep(1)
