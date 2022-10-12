@@ -234,7 +234,7 @@ class CaseCommand(Command):
                     out_end = len(vm.output)
                     if out_begin < out_end:
                         print("\n".join(vm.output[out_begin:]))
-                    table = Table(title="QEMU INFO", box=box.ROUNDED, expand=True, show_lines=True)
+                    table = Table(box=box.ROUNDED, expand=True, show_lines=True)
                     if out_end == 0:
                         table.add_row("", Spinner('dots', text=Text('Wating for kernel to boot...', style="green")))
                     table.add_row("Distro name", Text(distro_name,style="green",overflow="fold"))
