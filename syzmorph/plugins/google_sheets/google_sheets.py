@@ -222,7 +222,7 @@ class GoogleSheets(AnalysisModule):
         new_data = old_val + v
         if len(new_data) > 50000:
             new_data = new_data[:49999]
-        wks.update_value('H2', new_data)
+        wks.update_value('H'+str(self.idx), new_data)
 
     def _write_capability_check(self, wks: pygsheets.Worksheet):
         res = {}
@@ -310,7 +310,8 @@ class GoogleSheets(AnalysisModule):
                 self.case_type = self.TYPE_SUCCEED_NEED_ADAPTATION
     
     def write_failed_str_to_cell(self, pos, wks):
-        self._write_to_cell(pos, "failed", wks)
+        old_val = wks.get_value(pos) + '\n' + "failed"
+        self._write_to_cell(pos, old_val, wks)
 
     def _write_to_cell(self, pos, text, wks):
         wks.update_value(pos, text)

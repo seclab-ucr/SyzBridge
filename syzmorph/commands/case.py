@@ -16,7 +16,7 @@ class CaseCommand(Command):
     def add_arguments(self, parser):
         super().add_arguments(parser)
         parser.add_argument('--proj', nargs='?', action='store', help='project name')
-        parser.add_argument('--hash', nargs='?', action='store', help='hash of a case or a file contains multiple hashs')
+        parser.add_argument('--case', nargs='?', action='store', help='hash of a case or a file contains multiple hashs')
         parser.add_argument('--all', action='store_true', help='Get all case info')
         parser.add_argument('--count', '-c', action='store_true', help='count the number of bugs')
 
@@ -32,6 +32,7 @@ class CaseCommand(Command):
         parser.add_argument('--qemu-ssh', nargs='?', action='store', help='overwrite the default ssh port')
         parser.add_argument('--get-trace', action='store_true', help='Get a ftrace from original PoC')
         parser.add_argument('--enable-module', action='append', default=[], help='enable additional modules before getting trace')
+        parser.add_argument('--parse-trace', nargs='?', action='store', help='Parse a ftrace. The vaule could be a ftrace file or a distro name')
 
         parser.add_argument('--prepare4debug', nargs='?', action='store', help='prepare a folder for case debug')
 
@@ -40,21 +41,18 @@ class CaseCommand(Command):
 
     def run(self, args):
         self.args = args
-        if args.proj is None:
-            print('Please specify a project name')
-            return
         self.proj_dir = os.path.join(os.getcwd(), "projects/{}".format(args.proj))
         self.cases = self.read_cases(args.proj)
-        if args.hash != None:
-            if os.path.exists(args.hash):
+        if args.case != None:
+            if os.path.exists(args.case):
                 t = self.cases.copy()
                 self.cases = {}
-                with open(args.hash, 'r') as f:
+                with open(args.case, 'r') as f:
                     for hash_val in f.readlines():
                         hash_val = hash_val.strip()
                         self.cases[hash_val] = t[hash_val]
             else:
-                self.cases = {args.hash: self.cases[args.hash]}
+                self.cases = {args.case: self.cases[args.case]}
         if args.count:
             j = json.load(open(self.proj_dir + '/cases.json', 'r'))
             print(len(j))
@@ -66,6 +64,9 @@ class CaseCommand(Command):
 
         if args.launch_qemu != None:
             self.launch_qemu(args.launch_qemu)
+            return
+        if args.parse_trace != None:
+            self.parse_trace(args.parse_trace)
             return
         if args.all:
             self.print_case_info()
@@ -90,10 +91,10 @@ class CaseCommand(Command):
                             os.remove(stamp_path)
             print("Remove finish stamp {} from {} cases".format(args.remove_stamp, len(self.cases)))
         if args.prepare4debug != None:
-            if args.hash == None:
+            if args.case == None:
                 print('Please specify a case hash for debug')
                 return
-            self.prepare_case_for_debug(args.hash, args.prepare4debug)
+            self.prepare_case_for_debug(args.case, args.prepare4debug)
     
     def prepare_case_for_debug(self, hash_val, folder):
         case_debug_path = folder
@@ -147,6 +148,36 @@ class CaseCommand(Command):
                 if self.args.case_title:
                     line += ' | ' + self.cases[hash_val]['title']
                 print(line)
+            
+    def parse_trace(self, value):
+        if os.path.exists(value):
+            self._call_ftraceparser(value)
+        else:
+            if self.args.config == None:
+                print("If --parse-trace followed by distro name, you need to specify a config file")
+                return
+            if self.args.case == None:
+                print("If --parse-trace followed by distro name, you need to specify a case hash")
+                return
+            if self.args.proj == None:
+                print("If --parse-trace followed by distro name, you need to specify a project")
+                return
+            if value == "upstream":
+                distro = self.cfg.get_upstream()
+            else:
+                distro = self.cfg.get_distro_by_name(value)
+                if distro == None:
+                    print('Cannot find distro {}'.format(value))
+                    return
+
+            folder = self._get_case_folder(self.args.case)
+            trace_analysis_path = os.path.join(self.proj_dir, folder, self.args.case[:7], 'TraceAnalysis')
+            ftrace_file = os.path.join(trace_analysis_path, 'trace-{}.report'.format(distro.distro_name))
+            if not os.path.exists(ftrace_file):
+                print("Cannot find ftrace file {}".format(ftrace_file))
+                return
+            self._call_ftraceparser(ftrace_file)
+        return
     
     def launch_qemu(self, distro_name):
         from rich.table import Table
@@ -158,31 +189,21 @@ class CaseCommand(Command):
         from rich.spinner import Spinner
 
         console = Console()
-        if self.args.hash is None:
+        if self.args.case is None:
             print('Please specify a case hash')
             return
         if self.args.config is None:
             print('Please specify a config file')
             return
-        hash_vals = self.read_case_from_folder('completed')
-        if self.args.hash in hash_vals:
-            folder = 'completed'
-        hash_vals = self.read_case_from_folder('incomplete')
-        if self.args.hash in hash_vals:
-            folder = 'incomplete'
-        hash_vals = self.read_case_from_folder('succeed')
-        if self.args.hash in hash_vals:
-            folder = 'succeed'
-        hash_vals = self.read_case_from_folder('error')
-        if self.args.hash in hash_vals:
-            folder = 'error'
+
+        folder = self._get_case_folder(self.args.case)
 
         distro = self.cfg.get_distro_by_name(distro_name)
         if distro == None:
             print('Cannot find distro {}'.format(distro_name))
             return
 
-        case_path = os.path.join(self.proj_dir, folder, self.args.hash[:7])
+        case_path = os.path.join(self.proj_dir, folder, self.args.case[:7])
         launch_script_path = os.path.join(case_path, 'BugReproduce', 'launch_{}.sh'.format(distro_name))
         if not os.path.exists(launch_script_path):
             print("Cannot find launch script {}".format(launch_script_path))
@@ -255,6 +276,27 @@ class CaseCommand(Command):
         if self.args.get_trace and ret:
             console.print("Downloaded trace to /tmp/trace-{}.report".format(distro_name))
         return
+    
+    def _get_case_folder(self, case_hash):
+        folder = None
+        hash_vals = self.read_case_from_folder('completed')
+        if case_hash in hash_vals:
+            folder = 'completed'
+        hash_vals = self.read_case_from_folder('incomplete')
+        if case_hash in hash_vals:
+            folder = 'incomplete'
+        hash_vals = self.read_case_from_folder('succeed')
+        if case_hash in hash_vals:
+            folder = 'succeed'
+        hash_vals = self.read_case_from_folder('error')
+        if case_hash in hash_vals:
+            folder = 'error'
+        return folder
+    
+    def _call_ftraceparser(self, trace_path):
+        ftraceparser_path = os.path.join(os.getcwd(), 'syzmorph/infra/ftraceparser/')
+        run_cmd = ['python3', 'ftraceparser', trace_path]
+        call(run_cmd, shell=False, cwd=ftraceparser_path, env=os.environ.copy())
 
     def _get_results(self, module_name, case_path):
         results_path = os.path.join(case_path, module_name, 'results.json')
@@ -269,7 +311,7 @@ class CaseCommand(Command):
         poc_path = os.path.join(case_plugin_path, poc_src)
         qemu.upload(user="root", src=[poc_path], dst="/root", wait=True)
         qemu.output.append("uploading {} to /root".format(poc_src))
-        if '386' in self.cases[self.args.hash]['manager']:
+        if '386' in self.cases[self.args.case]['manager']:
             out = qemu.command(cmds="gcc -m32 -pthread -o poc {}".format(poc_src), user="root", wait=True)
             qemu.output.append("gcc -m32 -pthread -o poc {}".format(poc_src))
             qemu.output.extend(out)
