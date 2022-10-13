@@ -39,8 +39,8 @@ class RunCommand(Command):
         # Regular arguments
         parser.add_argument('--image', nargs=1, action='store',
                             help='Linux image for bug reproducing')
-        parser.add_argument('--vmlinux', nargs='?', action='store',
-                            help='vmlinux for debugging')
+        parser.add_argument('--distro', nargs='?', action='store',
+                            help='Specifying the distro')
         parser.add_argument('-pm', '--parallel-max', nargs='?', action='store',
                             default='1', help='The maximum of parallel processes\n'
                                             '(default valus is 1)')
@@ -180,7 +180,6 @@ class RunCommand(Command):
                     t = getattr(self.cfg.kernel, vendor)
                     print("=========={}==========".format(t.distro_name))
                     print("[*] vendor image: {}".format(t.distro_image))
-                    print("[*] vmlinux: {}".format(t.vmlinux))
                     print("[*] ssh_port: {}".format(t.ssh_port))
                     print("[*] ssh_key: {}".format(t.ssh_key))
                     print("[*] distro_src: {}".format(t.distro_src))
@@ -228,6 +227,9 @@ class RunCommand(Command):
         self.cases = self.read_cases(args.proj)
         if args.case != None:
             self.cases = {args.case: self.cases[args.case]}
+        if self.args.distro != None:
+            for hash_val in self.cases:
+                self.cases[hash_val]['affect'] = self.args.distro
         self.build_work_dir()
 
         for key in self.cases:
