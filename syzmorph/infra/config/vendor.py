@@ -62,7 +62,8 @@ class Vendor():
             func = func.strip()
             if func not in self.func2module:
                 self.func2module[func] = []
-            self.func2module[func].append(cur_module) 
+            if cur_module not in self.func2module[func]:
+                self.func2module[func].append(cur_module) 
 
         dirname = os.path.dirname(self.distro_src)
         modules_dir = os.path.join(dirname, 'modules')
@@ -77,7 +78,8 @@ class Vendor():
                 continue
             if func not in self.func2module:
                 self.func2module[func] = []
-            self.func2module[func].append(cur_module)
+            if cur_module not in self.func2module[func]:
+                self.func2module[func].append(cur_module)
         return
 
     def is_inited(self):

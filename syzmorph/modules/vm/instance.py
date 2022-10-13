@@ -204,7 +204,7 @@ class VMInstance(Network):
                     self.qemu_fail = True
                 if self._output_lock.locked():
                     self._output_lock.release()
-                if self.qemu_fail:
+                if not self.func_finished():
                     self._send_return_value(False)
                 self.kill_vm()
                 return

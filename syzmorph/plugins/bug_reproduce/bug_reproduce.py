@@ -19,6 +19,7 @@ class BugReproduce(AnalysisModule):
     DEPENDENCY_PLUGINS = ["ModulesAnalysis", "CapabilityCheck"]
 
     FEATURE_LOOP_DEVICE = 1 << 0
+    FEATURE_MOD4ENV = 1 << 1
 
     def __init__(self):
         super().__init__()
@@ -29,6 +30,7 @@ class BugReproduce(AnalysisModule):
         self.distro_lock = threading.Lock()
         self.repro_timeout = None
         self._skip_regular_reproduce = False
+        self._addition_modules = []
         
     def prepare(self):
         self._init_results()
@@ -279,6 +281,7 @@ class BugReproduce(AnalysisModule):
         text = "".join(code)
         if text.find("int main") != -1:
             main_func = r"^int main"
+        loop_func = r"^(static )?void loop\(.*\)"
 
         for i in range(0, len(code)):
             line = code[i].strip()
@@ -292,11 +295,16 @@ class BugReproduce(AnalysisModule):
                 if need_namespace:
                     data.insert(len(data)-1, "#include \"sandbox.h\"\n")
                     insert_line.append([i+2, "setup_sandbox();\n"])
+            
+            if regx_match(loop_func, line):
+                if code[i+1].strip() == "{":
+                    insert_line.append([i+2, "printf(\"MAGIC!!?REACH POC CORE FUNCTION\\n\");\n"])
 
             for each in skip_funcs:
                 if regx_match(each, line):
                     data.pop()
-                    self.results[distro.distro_name]['skip_funcs'].append(each)
+                    if each not in self.results[distro.distro_name]['skip_funcs']:
+                        self.results[distro.distro_name]['skip_funcs'].append(each)
 
             # We dont have too much devices to connect, limit the number to 1
             if '*hash = \'0\' + (char)(a1 % 10);' in line:
@@ -310,6 +318,13 @@ class BugReproduce(AnalysisModule):
                     feature |= self.FEATURE_LOOP_DEVICE
                     if 'loop' not in self.results[distro.distro_name]['device_tuning']:
                         self.results[distro.distro_name]['device_tuning'].append('loop')
+            
+            if 'hwsim80211_create_device' in line:
+                if not (feature & self.FEATURE_MOD4ENV):
+                    feature |= self.FEATURE_MOD4ENV
+                    self.results[distro.distro_name]['env_modules'].append('mac80211_hwsim')
+                if 'mac80211_hwsim' not in self._addition_modules:
+                    self._addition_modules.append('mac80211_hwsim')
 
         if data != []:
             fdst.writelines(data)
@@ -425,6 +440,10 @@ class BugReproduce(AnalysisModule):
         if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
             self.logger.fatal("KASAN is not enabled in kernel!")
             raise KASANDoesNotEnabled(self.case_hash)
+        if len(self._addition_modules) > 0:
+            self.logger.info("Loading addition modules for environment setup: {}".format(self._addition_modules))
+            self._enable_missing_modules(qemu, self._addition_modules)
+
         res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q)
         if trigger:
             self.results[vm_tag]["repeat"] = False
@@ -607,6 +626,7 @@ class BugReproduce(AnalysisModule):
             distro_result['missing_module'] = []
             distro_result['skip_funcs'] = []
             distro_result['device_tuning'] = []
+            distro_result['env_modules'] = []
             distro_result['interface_tuning'] = []
             distro_result['namespace'] = False
             distro_result['root'] = None
