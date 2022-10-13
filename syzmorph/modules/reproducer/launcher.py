@@ -41,6 +41,7 @@ class Launcher(Build):
         remain = []
         
         i = 0
+        error_attempt = 0
         while i < attempt:
             args = {'th_index':i, 'func':func, 'args':func_args, 'root':root, 'work_dir':work_dir, 'vm_tag':vm_tag + '-' + str(i), **kwargs}
             x = multiprocessing.Process(target=self._reproduce, kwargs=args, name="{}-{} trigger-{}".format(self.manager.case_hash, self.kernel.distro_name, i))
@@ -56,9 +57,15 @@ class Launcher(Build):
                     remain = t[3:]
                 self.log("Reproducing done, crashes: {}, high_risk {}, qemu_fail {}".format(crashes, high_risk, qemu_fail))
                 if qemu_fail:
+                    error_attempt += 1
+                    if error_attempt > 3:
+                        break
                     continue
             else:
+                error_attempt += 1
                 self.log("Reproducing failed, ret {}".format(t))
+                if error_attempt > 3:
+                    break
                 continue
             i += 1
             if not trigger and crashes != []:
