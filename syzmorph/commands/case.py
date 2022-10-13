@@ -68,24 +68,30 @@ class CaseCommand(Command):
         if args.parse_trace != None:
             self.parse_trace(args.parse_trace)
             return
+        work_folder = []
         if args.all:
+            work_folder = ['succeed', 'error', 'incomplete', 'completed']
             self.print_case_info()
         if args.completed:
+            work_folder.append('completed')
             show = self.read_case_from_folder('completed')
             self.print_case_info(show)
         if args.incomplete:
+            work_folder.append('incomplete')
             show = self.read_case_from_folder('incomplete')
             self.print_case_info(show)
         if args.succeed:
+            work_folder.append('succeed')
             show = self.read_case_from_folder('succeed')
             self.print_case_info(show)
         if args.error:
+            work_folder.append('error')
             show = self.read_case_from_folder('error')
             self.print_case_info(show)
         if args.remove_stamp != []:
             for hash_val in self.cases:
                 for stamp in args.remove_stamp:
-                    for folder in ['succeed', 'error', 'incomplete', 'completed']:
+                    for folder in work_folder:
                         stamp_path = os.path.join(self.proj_dir, folder, hash_val[:7], '.stamp', stamp)
                         if os.path.exists(stamp_path):
                             os.remove(stamp_path)
@@ -124,11 +130,12 @@ class CaseCommand(Command):
         folder_path = os.path.join(self.proj_dir, folder)
         for case in os.listdir(folder_path):
             log_path = os.path.join(folder_path, case, 'log')
-            with open(log_path, 'r') as f:
-                line = f.readline()
-                hash_val = regx_get(case_hash_syzbot_regx, line, 0)
-                res.append(hash_val)
-                f.close()
+            if os.path.exists(log_path):
+                with open(log_path, 'r') as f:
+                    line = f.readline()
+                    hash_val = regx_get(case_hash_syzbot_regx, line, 0)
+                    res.append(hash_val)
+                    f.close()
         return res
     
     def read_cases(self, name):
