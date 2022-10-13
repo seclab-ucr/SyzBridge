@@ -92,6 +92,7 @@ class BugReproduce(AnalysisModule):
 
         for distro in self.cfg.get_distros():
             [distro_name, m] = output.get(block=True)
+            self.logger.info("Receive result from {}: {}".format(distro_name, m))
             res[distro_name] = m
         
         return res
