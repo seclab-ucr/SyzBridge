@@ -45,6 +45,8 @@ class SyzbotCommand(Command):
         parser.add_argument('--filter-by-distro-effective-cycle', action='store_true',
                             help='[bool] filter bugs by distro effective cycle\n'
                             'Use \'effective_cycle_start\' and \'effective_cycle_end\' in config file')
+        parser.add_argument('--filter-by-hash', nargs='?',
+                            help='[file|string] Rule out specific hash or a file that contains a list of hashs\n')
         parser.add_argument('--check-vul-exist', action='store_true',
                             help='[bool] Check if bug exist, this option only applies on fixed section\n')
         parser.add_argument('--addition', action='store_true',
@@ -86,6 +88,14 @@ class SyzbotCommand(Command):
         if self.args.key == None:
             self.args.key = ['']
         
+        filter_by_hash = []
+        if self.args.filter_by_hash != None:
+            if os.path.exists(self.args.filter_by_hash):
+                with open(self.args.filter_by_hash, 'r') as f:
+                    filter_by_hash = f.read().splitlines()
+            else:
+                filter_by_hash = [self.args.filter_by_hash]
+        
         self.proj_dir = self.build_proj_dir(args.proj)
         if self.proj_dir == None:
             return
@@ -96,12 +106,12 @@ class SyzbotCommand(Command):
             filter_by_reported=self.args.filter_by_reported, filter_by_closed=self.args.filter_by_closed, 
             filter_by_c_prog=self.args.filter_by_c_prog, filter_by_kernel=self.args.filter_by_kernel,
             filter_by_distro_effective_cycle=self.args.filter_by_distro_effective_cycle,
-            check_vul_exist=self.args.check_vul_exist,
+            check_vul_exist=self.args.check_vul_exist, filter_by_hashs=filter_by_hash,
             cfg=self.cfg, debug=self.args.debug, log_path = self.proj_dir)
         
         try:
             if self.args.get != None:
-                if len(self.args.get) == 40:
+                if not os.path.exists(self.args.get):
                     crawler.run_one_case(self.args.get)
                 else:
                     with open(self.args.get, 'r') as f:

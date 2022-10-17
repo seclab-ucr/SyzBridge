@@ -23,7 +23,7 @@ class Crawler:
                  url="https://syzkaller.appspot.com/upstream/fixed",
                  keyword=[], max_retrieve=99999, filter_by_reported="", log_path = ".", cfg=None,
                  filter_by_closed="", filter_by_c_prog=False, filter_by_kernel=[], 
-                 check_vul_exist=False,
+                 check_vul_exist=False, filter_by_hashs=[],
                  filter_by_distro_effective_cycle=False, include_high_risk=True, debug=False):
         self.url = url
         if type(keyword) == list:
@@ -65,6 +65,7 @@ class Crawler:
         self.filter_by_c_prog = filter_by_c_prog
         self.check_vul_exist = check_vul_exist
         self.filter_by_kernel = filter_by_kernel
+        self.filter_by_hashs = filter_by_hashs
         self._fixes = {}
         if cfg != None:
             self.cfg: Config = cfg
@@ -73,12 +74,16 @@ class Crawler:
         self.thread_lock = None
 
     def run(self):
-        self.logger.info("Wait for distro VMs are ready")
-        if not self.wait_for_distro_vm_ready():
-            return
+        if self.check_vul_exist:
+            self.logger.info("Wait for distro VMs are ready")
+            if not self.wait_for_distro_vm_ready():
+                return
         cases_hash, high_risk_impacts = self.gather_cases()
         for each in cases_hash:
             self._patch_info = {'url': None, 'fixes':[]}
+            if each['Hash'] in self.filter_by_hashs:
+                self.logger.debug("Skip {} because it's filtered by hash match".format(each['Hash']))
+                continue
             if 'Patch' in each:
                 patch_url = each['Patch']
                 if patch_url in self._patches or \
@@ -102,7 +107,8 @@ class Crawler:
                     self.cases[each['Hash']]['affect'] = None
                 self.cases[each['Hash']]['title'] = each['Title']
                 self.cases[each['Hash']]['patch'] = self._patch_info
-        self.distro_vm_kill()
+        if self.check_vul_exist:
+            self.distro_vm_kill()
         return
     
     def wait_for_distro_vm_ready(self):
@@ -476,9 +482,13 @@ class Crawler:
         return None
 
     def run_one_case(self, hash_val):
-        self.logger.info("Wait for distro VMs are ready")
-        if not self.wait_for_distro_vm_ready():
+        if hash_val in self.filter_by_hashs:
+            self.logger.debug("Skip {} because it's filtered by hash match".format(hash_val))
             return
+        if self.check_vul_exist:
+            self.logger.info("Wait for distro VMs are ready")
+            if not self.wait_for_distro_vm_ready():
+                return
         self.logger.info("retreive one case: %s",hash_val)
         patch_url = self.get_patch_url(hash_val)
         if self.retreive_case(hash_val) == -1:
@@ -503,7 +513,8 @@ class Crawler:
             self.cases[hash_val]['affect'] = None
         self.cases[hash_val]['title'] = self.get_title_of_case(hash_val)
         self.cases[hash_val]['patch'] = self._patch_info
-        self.distro_vm_kill()
+        if self.check_vul_exist:
+            self.distro_vm_kill()
         return self.cases[hash_val]
     
     def case_first_crash(self, hash_val):
