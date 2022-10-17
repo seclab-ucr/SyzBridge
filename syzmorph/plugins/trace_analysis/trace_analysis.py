@@ -20,6 +20,7 @@ class TraceAnalysis(AnalysisModule):
     def __init__(self):
         super().__init__()
         self.syzcall2syscall = {}
+        self.addition_modules = []
         
     def prepare(self):
         if not self.manager.has_c_repro:
@@ -279,11 +280,15 @@ class TraceAnalysis(AnalysisModule):
         self._write_to(final_report, self.REPORT_NAME)
     
     def _generate_script(self, cmd, script_name):
+        modprobe_cmd = ""
+        for mod in self.addition_modules:
+            modprobe_cmd += "modprobe {} || true\n".format(mod)
         trace_poc_text = """
 #!/bin/bash
 
 set -ex
 
+{}
 echo 140800 >  /sys/kernel/debug/tracing/buffer_size_kb
 chmod +x ./poc
 nohup {} > nohup.out 2>&1 &
@@ -311,26 +316,26 @@ fi
 
 EXIT_CODE=0
 ls trace.dat || EXIT_CODE=1
-exit $EXIT_CODE""".format(cmd)
+exit $EXIT_CODE""".format(modprobe_cmd, cmd)
         script_path = os.path.join(self.path_case_plugin, script_name)
         with open(script_path, "w") as f:
             f.write(trace_poc_text)
         return script_path
     
-    def _get_trace(self, cfg):
-        self.set_stage_text("Getting trace from {}".format(cfg.repro.distro_name))
-        self.info_msg("Generating trace for {}".format(cfg.repro.distro_name))
-        trace_path = os.path.join(self.path_case_plugin, "trace-{}.report".format(cfg.repro.distro_name))
+    def _get_trace(self, distro):
+        self.set_stage_text("Getting trace from {}".format(distro.distro_name))
+        self.info_msg("Generating trace for {}".format(distro.distro_name))
+        trace_path = os.path.join(self.path_case_plugin, "trace-{}.report".format(distro.distro_name))
         if os.path.exists(trace_path):
             return trace_path
-        if cfg.type == VMInstance.UPSTREAM:
+        if distro.type == VMInstance.UPSTREAM:
             if self.build_env_upstream() != 0:
                 self.err_msg("Failed to build upstream environment")
                 return None
 
-        qemu = cfg.repro.launch_qemu(self.case_hash, tag="{}-trace".format(cfg.distro_name), work_path=self.path_case_plugin, log_name="qemu-{}.log".format(cfg.repro.distro_name), 
-            timeout=TIMEOUT_TRACE_ANALYSIS, snapshot=False)
-        qemu.run(alternative_func=self._run_trace_cmd, args=("trace-{}".format(cfg.repro.distro_name), ))
+        qemu = distro.repro.launch_qemu(self.case_hash, tag="{}-trace".format(distro.distro_name), work_path=self.path_case_plugin, 
+        log_name="qemu-{}.log".format(distro.distro_name), timeout=TIMEOUT_TRACE_ANALYSIS, snapshot=False)
+        qemu.run(alternative_func=self._run_trace_cmd, args=("trace-{}".format(distro.distro_name), ))
         done = qemu.wait()
         qemu.kill()
         if not done:
@@ -344,7 +349,9 @@ exit $EXIT_CODE""".format(cmd)
                 'exit_to_usermode_loop', #Ubuntu
                 'exit_to_user_mode_prepare'] #Fedora
         enabled_syscalls = []
-        skip_funcs = [r"setup_usb\(\);", r"setup_leak\(\);", r"setup_cgroups\(\);", r"initialize_cgroups\(\);", r"setup_cgroups_loop\(\);"]
+        skip_funcs = []
+        if qemu.tag != "upstream-trace":
+            skip_funcs = [r"setup_usb\(\);", r"setup_leak\(\);"]
         data = []
 
         src = os.path.join(self.path_case, "poc.c")
@@ -405,6 +412,9 @@ exit $EXIT_CODE""".format(cmd)
             
             if regx_match(non_thread_func, line):
                 insert_exit_line = self._extract_func(i, code)
+            
+            if 'hwsim80211_create_device' in line:
+                self.addition_modules.append('mac80211_hwsim')
             
             # tune netdevice init function
             for each in devices_init_func_regx:
