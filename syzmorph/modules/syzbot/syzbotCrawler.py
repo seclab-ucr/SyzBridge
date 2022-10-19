@@ -84,18 +84,19 @@ class Crawler:
             if each['Hash'] in self.filter_by_hashs:
                 self.logger.debug("Skip {} because it's filtered by hash match".format(each['Hash']))
                 continue
+            patch_url = None
             if 'Patch' in each:
                 patch_url = each['Patch']
                 if patch_url in self._patches or \
                     (patch_url in high_risk_impacts and not self.include_high_risk):
                     continue
                 self._patches[patch_url] = True
-                if self.check_vul_exist:
-                    if not self.check_excluded_distro(each['Hash'], patch_url):
-                        self.logger.debug("{} does not have a fixes tag".format(each['Hash']))
-                        if each['Hash'] in self.cases:
-                            self.cases.pop(each['Hash'])
-                        continue
+            if self.check_vul_exist:
+                if patch_url == None or not self.check_excluded_distro(each['Hash'], patch_url):
+                    self.logger.debug("{} does not have a fixes tag or a patch url".format(each['Hash']))
+                    if each['Hash'] in self.cases:
+                        self.cases.pop(each['Hash'])
+                    continue
             if self.retreive_case(each['Hash']) != -1:
                 if self.filter_by_distro_effective_cycle:
                     self.cases[each['Hash']]['affect'] = self.get_affect_distro(int(each['Reported']))
@@ -496,10 +497,11 @@ class Crawler:
             return
         self._patch_info = {'url': None, 'fixes':[]}
         if self.check_vul_exist:
-            if not self.check_excluded_distro(hash_val, patch_url):
-                self.logger.error("{} does not have a fixes tag".format(hash_val))
+            if patch_url == None or not self.check_excluded_distro(hash_val, patch_url):
+                self.logger.error("{} does not have a fixes tag or a patch url".format(hash_val))
                 self.cases.pop(hash_val)
-                self.distro_vm_kill()
+                if self.check_vul_exist:
+                    self.distro_vm_kill()
                 return
         if self.filter_by_distro_effective_cycle:
             report_date = self.case_first_crash(hash_val)
@@ -507,7 +509,8 @@ class Crawler:
             if len(self.cases[hash_val]['affect']) == 0:
                 self.logger.error("{} does not affect any distro within its life cycle".format(hash_val))
                 self.cases.pop(hash_val)
-                self.distro_vm_kill()
+                if self.check_vul_exist:
+                    self.distro_vm_kill()
                 return
         else:
             self.cases[hash_val]['affect'] = None

@@ -26,6 +26,7 @@ class CaseCommand(Command):
         parser.add_argument('--error', action='store_true', help='Get error case info')
         parser.add_argument('--case-title', action='store_true', help='Get case title')
         parser.add_argument('--remove-stamp', action='append', default=[], help='Remove finish stamp')
+        parser.add_argument('--show', action='store_true', help='Show case info')
 
         parser.add_argument('--config', nargs='?', action='store', help='config file of a project')
         parser.add_argument('--launch-qemu', nargs='?', action='store', help='launch qemu of specified distro')
@@ -52,6 +53,9 @@ class CaseCommand(Command):
                         hash_val = hash_val.strip()
                         self.cases[hash_val] = t[hash_val]
             else:
+                if args.case not in self.cases:
+                    print("{} is not in project {}".format(args.case, args.proj))
+                    return
                 self.cases = {args.case: self.cases[args.case]}
         if args.count:
             j = json.load(open(self.proj_dir + '/cases.json', 'r'))
@@ -68,6 +72,9 @@ class CaseCommand(Command):
         if args.parse_trace != None:
             self.parse_trace(args.parse_trace)
             return
+        if args.show:
+            for hash_val in self.cases:
+                print(json.dumps(self.cases[hash_val], indent=4))
         work_folder = []
         if args.all:
             work_folder = ['succeed', 'error', 'incomplete', 'completed']
