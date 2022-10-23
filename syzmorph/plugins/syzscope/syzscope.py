@@ -370,7 +370,7 @@ done
                 for line in report:
                     if regx_match(reproducable_regx, line):
                         distro_name = regx_get(reproducable_regx, line, 0)
-                        distro = self.cfg.get_distro_by_name(distro_name)
+                        distro = self.cfg.get_kernel_by_name(distro_name)
                         ret.append(distro)
         return ret
 

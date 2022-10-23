@@ -9,7 +9,6 @@ from infra.tool_box import *
 from infra.ftraceparser.ftraceparser.trace import Trace, Node
 from plugins.error import *
 
-TIMEOUT_TRACE_ANALYSIS = 10*60
 class TraceAnalysis(AnalysisModule):
     NAME = "TraceAnalysis"
     REPORT_START = "======================TraceAnalysis Report======================"
@@ -23,6 +22,14 @@ class TraceAnalysis(AnalysisModule):
         self.addition_modules = []
         
     def prepare(self):
+        plugin = self.cfg.get_plugin(self.NAME)
+        if plugin == None:
+            self.err_msg("No such plugin {}".format(self.NAME))
+        try:
+            self.trace_timeout = int(plugin.timeout)
+        except AttributeError:
+            self.err_msg("Failed to get timeout")
+            return False
         if not self.manager.has_c_repro:
             self.err_msg("Case does not have c reproducer")
             return False
@@ -47,7 +54,7 @@ class TraceAnalysis(AnalysisModule):
 
         for _ in range(0,3):
             self.err_msg("Starting retrieving trace from upstream")
-            cfg = self.cfg.get_upstream()
+            cfg = self.cfg.get_kernel_by_name('upstream')
             if cfg == None:
                 break
             trace_upstream = self._get_trace(cfg)
@@ -138,31 +145,12 @@ class TraceAnalysis(AnalysisModule):
         return None
     
     def build_env_upstream(self):
-        self.set_stage_text("Building upstream kernel")
-        image = "stretch"
-        gcc_version = set_compiler_version(time_parser.parse(self.case["time"]), self.case["config"])
-        script = os.path.join(self.path_package, "scripts/deploy-linux.sh")
-        kernel = self.case["kernel"]
-        if len(self.case["kernel"].split(" ")) == 2:
-            kernel = self.case["kernel"].split(" ")[0]
-        chmodX(script)
-
-        kernel = self.case["kernel"]
-        try:
-            if self.case["kernel"].startswith("https"):
-                kernel = self.case["kernel"].split('/')[-1].split('.')[0]
-        except:
-            pass
-        
-        p = Popen([script, gcc_version, self.path_case, str(self.args.parallel_max), self.case["commit"], self.case["config"], 
-            image, "", "", str(self.index), kernel, ""],
-            stderr=STDOUT,
-            stdout=PIPE)
-        with p.stdout:
-            self._log_subprocess_output(p.stdout)
-        exitcode = p.wait()
-        self.info_msg("script/deploy.sh is done with exitcode {}".format(exitcode))
-        return exitcode
+        if self._check_stamp("BUILD_KERNEL") and not self._check_stamp("BUILD_TRACE_ANALYSIS_KERNEL"):
+            self._remove_stamp("BUILD_KERNEL")
+        panic_patch = os.path.join(self.path_package, "plugins/trace_analysis/panic.patch")
+        ret = self.build_mainline_kernel(patch=panic_patch)
+        self._create_stamp("BUILD_TRACE_ANALYSIS_KERNEL")
+        return ret
     
     def _run_trace_cmd(self, qemu: VMInstance, trace_filename, syz_repro=False):
         self.set_stage_text("Extracting trace from {}".format(trace_filename))
@@ -210,6 +198,15 @@ class TraceAnalysis(AnalysisModule):
                 return True
         return True
     
+    def _retrieve_trace(self, qemu: VMInstance, trace_filename):
+        out = qemu.command(cmds="ls trace.dat", user="root", wait=True)
+        for line in out:
+            if "No such file or directory" in line:
+                qemu.command(cmds="CPU_DATA_LIST=`ls trace.dat.cpu*`; trace-cmd restore $CPU_DATA_LIST", user="root", wait=True)
+        qemu.command(cmds="trace-cmd report > trace.report", user="root", wait=True)
+        qemu.download(user="root", src=["/root/trace.report"], dst="{}/{}.report".format(self.path_case_plugin, trace_filename), wait=True)
+        return True
+
     def prepare_syzkaller(self):
         i386 = None
         if regx_match(r'386', self.case["manager"]):
@@ -334,10 +331,14 @@ exit $EXIT_CODE""".format(modprobe_cmd, cmd)
                 return None
 
         qemu = distro.repro.launch_qemu(self.case_hash, tag="{}-trace".format(distro.distro_name), work_path=self.path_case_plugin, 
-        log_name="qemu-{}.log".format(distro.distro_name), timeout=TIMEOUT_TRACE_ANALYSIS, snapshot=False)
+        log_name="qemu-{}.log".format(distro.distro_name), timeout=self.trace_timeout, snapshot=False)
         qemu.run(alternative_func=self._run_trace_cmd, args=("trace-{}".format(distro.distro_name), ))
         done = qemu.wait()
-        qemu.kill()
+        qemu.kill_vm()
+        if not os.path.exists(trace_path):
+            qemu.run(alternative_func=self._retrieve_trace, args=("trace-{}".format(distro.distro_name), ))
+            done = qemu.wait()
+        qemu.destroy()
         if not done:
             return None
         return trace_path

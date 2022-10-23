@@ -77,8 +77,8 @@ function build_linux_folder {
   fi
 }
 
-if [ $# -lt 11 ]; then
-  echo "Usage ./deploy-linux.sh gcc_version case_path max_compiling_kernel linux_commit config_url image linux_repo linux_version index kernel patch"
+if [ $# -lt 14 ]; then
+  echo "Usage ./deploy-linux.sh gcc_version case_path max_compiling_kernel linux_commit config_url image linux_repo linux_version index kernel patch keep_config extra_cmd branch"
   exit 1
 fi
 
@@ -97,6 +97,9 @@ LINUX_VERSION=$8
 INDEX=$9
 KERNEL=${10}
 PATCH=${11}
+KEEP_CONFIG=${12}
+EXTRA_CMD=${13}
+BRANCH=${14}
 
 cd $CASE_PATH || exit 1
 if [ ! -d "compiler" ]; then
@@ -126,28 +129,35 @@ cd ..
 
 echo "[+] Building kernel"
 OLD_INDEX=`ls -l linux | rev | cut -d'-' -f 1`
-if [ "$OLD_INDEX" != "$INDEX" ] | [ ! -e ./linux ]; then
-  rm -rf "./linux" || echo "No linux repo"
+if [ "$OLD_INDEX" != "$INDEX" ] | [ ! -e ./linux-$KERNEL ]; then
+  rm -rf "./linux-$KERNEL" || echo "No linux repo"
   if [[ $KERNEL =~ linux-[0-9]+\.[0-9]+\.y$ ]]; then
     KERNEL="stable"
   fi
   LINUX0=$PROJECT_PATH/tools/linux-$KERNEL-0
   ls $LINUX0 || LINUX0="LINUX0"
   ls $PROJECT_PATH/tools/linux-$KERNEL-$INDEX || build_linux_folder $PROJECT_PATH/tools/linux-$KERNEL-$INDEX $LINUX0 $KERNEL
-  ln -s $PROJECT_PATH/tools/linux-$KERNEL-$INDEX ./linux
+  ln -s $PROJECT_PATH/tools/linux-$KERNEL-$INDEX ./linux-$KERNEL
   if [ -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
       rm $CASE_PATH/.stamp/BUILD_KERNEL
   fi
 fi
 
 if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
-    cd linux
+    if [ -z $LINUX_REPO ]; then
+      cd linux-$KERNEL
+    else
+      cd $LINUX_REPO
+    fi
     if [ $COMMIT == "0" ]; then
       cd linux-$LINUX_VERSION || get_linux $LINUX_REPO $LINUX_VERSION
     else
       git stash || echo "it's ok"
       make clean > /dev/null || echo "it's ok"
       git clean -fdx > /dev/null || echo "it's ok"
+      if [ ! -z $BRANCH ]; then
+        git checkout -f $BRANCH || (git fetch --all --tags > /dev/null && git pull --tags origin master > /dev/null && git reset --hard origin/master > /dev/null && git checkout -f $BRANCH)
+      fi
       git checkout -f $COMMIT || (git fetch --all --tags > /dev/null && git pull --tags origin master > /dev/null && git reset --hard origin/master > /dev/null && git checkout -f $COMMIT)
     fi
     curl $CONFIG > .config
@@ -241,25 +251,26 @@ if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
     CONFIG_DEBUG_BOOT_PARAMS
     "
 
-    for key in $CONFIGKEYSDISABLE;
-    do
-    config_disable $key
-    done
+    if [ $KEEP_CONFIG == "0" ]; then
+      for key in $CONFIGKEYSDISABLE;
+      do
+        config_disable $key
+      done
 
-    for key in $CONFIGKEYSENABLE;
-    do
-    config_enable $key
-    done
+      for key in $CONFIGKEYSENABLE;
+      do
+        config_enable $key
+      done
+    fi
 
     PATCH_TCP_CONG=0
     make olddefconfig CC=$COMPILER
     echo $PATCH 
-    if [ "$PATCH" != "" ]; then
+    if [ ! -z "$PATCH" ]; then
       patch -p1 -i $PATCH || exit 2
-      CWD=`pwd`
-      cd $PROJECT_PATH/syzmorph/infra/SmartPatch
-      python3 SmartPatch -linux $CWD -patch ./capability_patch.json || exit 2
-      cd $CWD
+    fi
+    if [ ! -z $EXTRA_CMD ]; then
+      eval $EXTRA_CMD || exit 2
     fi
     make -j$N_CORES CC=$COMPILER > make.log 2>&1 || PATCH_TCP_CONG=1
     if [ $PATCH_TCP_CONG == 1 ]; then

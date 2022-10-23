@@ -10,8 +10,8 @@ class VM(VMInstance, VMState):
             self.only_instance = False
             VMState.__init__(self, vmlinux, gdb_port, arch, work_path=work_path, log_suffix=log_suffix, debug=debug)
     
-    def kill(self):
-        self.logger.info("Kill QEMU on demand")
+    def destroy(self):
+        self.logger.info("Destory QEMU on demand")
         if not self.only_instance:
             if self.gdb != None:
                 self.gdb.close()

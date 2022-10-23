@@ -236,7 +236,7 @@ def chmodX(path):
 def request_get(url):
     return requests.request(method='GET', url=url)
 
-def init_logger(logger_id, cus_format='%(message)s', debug=False, propagate=False, handler_type = FILE_HANDLER):
+def init_logger(logger_id, cus_format='%(asctime)s %(message)s', debug=False, propagate=False, handler_type = FILE_HANDLER):
     ran = random.getrandbits(8)
     if (handler_type == FILE_HANDLER):
         handler = logging.FileHandler(logger_id)
@@ -503,7 +503,7 @@ def clone_repo(repo_url, repo_path):
     ret = call(['git', 'clone', repo_url, repo_path])
     return ret
 
-def local_command(command, cwd=None, shell=False, redir_err=True):
+def local_command(command, cwd=None, shell=False, redir_err=True, logger=None):
     out = []
     if redir_err:
         p = Popen(args=command, shell=shell, cwd=cwd, stdout=PIPE, stderr=PIPE)
@@ -516,6 +516,8 @@ def local_command(command, cwd=None, shell=False, redir_err=True):
                     line = line.decode("utf-8").strip('\n').strip('\r')
                 except:
                     continue
+                if logger != None:
+                    logger.info(line)
                 out.append(line)
                 #if debug:
                     #print(line)

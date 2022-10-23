@@ -133,7 +133,7 @@ class Crawler:
 
     def distro_vm_kill(self):
         for distro_name in self.distro_vm:
-            self.distro_vm[distro_name].kill()
+            self.distro_vm[distro_name].destroy()
     
     def create_snapshot(self, src, img, image_name):
         dst = "{}/{}-snapshot.img".format(img, image_name)

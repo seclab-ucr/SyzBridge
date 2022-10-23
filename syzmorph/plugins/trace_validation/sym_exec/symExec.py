@@ -70,7 +70,7 @@ class SymExec(MemInstrument):
     def cleanup(self):
         super().cleanup()
         if self.vm != None:
-            self.vm.kill()
+            self.vm.destroy()
 
     def setup_bug_capture(self, extra_noisy_func=None):
         self.extra_noisy_func = extra_noisy_func
@@ -98,11 +98,11 @@ class SymExec(MemInstrument):
         self.vm.timeout = 5*60
         if not self.vm.gdb_connect(self.gdb_port):
             self.logger.error("SyzScope does not support current gdb, please change to pwndbg in ~/.gdbinit")
-            qemu.kill()
+            qemu.destroy()
             return False
         if not self.vm.set_checkpoint():
             self.logger.error("No kasan_report() found")
-            qemu.kill()
+            qemu.destroy()
             return False
         self.proj = self.vm.kernel.proj
         self.vm.mon_connect(self.mon_port)

@@ -146,7 +146,7 @@ class SyzkallerInterface(AnalysisModule):
         self.buil_workdir()
         linux_path = os.path.join(self.path_case, "linux")
         image_path = os.path.join(self.path_case, "img")
-        syz_config = cfg_template.format(self.syzkaller_path, linux_path, image_path, "", 4, self.cfg.get_upstream().ssh_port)
+        syz_config = cfg_template.format(self.syzkaller_path, linux_path, image_path, "", 4, self.cfg.get_kernel_by_name('upstream').ssh_port)
         self._write_to(syz_config, "gopath/src/github.com/google/syzkaller/workdir/my.cfg")
 
     def buil_workdir(self):

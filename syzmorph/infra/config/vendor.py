@@ -49,7 +49,7 @@ class Vendor():
         qemu = self.repro.launch_qemu(tag=vm_tag, work_path=work_path)
         self.repro.run_qemu(qemu, self._get_modules)
         qemu.wait()
-        qemu.kill()
+        qemu.destroy()
         self.build_module_func_list()
         self._dump_modules_to_cache()
     
@@ -298,6 +298,8 @@ class Vendor():
     def distro_version(self, n):
         if type(n) != str:
             raise TargetFormatNotMatch(n, type(n), str)
+        if not regx_match(r'^\d+\.\d+\.\d+$', n):
+            raise TargetFormatNotMatch(n, "x.x.x", n)
         self._distro_version = n
 
     @property

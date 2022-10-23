@@ -53,6 +53,7 @@ class VMInstance(Network):
         if tag != '':
             self.tag = tag
         self.instance = None
+        self._killed = False
         Network.__init__(self, self.case_logger, self.debug, self.debug)
     
     def log_thread(func):
@@ -66,6 +67,7 @@ class VMInstance(Network):
     def reset(self):
         self.qemu_ready = False
         self.kill_qemu = False
+        self._killed = False
         self.qemu_fail = False
         self.dumped_ftrace = False
         #self.qemu_ready_bar = ""
@@ -138,6 +140,9 @@ class VMInstance(Network):
 
     def kill_vm(self):
         self.logger.info('Kill VM pid: {}'.format(self.instance.pid))
+        if self._killed:
+            return
+        self._killed = True
         try:
             self.instance.kill()
             time.sleep(3)
