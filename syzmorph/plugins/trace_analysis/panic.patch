@@ -1,0 +1,13 @@
+diff --git a/kernel/panic.c b/kernel/panic.c
+index 332736a72a58..ffaf8fa92b0d 100644
+--- a/kernel/panic.c
++++ b/kernel/panic.c
+@@ -176,6 +176,8 @@ static void panic_print_sys_info(void)
+  */
+ void panic(const char *fmt, ...)
+ {
++	printk(KERN_EMERG "DON'T PANIC!");
++	return;
+ 	static char buf[1024];
+ 	va_list args;
+ 	long i, i_next = 0, len;
