@@ -104,5 +104,19 @@
     ],
     "syz_clone3": [
         "clone3"
+    ],
+    "syz_usb_control_io": [
+        "ioctl"
+    ],
+    "syz_usb_ep_write": [
+        "ioctl"
+    ],
+    "syz_usb_disconnect": [
+        "close"
+    ],
+    "syz_usb_connect_ath9k": [
+        "open",
+        "ioctl",
+        "write"
     ]
 }
