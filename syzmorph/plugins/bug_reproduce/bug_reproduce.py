@@ -11,6 +11,7 @@ from subprocess import Popen, STDOUT, PIPE, call
 from plugins.modules_analysis import ModulesAnalysis
 from .error import *
 
+qemu_ooutput_window = 15
 class BugReproduce(AnalysisModule):
     NAME = "BugReproduce"
     REPORT_START = "======================BugReproduce Report======================"
@@ -55,6 +56,19 @@ class BugReproduce(AnalysisModule):
     def prepare_on_demand(self):
         self._prepared = True
         return True
+    
+    def expt_handler(func):
+        def inner(self, *args):
+            try:
+                ret = func(self, *args)
+            except KASANDoesNotEnabled as e:
+                raise e
+            except ModprobePaniced as e:
+                return [[], False, False, e.mod, e]
+            except Exception as e:
+                raise e
+            return ret
+        return inner
     
     def check(func):
         def inner(self):
@@ -129,7 +143,7 @@ class BugReproduce(AnalysisModule):
         self.info_msg("{} does not trigger any bugs, try to enable missing modules".format(distro.distro_name))
         m = self.get_missing_modules(distro.distro_name)
         missing_modules = [e['name'] for e in m if e['type'] != 0 ]
-        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, [], ), attempt=1, root=True, log_prefix='missing-modules', timeout=len(missing_modules) * 2 * self.repro_timeout + 300)
+        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, [], [],), attempt=1, root=True, log_prefix='missing-modules', timeout=len(missing_modules) * 2 * self.repro_timeout + 300)
         if success:
             self.results[distro.distro_name]['trigger'] = True
             tested_modules = t[0]
@@ -176,15 +190,15 @@ class BugReproduce(AnalysisModule):
                 self.report.append("{} is not in loadable list".format(e))
         return ret
     
-    def minimize_modules(self, distro, tested_modules: list, essential_modules: list):
-        tested_modules = tested_modules[::-1][1:]
-        self.info_msg("{} is minimizing modules list {}, current essential list {}".format(distro.distro_name, tested_modules, essential_modules))
-        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(tested_modules, essential_modules), root=True, attempt=1, log_prefix='minimize', timeout=len(tested_modules) * self.repro_timeout + 300)
+    def minimize_modules(self, distro, missing_modules: list, essential_modules: list):
+        missing_modules = missing_modules[::-1][1:]
+        self.info_msg("{} is minimizing modules list {}, current essential list {}".format(distro.distro_name, missing_modules, essential_modules))
+        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, essential_modules, []), root=True, attempt=1, log_prefix='minimize', timeout=len(missing_modules) * self.repro_timeout + 300)
         if success:
-            tested_modules = t[0]
-            if tested_modules != []:
+            missing_modules = t[0]
+            if missing_modules != []:
                 essential_modules.extend(t[::-1][0])
-                return self.minimize_modules(distro, tested_modules, essential_modules)
+                return self.minimize_modules(distro, missing_modules, essential_modules)
             else:
                 return essential_modules
         return None
@@ -206,14 +220,32 @@ class BugReproduce(AnalysisModule):
         distro.repro.init_logger(self.logger)
         self.root_user = distro.repro.root_user
         self.normal_user = distro.repro.normal_user
-        report, triggered, t = distro.repro.reproduce(func=func, func_args=func_args, root=root, work_dir=self.path_case_plugin, vm_tag=distro.distro_name, attempt=attempt, c_hash=self.case_hash, log_name=log_name, **kwargs)
-        if not result_queue.empty():
-            new_results = result_queue.get()
-            self.results[distro.distro_name] = new_results[distro.distro_name]
-        if triggered:
-            title = self._BugChecker(report)
-            self.bug_title = title
-            return triggered, t
+        
+        while True:
+            report, triggered, t = distro.repro.reproduce(func=func, func_args=func_args, root=root, work_dir=self.path_case_plugin, vm_tag=distro.distro_name, attempt=attempt, c_hash=self.case_hash, log_name=log_name, **kwargs)
+            if not result_queue.empty():
+                new_results = result_queue.get()
+                self.results[distro.distro_name] = new_results[distro.distro_name]
+            if triggered:
+                title = self._BugChecker(report)
+                self.bug_title = title
+                return triggered, t
+            if len(t) == 2: # only if expt is the type of ModeprobePaniced, we proceed
+                panic_mod = t[0]
+                expt = t[1]
+                if isinstance(expt, ModprobePaniced):
+                    missing_modules = func_args[0]
+                    essential_modules = func_args[1]
+                    preload_modules = func_args[2]
+                    idx = missing_modules.index(panic_mod)
+                    if idx == len(missing_modules) - 1:
+                        break
+                    preload_modules.extend(missing_modules[:idx])
+                    missing_modules = missing_modules[idx:]
+                    func_args = (missing_modules, essential_modules, preload_modules)
+                    func_args += (poc_feature, result_queue)
+                    continue
+            break
         return False, t
     
     def rename_poc(self, root: bool):
@@ -378,7 +410,8 @@ class BugReproduce(AnalysisModule):
             # Will solve this problem if this race happens in real world
             q.put([res, trigger_hunted_bug])
 
-    def tweak_modules(self, qemu: VMInstance, th_index, work_dir, root, missing_modules: list, essential_modules: list, poc_feature: int, result_queue: queue.Queue):
+    @expt_handler
+    def tweak_modules(self, qemu: VMInstance, th_index, work_dir, root, missing_modules: list, essential_modules: list, preload_modules: list, poc_feature: int, result_queue: queue.Queue):
         threading.Thread(target=self._update_qemu_timer_status, args=(th_index, qemu), name="update_qemu_timer_status").start()
         
         tested_modules = []
@@ -392,6 +425,8 @@ class BugReproduce(AnalysisModule):
             raise KASANDoesNotEnabled(self.case_hash)
 
         qemu.logger.info("Missing modules: {}".format(missing_modules))
+        qemu.logger.info("Loading preload modules: {}".format(preload_modules))
+        self._enable_missing_modules(qemu, preload_modules)
         qemu.logger.info("Loading essential modules {}".format(essential_modules))
         if essential_modules != []:
             self._enable_missing_modules(qemu, essential_modules)
@@ -427,6 +462,7 @@ class BugReproduce(AnalysisModule):
         result_queue.put(self.results)
         return [[], False, False, []]
     
+    @expt_handler
     def capture_kasan(self, qemu, th_index, work_dir, root, poc_feature, result_queue: queue.Queue):
         if root:
             self.set_stage_text("\[root] Reproducing on {}".format(qemu.tag))
@@ -508,9 +544,8 @@ class BugReproduce(AnalysisModule):
             self.logger.fatal("Fail to compile poc!")
             return [[], False]
 
-        n = 3
+        n = int(self.repro_timeout/qemu_ooutput_window)
         if repeat:
-            n = 20
             script = os.path.join(self.path_package, "scripts/run-script.sh")
             chmodX(script)
             p = Popen([script, str(qemu.port), self.path_case_plugin, qemu.key, user],
@@ -535,7 +570,7 @@ class BugReproduce(AnalysisModule):
         self.set_stage_text("gathering output")
         for _ in range(0, n):
             try:
-                [res, trigger] = qemu_queue.get(block=True, timeout=15)
+                [res, trigger] = qemu_queue.get(block=True, timeout=qemu_ooutput_window)
                 if trigger:
                     return res, trigger
             except queue.Empty:
@@ -583,14 +618,15 @@ class BugReproduce(AnalysisModule):
         return res, trigger_hunted_bug
 
     def _enable_missing_modules(self, qemu, manual_enable_modules):
-        failed = 0
         for each in manual_enable_modules:
             args = self._module_args(each)
             out = qemu.command(cmds="modprobe {}{}".format(each, args), user=self.root_user, wait=True)
             for line in out:
-                if 'modprobe: FATAL:' in line or 'modprobe: ERROR:' in line:
-                    failed += 1
-        return failed != len(manual_enable_modules)
+                if 'modprobe: FATAL: Module {} not found in directory'.format(each) in line:
+                    raise ModprobePaniced(each)
+                if 'Exec format error' in line:
+                    raise ModprobePaniced(each)
+        return True
     
     def _module_args(self, module):
         # This is not perfect, nf_conntrack has arguments recently

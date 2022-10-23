@@ -49,13 +49,13 @@ class CapabilityCheck(AnalysisModule):
     
     def get_capability_check_report(self):
         self.set_stage_text("Getting capabilities")
-        upstream = self.cfg.get_upstream()
+        upstream = self.cfg.get_kernel_by_name('upstream')
         qemu = upstream.repro.launch_qemu(self.case_hash, work_path=self.path_case_plugin\
             , log_name="qemu-{}.log".format(upstream.repro.distro_name), timeout=3*60, tag="capability_check")
         qemu.run(alternative_func=self._run_poc, args=())
         qemu.wait()
         report = self._parse_capability_log(qemu.output)
-        qemu.kill()
+        qemu.destroy()
         return report
     
     def parse_report(self, reports):
@@ -117,28 +117,10 @@ class CapabilityCheck(AnalysisModule):
         return True
     
     def build_env_upstream(self):
-        image = "stretch"
-        gcc_version = set_compiler_version(time_parser.parse(self.case["time"]), self.case["config"])
-        script = os.path.join(self.path_package, "scripts/deploy-linux.sh")
-        chmodX(script)
-
-        kernel = self.case["kernel"]
-        try:
-            if self.case["kernel"].startswith("https"):
-                kernel = self.case["kernel"].split('/')[-1].split('.')[0]
-        except:
-            pass
-
         patch = os.path.join(self.path_package, "plugins/capability_check/capability.patch")
-        p = Popen([script, gcc_version, self.path_case, str(self.args.parallel_max), self.case["commit"], self.case["config"], 
-            image, "", "", str(self.index), kernel, patch],
-            stderr=STDOUT,
-            stdout=PIPE)
-        with p.stdout:
-            self._log_subprocess_output(p.stdout)
-        exitcode = p.wait()
-        self.info_msg("script/deploy.sh is done with exitcode {}".format(exitcode))
-        return exitcode
+        json_path = os.path.join(self.path_package, "plugins/capability_check/capability_patch.json")
+        extra_cmd="python3 SmartPatch -linux {} -patch {}/capability_patch.json".format(os.path.join(self.path_case, "linux"), json_path)
+        return self.build_mainline_kernel(patch=patch, extra_cmd=extra_cmd)
     
     def generate_report(self):
         final_report = "\n".join(self.report)

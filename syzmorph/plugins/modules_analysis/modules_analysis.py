@@ -108,7 +108,7 @@ class ModulesAnalysis(AnalysisModule):
         trace = self._open_trace()
         if trace == None:
             raise TraceAnalysisError("Failed to open upstream trace file")
-        upstream = self.cfg.get_upstream()
+        upstream = self.cfg.get_kernel_by_name('upstream')
         self.vm["upstream"] = self._prepare_gdb(upstream)
         check_map = {}
         all_distros = self.cfg.get_distros()

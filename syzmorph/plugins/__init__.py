@@ -5,7 +5,8 @@ import json
 from subprocess import call
 from infra.config.config import Config
 from infra.console.message import ConsoleMessage
-from deployer.case import Case
+from infra.tool_box import *
+from dateutil import parser as time_parser
 from .error import *
 
 logger = logging.getLogger(__name__)
@@ -162,6 +163,42 @@ class AnalysisModule:
         self.console_msg.type = ConsoleMessage.INFO
         self.console_msg.module[module_name] = [ConsoleMessage.INFO, "Preparing {}".format(module_name), ""]
         self.manager.send_to_console()
+    
+    def build_mainline_kernel(self, commit=None, config=None, image=None, gcc_version=None, kernel=None, patch="", keep_ori_config=False, extra_cmd="", kernel_repo="", branch=""):
+        self.set_stage_text("Building mainline kernel")
+        if commit == None:
+            commit = self.case["commit"]
+        if config == None:
+            config = self.case["config"]
+        if image == None:
+            image = "stretch"
+        if gcc_version == None:
+            gcc_version = set_compiler_version(time_parser.parse(self.case["time"]), self.case["config"])
+
+        if kernel == None:
+            kernel = self.case["kernel"]
+            try:
+                if self.case["kernel"].startswith("https"):
+                    kernel = self.case["kernel"].split('/')[-1].split('.')[0]
+            except:
+                pass
+        if keep_ori_config:
+            keep_ori_config = "1"
+        else:
+            keep_ori_config = "0"
+        
+        script = os.path.join(self.path_package, "scripts/deploy-linux.sh")
+        chmodX(script)
+        
+        p = Popen([script, gcc_version, self.path_case, str(self.args.parallel_max), commit, config, 
+            image, kernel_repo, "", str(self.index), kernel, patch, keep_ori_config, extra_cmd, branch],
+            stderr=STDOUT,
+            stdout=PIPE)
+        with p.stdout:
+            self._log_subprocess_output(p.stdout)
+        exitcode = p.wait()
+        self.info_msg("script/deploy.sh is done with exitcode {}".format(exitcode))
+        return exitcode
 
     def set_stage_text(self, text):
         if not self.console_mode:
