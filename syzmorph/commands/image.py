@@ -276,7 +276,7 @@ class ImageCommand(Command):
         if self.args.check_distro == None or self.args.check_distro == "all":
             all_distros = self.cfg.get_all_distros()
         else:
-            all_distros = [self.cfg.get_distro_by_name(self.args.check_distro)]
+            all_distros = [self.cfg.get_kernel_by_name(self.args.check_distro)]
         n_distro = len(all_distros)
         mem = self.get_mem_free()
         if mem == 0:

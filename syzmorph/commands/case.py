@@ -176,13 +176,10 @@ class CaseCommand(Command):
             if self.args.proj == None:
                 print("If --parse-trace followed by distro name, you need to specify a project")
                 return
-            if value == "upstream":
-                distro = self.cfg.get_upstream()
-            else:
-                distro = self.cfg.get_distro_by_name(value)
-                if distro == None:
-                    print('Cannot find distro {}'.format(value))
-                    return
+            distro = self.cfg.get_kernel_by_name(value)
+            if distro == None:
+                print('Cannot find distro {}'.format(value))
+                return
 
             folder = self._get_case_folder(self.args.case)
             trace_analysis_path = os.path.join(self.proj_dir, folder, self.args.case[:7], 'TraceAnalysis')
@@ -212,7 +209,7 @@ class CaseCommand(Command):
 
         folder = self._get_case_folder(self.args.case)
 
-        distro = self.cfg.get_distro_by_name(distro_name)
+        distro = self.cfg.get_kernel_by_name(distro_name)
         if distro == None:
             print('Cannot find distro {}'.format(distro_name))
             return
@@ -255,7 +252,7 @@ class CaseCommand(Command):
         mem = regx_get(r'-m (\d+G)', cmd, 0)
         cpu = regx_get(r'-smp (\d+)', cmd, 0)
         vm = VM(linux=None, kernel=distro, hash_tag="qemu {}".format(distro.distro_name), debug=False,
-            port=ssh_port, key=distro.ssh_key, image=distro_image, mem=mem, cpu=cpu)
+            port=ssh_port, gdb_port=distro.gdb_port, mon_port=distro.mon_port, key=distro.ssh_key, image=distro_image, mem=mem, cpu=cpu)
         if self.args.get_trace:
             vm.run(alternative_func=self._get_trace, args=(case_path,distro_name,))
         else:
@@ -283,12 +280,12 @@ class CaseCommand(Command):
                     live_table.update(Align.center(table))
                     out_begin = out_end
             except KeyboardInterrupt:
-                vm.kill()
+                vm.destroy()
                 vm.instance.wait()
                 return
         ret = vm.wait()
         if self.args.get_trace and ret:
-            console.print("Downloaded trace to /tmp/trace-{}.report".format(distro_name))
+            console.print("Downloaded trace to /tmp/trace-{}-{}.report".format(self.args.case, distro_name))
         return
     
     def _get_case_folder(self, case_hash):
@@ -333,7 +330,7 @@ class CaseCommand(Command):
             out = qemu.command(cmds="gcc -pthread -o poc {}".format(poc_src), user="root", wait=True)
             qemu.output.append("gcc -pthread -o poc {}".format(poc_src))
             qemu.output.extend(out)
-        trace_filename = "trace-{}".format(distro_name)
+        trace_filename = "trace-{}-{}".format(self.args.case, distro_name)
         trace_poc_script_name = 'trace-poc-{}-trace.sh'.format(distro_name)
         trace_poc_path = os.path.join(case_path, 'TraceAnalysis', trace_poc_script_name)
 

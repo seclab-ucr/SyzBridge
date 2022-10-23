@@ -80,12 +80,19 @@ class Config:
             res.append(cfg)
         return res
 
-    def get_distro_by_name(self, name):
-        for distro in self.get_all_distros():
-            if distro.distro_name == name and distro.type == VMInstance.DISTROS:
+    def get_kernel_by_name(self, name):
+        for distro in self.get_all_kernels():
+            if distro.distro_name == name:
                 return distro
         return None
     
+    def get_all_kernels(self)-> List[Vendor]:
+        res = []
+        for name in self.kernel.__dict__:
+            distro = getattr(self.kernel, name)
+            res.append(distro)
+        return res
+
     # get_all_distros ignore is_inited() and need_repro()
     # It returns every distro that was defined in config file
     def get_all_distros(self)-> List[Vendor]:
@@ -108,12 +115,17 @@ class Config:
                 res.append(distro)
         return res
     
-    def get_upstream(self)-> Vendor:
+    def get_upstreams(self)-> Vendor:
+        res = []
         for name in self.kernel.__dict__:
             distro = getattr(self.kernel, name)
             if distro.type == VMInstance.UPSTREAM:
-                return distro
-        return None
+                if not distro.is_inited():
+                    continue
+                if not distro.repro.need_repro():
+                    continue
+                res.append(distro)
+        return res
     
     def get_plugin(self, name)-> Plugin:
         try:

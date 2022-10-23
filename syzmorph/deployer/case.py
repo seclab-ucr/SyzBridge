@@ -24,7 +24,6 @@ class Case:
         self.path_ori_case = self.path_case
         self.case = case
         self.has_c_repro = True
-        self.path_linux = ""
         self.console_mode = self.args.console
         self._init_case(case_hash)
     
@@ -67,8 +66,6 @@ class Case:
                 self.path_case = dst
         else:
             os.makedirs(self.path_case, exist_ok=True)
-        
-        self.path_linux = os.path.join(self.path_case, "linux")
         
         self.case_logger = init_logger(self.path_case+"/log", 
             cus_format='%(asctime)s %(message)s',

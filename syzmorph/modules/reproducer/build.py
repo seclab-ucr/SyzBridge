@@ -14,7 +14,7 @@ class Build():
         self.distro_name = ""
         self.path_case = manager.path_case
         self.path_syzmorph = manager.path_syzmorph
-        self.path_linux = manager.path_linux
+        self.path_linux = None
         self.index = manager.index
         self.root_user = None
         self.normal_user = None
@@ -57,8 +57,9 @@ class Build():
             self.distro_name = self.kernel.distro_name
         if self.vmtype == VMInstance.UPSTREAM:
             self.image_path = "{}/img/{}-snapshot.img".format(self.path_case, self.kernel.distro_name)
-            self.vmlinux = "{}/linux/vmlinux".format(self.path_case)
+            self.vmlinux = "{}/linux-upstream/vmlinux".format(self.path_case)
             self.ssh_key = "{}/img/stretch.img.key".format(self.path_case)
+            self.path_linux = "{}/linux-{}".format(self.path_case, self.kernel.distro_name)
             self.distro_name = self.kernel.distro_name
 
     def create_snapshot(self, src, img, image_name):
