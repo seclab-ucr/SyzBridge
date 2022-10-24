@@ -117,7 +117,7 @@ EOF
 
         # Known issue 1: ubuntu-22.04 installs tiny-initramfs along with linux dep packages
         # This cause kernel from locating lvm disk
-        apt-get update
+        apt-get update || sleep 30 && apt-get update
         apt-get build-dep -y linux linux-image-$(uname -r)
         apt-get install -y git trace-cmd psmisc fakeroot libncurses-dev gawk flex bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev libiberty-dev autoconf gcc-multilib
         apt-get install -y linux-cloud-tools-common linux-tools-common || true
@@ -220,6 +220,50 @@ function compile_ubuntu() {
             CONFIG_FAIL_MMC_REQUEST
             CONFIG_FAIL_PAGE_ALLOC
             CONFIG_FAULT_INJECTION_DEBUG_FS
+            ${CONFIGKEYSENABLE}"
+        fi
+        enable_feature=$((enable_feature>>1))
+
+        if [ $((enable_feature%2)) == 1 ]; then
+            CONFIGKEYSENABLE="CONFIG_DEBUG_DEVRES
+            CONFIG_DEBUG_BUGVERBOSE
+            CONFIG_DEBUG_INFO
+            CONFIG_DEBUG_INFO_BTF
+            CONFIG_DEBUG_INFO_BTF_MODULES
+            CONFIG_DEBUG_FS
+            CONFIG_DEBUG_FS_ALLOW_ALL
+            CONFIG_DEBUG_KERNEL
+            CONFIG_DEBUG_MISC
+            CONFIG_DEBUG_OBJECTS
+            CONFIG_DEBUG_OBJECTS_FREE
+            CONFIG_DEBUG_OBJECTS_TIMERS
+            CONFIG_DEBUG_OBJECTS_WORK
+            CONFIG_DEBUG_OBJECTS_RCU_HEAD
+            CONFIG_DEBUG_OBJECTS_PERCPU_COUNTER
+            CONFIG_DEBUG_STACK_USAGE
+            CONFIG_DEBUG_VM
+            CONFIG_DEBUG_VM_VMACACHE
+            CONFIG_DEBUG_VM_RB
+            CONFIG_DEBUG_VM_PGFLAGS
+            CONFIG_DEBUG_VM_PGTABLE
+            CONFIG_DEBUG_VIRTUAL
+            CONFIG_DEBUG_MEMORY_INIT
+            CONFIG_DEBUG_PER_CPU_MAPS
+            CONFIG_DEBUG_KMAP_LOCAL
+            CONFIG_DEBUG_KMAP_LOCAL_FORCE_MAP
+            CONFIG_DEBUG_PREEMPT
+            CONFIG_DEBUG_RT_MUTEXES
+            CONFIG_DEBUG_SPINLOCK
+            CONFIG_DEBUG_MUTEXES
+            CONFIG_DEBUG_WW_MUTEX_SLOWPATH
+            CONFIG_DEBUG_RWSEMS
+            CONFIG_DEBUG_LOCK_ALLOC
+            CONFIG_DEBUG_ATOMIC_SLEEP
+            CONFIG_DEBUG_LIST
+            CONFIG_DEBUG_PLIST
+            CONFIG_DEBUG_SG
+            CONFIG_DEBUG_NOTIFIERS
+            CONFIG_DEBUG_CREDENTIALS
             ${CONFIGKEYSENABLE}"
         fi
         enable_feature=$((enable_feature>>1))

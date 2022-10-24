@@ -28,6 +28,7 @@ class ImageCommand(Command):
     FEATURE_KASAN = 1 << 0
     FEATURE_UBSAN = 1 << 1
     FEATURE_FAULT_INJECTION = 1 << 2
+    FEATURE_DEBUG = 1 << 3
 
     def __init__(self):
         super().__init__()
@@ -84,6 +85,8 @@ class ImageCommand(Command):
                             help='Enable CONFIG_UBSAN (Fall 2020)')
         parser.add_argument('--enable-fault-injection', action='store_true',
                             help='Enable CONFIG_FAULT_INJECTION')
+        parser.add_argument('--enable-debug-feature', action='store_true',
+                            help='Enable a batch of CONFIG_DEBUG_X features')
         parser.add_argument('--enable-extra', action='store', nargs='+',
                             help='Enable extra config')
         parser.add_argument('--disable-extra', action='store', nargs='+',
@@ -125,7 +128,7 @@ class ImageCommand(Command):
         cfg['root_user'] = self.ssh_user
         cfg['normal_user'] = "etenal"
         cfg['distro_code_name'] = "unknown"
-        cfg['distro_version'] = "unknown"
+        cfg['distro_version'] = "1.1.1"
         cfg['distro_name'] = self.distro
         cfg['type'] = 'distro'
         print("[distro_image]: {}".format(self.image))
@@ -185,6 +188,8 @@ class ImageCommand(Command):
             self.enable_feature |= self.FEATURE_UBSAN
         if self.args.enable_fault_injection:
             self.enable_feature |= self.FEATURE_FAULT_INJECTION
+        if self.args.enable_debug_feature:
+            self.enable_feature |= self.FEATURE_DEBUG
         self.logger = init_logger(logger_id=os.path.join(self.build_dir, "build.log") ,debug=True, propagate=False, handler_type=STREAM_HANDLER)
         return True
     

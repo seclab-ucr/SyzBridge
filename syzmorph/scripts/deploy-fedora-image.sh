@@ -20,6 +20,9 @@ WantedBy=multi-user.target
 EOF
 
     chmod 644 /etc/systemd/system/dhclient.service
+    # Disable auto update
+    systemctl disable dnf-makecache.service
+    systemctl disable dnf-makecache.timer
     systemctl enable dhclient.service
 }
 
@@ -118,6 +121,48 @@ function compile_fedora() {
             echo "CONFIG_FAIL_MMC_REQUEST=y" >> kernel-local
             echo "CONFIG_FAIL_PAGE_ALLOC=y" >> kernel-local
             echo "CONFIG_FAULT_INJECTION_DEBUG_FS=y" >> kernel-local
+        fi
+        enable_feature=$((enable_feature>>1))
+        if [ $((enable_feature%2)) == 1 ]; then
+            echo "CONFIG_DEBUG_DEVRES=y" >> kernel-local
+            echo "CONFIG_DEBUG_BUGVERBOSE=y" >> kernel-local
+            echo "CONFIG_DEBUG_INFO=y" >> kernel-local
+            echo "CONFIG_DEBUG_INFO_BTF=y" >> kernel-local
+            echo "CONFIG_DEBUG_INFO_BTF_MODULES=y" >> kernel-local
+            echo "CONFIG_DEBUG_FS=y" >> kernel-local
+            echo "CONFIG_DEBUG_FS_ALLOW_ALL=y" >> kernel-local
+            echo "CONFIG_DEBUG_KERNEL=y" >> kernel-local
+            echo "CONFIG_DEBUG_MISC=y" >> kernel-local
+            echo "CONFIG_DEBUG_OBJECTS=y" >> kernel-local
+            echo "CONFIG_DEBUG_OBJECTS_FREE=y" >> kernel-local
+            echo "CONFIG_DEBUG_OBJECTS_TIMERS=y" >> kernel-local
+            echo "CONFIG_DEBUG_OBJECTS_WORK=y" >> kernel-local
+            echo "CONFIG_DEBUG_OBJECTS_RCU_HEAD=y" >> kernel-local
+            echo "CONFIG_DEBUG_OBJECTS_PERCPU_COUNTER=y" >> kernel-local
+            echo "CONFIG_DEBUG_STACK_USAGE=y" >> kernel-local
+            echo "CONFIG_DEBUG_VM=y" >> kernel-local
+            echo "CONFIG_DEBUG_VM_VMACACHE=y" >> kernel-local
+            echo "CONFIG_DEBUG_VM_RB=y" >> kernel-local
+            echo "CONFIG_DEBUG_VM_PGFLAGS=y" >> kernel-local
+            echo "CONFIG_DEBUG_VM_PGTABLE=y" >> kernel-local
+            echo "CONFIG_DEBUG_VIRTUAL=y" >> kernel-local
+            echo "CONFIG_DEBUG_MEMORY_INIT=y" >> kernel-local
+            echo "CONFIG_DEBUG_PER_CPU_MAPS=y" >> kernel-local
+            echo "CONFIG_DEBUG_KMAP_LOCAL=y" >> kernel-local
+            echo "CONFIG_DEBUG_KMAP_LOCAL_FORCE_MAP=y" >> kernel-local
+            echo "CONFIG_DEBUG_PREEMPT=y" >> kernel-local
+            echo "CONFIG_DEBUG_RT_MUTEXES=y" >> kernel-local
+            echo "CONFIG_DEBUG_SPINLOCK=y" >> kernel-local
+            echo "CONFIG_DEBUG_MUTEXES=y" >> kernel-local
+            echo "CONFIG_DEBUG_WW_MUTEX_SLOWPATH=y" >> kernel-local
+            echo "CONFIG_DEBUG_RWSEMS=y" >> kernel-local
+            echo "CONFIG_DEBUG_LOCK_ALLOC=y" >> kernel-local
+            echo "CONFIG_DEBUG_ATOMIC_SLEEP=y" >> kernel-local
+            echo "CONFIG_DEBUG_LIST=y" >> kernel-local
+            echo "CONFIG_DEBUG_PLIST=y" >> kernel-local
+            echo "CONFIG_DEBUG_SG=y" >> kernel-local
+            echo "CONFIG_DEBUG_NOTIFIERS=y" >> kernel-local
+            echo "CONFIG_DEBUG_CREDENTIALS=y" >> kernel-local
         fi
         enable_feature=$((enable_feature>>1))
         patch -p1 -f -i ~/kernel_spec.patch || sed -i 's/%define listnewconfig_fail 1/%define listnewconfig_fail 0/' kernel.spec
