@@ -502,6 +502,11 @@ class ImageCommand(Command):
                         passed_check = True
                     else:
                         return False
+                if self.enable_feature & self.FEATURE_DEBUG != 0:
+                    if self._kernel_config_pre_check(qemu, 'CONFIG_DEBUG_KERNEL=y'):
+                        passed_check = True
+                    else:
+                        return False
                 if passed_check:
                     self._retrieve_modules(qemu)
                     qemu.command(user=self.ssh_user, cmds="shutdown -h now", wait=True)
