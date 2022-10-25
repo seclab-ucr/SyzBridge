@@ -213,7 +213,7 @@ class ImageCommand(Command):
         else:
             if mem / 2 < 2:
                 mem = str(2)+"G"
-            elif mem / 2 >= 8:
+            else:
                 mem = str(int(mem / 2))+"G"
         
         cpu = self.get_cpu_count()
