@@ -257,7 +257,6 @@ function compile_ubuntu() {
             CONFIG_DEBUG_MUTEXES
             CONFIG_DEBUG_WW_MUTEX_SLOWPATH
             CONFIG_DEBUG_RWSEMS
-            CONFIG_DEBUG_LOCK_ALLOC
             CONFIG_DEBUG_ATOMIC_SLEEP
             CONFIG_DEBUG_LIST
             CONFIG_DEBUG_PLIST

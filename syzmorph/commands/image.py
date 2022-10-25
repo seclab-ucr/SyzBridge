@@ -655,7 +655,6 @@ class ImageCommand(Command):
                     break;
             qemu.command(user=self.ssh_user, cmds="shutdown -h now", wait=True)
 
-        time.sleep(10) # Wait for normally shutdown
         return True
     
     def grub_order(self, grub_path):
