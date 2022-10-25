@@ -191,7 +191,7 @@ function archive_kernel() {
         cd ~/debian-${code_name}/
         
         cp linux-${kernel_version}/.config linux-${kernel_version}/config
-        tar -czf debian.tar.gz linux-${kernel_version}
+        tar -czf debian.tar.gz linux-${kernel_version}/*
         mv debian.tar.gz /tmp
         touch ~/.stamp/ARCHIVE_KERNEL
     fi

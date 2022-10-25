@@ -478,7 +478,7 @@ class ImageCommand(Command):
         idx_step = self._step_progress_finish(step_task_id, idx_step)
         
         step_task_id = self.step_progress.add_task("", action=self._step_actions[idx_step], name=distro.distro_name)
-        qemu.command(user=self.ssh_user, cmds="shutdown -h now", wait=True)
+        qemu.shutdown()
         res.append(step_task_id)
         return res
     
@@ -509,7 +509,7 @@ class ImageCommand(Command):
                         return False
                 if passed_check:
                     self._retrieve_modules(qemu)
-                    qemu.command(user=self.ssh_user, cmds="shutdown -h now", wait=True)
+                    qemu.shutdown()
                     return True
                 else:
                     if self.enable_feature == 0:
@@ -586,7 +586,8 @@ class ImageCommand(Command):
                 grub_str = self.grub_order(os.path.join(self.build_dir, "grub.cfg"))
                 self.logger.info("grub command: {}".format(grub_str))
                 if grub_str != None:
-                    qemu.command(user=self.ssh_user, cmds="sed -i 's/GRUB_DEFAULT=.*/GRUB_DEFAULT=\"{}\"/' /etc/default/grub && update-grub && shutdown -h now".format(grub_str), wait=True)
+                    qemu.command(user=self.ssh_user, cmds="sed -i 's/GRUB_DEFAULT=.*/GRUB_DEFAULT=\"{}\"/' /etc/default/grub && update-grub".format(grub_str), wait=True)
+                    qemu.shutdown()
             
         if self.distro == "debian":
             ret = qemu.upload(user=self.ssh_user, src=[image_building_script_path], dst='~', wait=True)
@@ -611,7 +612,8 @@ class ImageCommand(Command):
                 grub_str = self.grub_order(os.path.join(self.build_dir, "grub.cfg"))
                 self.logger.info("grub command: {}".format(grub_str))
                 if grub_str != None:
-                    qemu.command(user=self.ssh_user, cmds="sed -i 's/GRUB_DEFAULT=.*/GRUB_DEFAULT=\"{}\"/' /etc/default/grub && update-grub && shutdown -h now".format(grub_str), wait=True)
+                    qemu.command(user=self.ssh_user, cmds="sed -i 's/GRUB_DEFAULT=.*/GRUB_DEFAULT=\"{}\"/' /etc/default/grub && update-grub".format(grub_str), wait=True)
+                    qemu.shutdown()
         
         if self.distro == "fedora":
             out = qemu.command(user=self.ssh_user, cmds="uname -r", wait=True);
@@ -651,8 +653,8 @@ class ImageCommand(Command):
                     self.kernel_version = regx_get(r'vmlinuz-(.*\+debug)', line, 0)
                     qemu.command(user=self.ssh_user, cmds="grubby --set-default /boot/vmlinuz-{}".format(self.kernel_version), wait=True);
                     qemu.command(user=self.ssh_user, cmds="grub2-mkconfig -o /boot/grub2/grub.cfg", wait=True);
-                    break;
-            qemu.command(user=self.ssh_user, cmds="shutdown -h now", wait=True)
+                    break
+            qemu.shutdown()
 
         return True
     

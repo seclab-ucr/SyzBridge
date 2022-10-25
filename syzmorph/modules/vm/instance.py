@@ -37,6 +37,7 @@ class VMInstance(Network):
         self._qemu_return = queue.Queue()
         self.qemu_ready = False
         self.kill_qemu = False
+        self._shutdown = False
         self.qemu_fail = False
         self.dumped_ftrace = False
         self.output = []
@@ -137,6 +138,10 @@ class VMInstance(Network):
     def wait(self):
         ret = self._qemu_return.get(block=True)
         return ret
+    
+    def shutdown(self):
+        self._shutdown = True
+        self.command(user='root', cmds="shutdown -h now", wait=False)
 
     def kill_vm(self):
         self.logger.info('Kill VM pid: {}'.format(self.instance.pid))
@@ -144,7 +149,13 @@ class VMInstance(Network):
             return
         self._killed = True
         try:
-            time.sleep(3)
+            if self._shutdown:
+                n = 30
+                while n > 0:
+                    if self.instance.poll() == None:
+                        time.sleep(1)
+                    else:
+                        break
             self.instance.kill()
             time.sleep(3)
         except:
