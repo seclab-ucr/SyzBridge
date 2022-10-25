@@ -510,7 +510,6 @@ class ImageCommand(Command):
                 if passed_check:
                     self._retrieve_modules(qemu)
                     qemu.command(user=self.ssh_user, cmds="shutdown -h now", wait=True)
-                    time.sleep(10)
                     return True
                 else:
                     if self.enable_feature == 0:
