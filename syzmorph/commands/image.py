@@ -330,7 +330,7 @@ class ImageCommand(Command):
                 self.app_steps_progress.update(app_steps_task_id, completed=100)
                 while vm.instance.poll() == None:
                     time.sleep(1)
-                vm.kill()
+                vm.destroy()
                 # stop and hide steps progress bar for this specific app
                 self.app_steps_progress.update(app_steps_task_id, visible=False)
                 self.current_app_progress.stop_task(current_task_id)

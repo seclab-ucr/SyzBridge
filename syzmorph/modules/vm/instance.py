@@ -144,6 +144,7 @@ class VMInstance(Network):
             return
         self._killed = True
         try:
+            time.sleep(3)
             self.instance.kill()
             time.sleep(3)
         except:

@@ -181,7 +181,8 @@ function compile_ubuntu() {
         mv debian/rules.d/4-checks-new.mk debian/rules.d/4-checks.mk
 
         sed -i 's/if \[ "\$fail" != 0 \]; then/if \[ "\$fail" != -1 \]; then/' debian/scripts/misc/kernelconfig
-
+        # Disable nvidia driver cuz some of the url is withdrawn.
+        sed -i '/do_dkms_nvidia/ s/true/false/' debian.master/rules.d/amd64.mk
         #printf '#!'"/usr/bin/perl\nexit 0" > debian/scripts/config-check
         #printf '#!'"/usr/bin/python3\nsys.exit(0)" > debian/scripts/module-check
         #chmod +x debian/scripts/config-check
@@ -231,7 +232,6 @@ function compile_ubuntu() {
             CONFIG_DEBUG_INFO_BTF
             CONFIG_DEBUG_INFO_BTF_MODULES
             CONFIG_DEBUG_FS
-            CONFIG_DEBUG_FS_ALLOW_ALL
             CONFIG_DEBUG_KERNEL
             CONFIG_DEBUG_MISC
             CONFIG_DEBUG_OBJECTS
@@ -255,8 +255,6 @@ function compile_ubuntu() {
             CONFIG_DEBUG_RT_MUTEXES
             CONFIG_DEBUG_SPINLOCK
             CONFIG_DEBUG_MUTEXES
-            CONFIG_DEBUG_WW_MUTEX_SLOWPATH
-            CONFIG_DEBUG_RWSEMS
             CONFIG_DEBUG_ATOMIC_SLEEP
             CONFIG_DEBUG_LIST
             CONFIG_DEBUG_PLIST
