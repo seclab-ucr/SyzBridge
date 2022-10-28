@@ -93,10 +93,14 @@ class ImageCommand(Command):
                             help='Disable extra config')
 
         # image building options
+        parser.add_argument('--cpu', nargs='?', action='store', default='',
+                            help='Specify the cpu number fro compiling the image')
+        parser.add_argument('--mem', nargs='?', action='store', default='',
+                            help='Specify the memory size for compiling the image')
         parser.add_argument('--version-since', nargs='?', action='store', default='',
-                            help='[Ubuntu] pick the first distro kernel version since a date')
+                            help='pick the first distro kernel version since a date')
         parser.add_argument('--version-until', nargs='?', action='store', default='',
-                            help='[Ubuntu] pick the first distro kernel version until a date')
+                            help='pick the first distro kernel version until a date')
         parser.add_argument('--get', nargs='?', action='store', default='',
                             help='[Ubuntu] Use a specific kernel commit\n'
                             '[Debian] Use a url to a .dsc file (http://snapshot.debian.org/package/linux/)\n'
@@ -219,6 +223,10 @@ class ImageCommand(Command):
         cpu = self.get_cpu_count()
         if cpu > 1:
             cpu = str(int(cpu / 2))
+        if self.args.cpu != None:
+            cpu = self.args.cpu
+        if self.args.mem != None:
+            mem = self.args.mem
 
         vm = VM(linux=None, kernel=self.kernel, hash_tag="building {}".format(self.distro), work_path=self.build_dir, 
             log_name='vm.log', logger=self.logger, debug=True,
@@ -298,6 +306,10 @@ class ImageCommand(Command):
             cpu = "2"
         else:
             cpu = "1"
+        if self.args.cpu != None:
+            cpu = self.args.cpu
+        if self.args.mem != None:
+            mem = self.args.mem
             
         self._init_progress_bar()
         
