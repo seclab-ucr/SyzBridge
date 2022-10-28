@@ -14,15 +14,6 @@ index fd3ce3c33..0f4f17115 100755
 index 67e34adb1..1883e7bcc 100644
 --- a/kernel.spec
 +++ b/kernel.spec
-@@ -24,7 +24,7 @@ Summary: The Linux kernel
- %global zipsed -e 's/\.ko$/\.ko.xz/'
- %endif
- 
--# define buildid .local
-+%define buildid .local
- 
- # baserelease defines which build revision of this kernel version we're
- # building.  We used to call this fedora_build, but the magical name
 @@ -1317,12 +1317,6 @@ do
    mv $i .config
    Arch=`head -1 .config | cut -b 3-`

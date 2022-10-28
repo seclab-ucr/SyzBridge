@@ -119,6 +119,8 @@ class Case:
 
     # Check whether current bug affects a particular distro 
     def need_repro(self, distro_name):
+        if 'affect' not in self.case:
+            return False
         if self.case['affect'] != None:
             if distro_name in self.case['affect']:
                 return True 
