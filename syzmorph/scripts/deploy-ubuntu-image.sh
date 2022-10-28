@@ -23,7 +23,8 @@ function config_disable() {
 }
 
 function enable_extra_config() {
-    if [ -f "~/enable_extra_config"]; then
+    if [ -f "/root/enable_extra_config" ]; then
+        cat /root/disable_extra_config |
         while read -r key; 
         do
             config_enable $key debian.master/config/config.common.ubuntu
@@ -34,7 +35,8 @@ function enable_extra_config() {
 }
 
 function disable_extra_config() {
-    if [ -f "~/disable_extra_config"]; then
+    if [ -f "/root/disable_extra_config" ]; then
+        cat /root/disable_extra_config |
         while read -r key; 
         do
             config_disable $key debian.master/config/config.common.ubuntu
@@ -227,7 +229,6 @@ function compile_ubuntu() {
 
         if [ $((enable_feature%2)) == 1 ]; then
             CONFIGKEYSENABLE="CONFIG_DEBUG_DEVRES
-            CONFIG_DEBUG_BUGVERBOSE
             CONFIG_DEBUG_INFO
             CONFIG_DEBUG_INFO_BTF
             CONFIG_DEBUG_INFO_BTF_MODULES
@@ -239,23 +240,9 @@ function compile_ubuntu() {
             CONFIG_DEBUG_OBJECTS_TIMERS
             CONFIG_DEBUG_OBJECTS_WORK
             CONFIG_DEBUG_OBJECTS_RCU_HEAD
-            CONFIG_DEBUG_OBJECTS_PERCPU_COUNTER
-            CONFIG_DEBUG_STACK_USAGE
-            CONFIG_DEBUG_VM
-            CONFIG_DEBUG_VM_VMACACHE
-            CONFIG_DEBUG_VM_RB
-            CONFIG_DEBUG_VM_PGFLAGS
-            CONFIG_DEBUG_VM_PGTABLE
-            CONFIG_DEBUG_VIRTUAL
-            CONFIG_DEBUG_MEMORY_INIT
-            CONFIG_DEBUG_PER_CPU_MAPS
-            CONFIG_DEBUG_KMAP_LOCAL
-            CONFIG_DEBUG_KMAP_LOCAL_FORCE_MAP
-            CONFIG_DEBUG_PREEMPT
             CONFIG_DEBUG_RT_MUTEXES
             CONFIG_DEBUG_SPINLOCK
             CONFIG_DEBUG_MUTEXES
-            CONFIG_DEBUG_ATOMIC_SLEEP
             CONFIG_DEBUG_LIST
             CONFIG_DEBUG_PLIST
             CONFIG_DEBUG_SG

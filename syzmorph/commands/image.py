@@ -516,7 +516,6 @@ class ImageCommand(Command):
                         return True
                     else:
                         return False
-        self.logger.error("Kernel version does not match {}, check grub".format(self.kernel_version))
         return False
     
     def _retrieve_modules(self, qemu: VM):
@@ -535,6 +534,7 @@ class ImageCommand(Command):
             disable_config_file = self.build_dir+'/disable_extra_config'
             with open(disable_config_file, 'w') as f:
                 f.writelines(self.args.disable_extra)
+                f.write('\n')
                 f.close()
                 ret = qemu.upload(user=self.ssh_user, src=[disable_config_file], dst='~', wait=True)
                 if ret == None or ret != 0:
