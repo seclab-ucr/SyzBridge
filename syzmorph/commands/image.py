@@ -627,8 +627,9 @@ class ImageCommand(Command):
                 return False
 
             kernel_spec_patch_path = os.path.join(proj_path, "resources/kernel_spec.patch")
+            process_configs_path = os.path.join(proj_path, "resources/process_configs.sh")
 
-            ret = qemu.upload(user=self.ssh_user, src=[image_building_script_path, kernel_spec_patch_path], dst='~', wait=True)
+            ret = qemu.upload(user=self.ssh_user, src=[image_building_script_path, kernel_spec_patch_path, process_configs_path], dst='~', wait=True)
             if ret == None or ret != 0:
                 qemu.logger.error("Failed to upload {}".format(image_building_script_path))
                 return False
