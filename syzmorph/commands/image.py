@@ -93,9 +93,9 @@ class ImageCommand(Command):
                             help='Disable extra config')
 
         # image building options
-        parser.add_argument('--cpu', nargs='?', action='store', default='',
+        parser.add_argument('--cpu', nargs='?', action='store',
                             help='Specify the cpu number fro compiling the image')
-        parser.add_argument('--mem', nargs='?', action='store', default='',
+        parser.add_argument('--mem', nargs='?', action='store',
                             help='Specify the memory size for compiling the image')
         parser.add_argument('--version-since', nargs='?', action='store', default='',
                             help='pick the first distro kernel version since a date')
