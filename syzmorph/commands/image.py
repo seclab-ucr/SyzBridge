@@ -442,6 +442,10 @@ class ImageCommand(Command):
             kerenl_version = regx_get(r'^(\d+\.\d+\.\d+)', out[1], 0)
         if regx_match(r'^(\d+\.\d+\.\d+-\d+)', out[1]):
             kerenl_version = regx_get(r'^(\d+\.\d+\.\d+)-\d+', out[1], 0)
+            if 'generic' in out[1]:
+                major_version = regx_get(r'^(\d+\.\d+)\.\d+-(\d+)', out[1], 0)
+                minor_version = regx_get(r'^(\d+\.\d+)\.\d+-(\d+)', out[1], 1)
+                kerenl_version = "{}.{}".format(major_version, minor_version)
         if kerenl_version != distro.distro_version:
             res.append("Kernel Version Check Failed, {} != {}".format(out[1], distro.distro_version))
         
@@ -500,6 +504,10 @@ class ImageCommand(Command):
             kerenl_version = regx_get(r'^(\d+\.\d+\.\d+)', out[1], 0)
         if regx_match(r'^(\d+\.\d+\.\d+-\d+)', out[1]):
             kerenl_version = regx_get(r'^(\d+\.\d+\.\d+)-\d+', out[1], 0)
+            if 'generic' in out[1]:
+                major_version = regx_get(r'^(\d+\.\d+)\.\d+-(\d+)', out[1], 0)
+                minor_version = regx_get(r'^(\d+\.\d+)\.\d+-(\d+)', out[1], 1)
+                kerenl_version = "{}.{}".format(major_version, minor_version)
         if regx_match(r'^(\d+\.\d+\.\d+)', self.kernel_version):
             self.kernel_version = regx_get(r'^(\d+\.\d+\.\d+)', self.kernel_version, 0)
         if regx_match(r'^(\d+\.\d+\.\d+-\d+)', self.kernel_version):
