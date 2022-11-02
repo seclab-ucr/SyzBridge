@@ -55,10 +55,10 @@ echo "[+] Building syzkaller"
 if [ ! -d "$GOPATH/src/github.com/google/syzkaller" ]; then
     mkdir -p $GOPATH/src/github.com/google/ || echo "Dir exists"
     cd $GOPATH/src/github.com/google/
+    rm -rf syzkaller || true
     cp -r $PROJECT_PATH/tools/gopath/src/github.com/google/syzkaller ./
 
     cd $GOPATH/src/github.com/google/syzkaller || exit 1
-    make clean
     git stash --all || set_git_config
     if [ "$SYZ_COMMIT" != "" ]; then
         git checkout -f $SYZ_COMMIT || (git pull origin master > /dev/null 2>&1 && git checkout -f $SYZ_COMMIT)

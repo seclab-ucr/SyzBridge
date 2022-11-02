@@ -1,6 +1,7 @@
 import logging
 import os, shutil
 import json
+import traceback
 
 from subprocess import call
 from infra.config.config import Config
@@ -80,6 +81,8 @@ class AnalysisModule:
             except Exception as e:
                 self.logger.exception("[{}] Exception happens: {}".format(self.analyzor.NAME, e))
                 self.main_logger.exception("Case {} caught exception in plugin {}: {}".format(self.case_hash, self.analyzor.NAME, e))
+                tb = traceback.format_exc()
+                self.main_logger.error(tb)
                 return False
             return ret
         return inner

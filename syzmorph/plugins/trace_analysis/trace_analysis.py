@@ -14,7 +14,7 @@ class TraceAnalysis(AnalysisModule):
     REPORT_START = "======================TraceAnalysis Report======================"
     REPORT_END =   "==================================================================="
     REPORT_NAME = "Report_TraceAnalysis"
-    DEPENDENCY_PLUGINS = []
+    DEPENDENCY_PLUGINS = ["SyzFeatureMinimize"]
 
     def __init__(self):
         super().__init__()
@@ -355,7 +355,10 @@ exit $EXIT_CODE""".format(modprobe_cmd, cmd)
             skip_funcs = [r"setup_usb\(\);", r"setup_leak\(\);"]
         data = []
 
-        src = os.path.join(self.path_case, "poc.c")
+        if os.path.exists(os.path.join(self.path_case, "PoC_no_repeat.c")):
+            src = os.path.join(os.path.join(self.path_case, "PoC_no_repeat.c"))
+        else:
+            src = os.path.join(self.path_case, "poc.c")
         dst = os.path.join(self.path_case_plugin, "poc.c")
         non_thread_func = ""
         fsrc = open(src, "r")

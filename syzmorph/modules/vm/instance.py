@@ -37,6 +37,7 @@ class VMInstance(Network):
         self._qemu_return = queue.Queue()
         self.qemu_ready = False
         self.kill_qemu = False
+        self.trigger_crash = False
         self._shutdown = False
         self.qemu_fail = False
         self.dumped_ftrace = False
@@ -68,6 +69,7 @@ class VMInstance(Network):
     def reset(self):
         self.qemu_ready = False
         self.kill_qemu = False
+        self.trigger_crash = False
         self._killed = False
         self.qemu_fail = False
         self.dumped_ftrace = False
@@ -174,7 +176,7 @@ class VMInstance(Network):
             else:
                 f.write(" ".join(cmd))
             f.close()
-
+    
     def upload(self, user, src: list, dst, wait: bool):
         if type(src) != list:
             self.logger.error("src must be a list")
@@ -187,6 +189,8 @@ class VMInstance(Network):
         ret = self.scp("localhost", user, self.port, self.key, src, dst, False, wait)
         return ret
 
+    # If wait is True, return the output of the command
+    # If wait is False, return the thread instance
     def command(self, cmds, user, wait: bool, timeout=None):
         ret = self.ssh("localhost", user, self.port, self.key, cmds, wait, timeout)
         return ret

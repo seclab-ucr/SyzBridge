@@ -85,7 +85,13 @@ class LtsReproduce(AnalysisModule):
         return success
 
     def tune_poc(self, root):
-        src = os.path.join(self.path_case, "poc.c")
+        if os.path.exists(self.path_case, "PoC_no_repeat.c"):
+            src = os.path.join(self.path_case, "PoC_no_repeat.c")
+            self.info_msg("Copy PoC_no_repeat.c")
+        else:
+            src = os.path.join(self.path_case, "poc.c")
+            self.info_msg("Copy poc.c")
+
         if not root:
             dst = os.path.join(self.path_case_plugin, "poc_normal.c")
         else:

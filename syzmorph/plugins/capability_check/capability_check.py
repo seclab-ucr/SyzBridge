@@ -14,7 +14,7 @@ class CapabilityCheck(AnalysisModule):
     REPORT_START = "======================CapabilityCheck Report======================"
     REPORT_END =   "==================================================================="
     REPORT_NAME = "Report_CapabilityCheck"
-    DEPENDENCY_PLUGINS = []
+    DEPENDENCY_PLUGINS = ["SyzFeatureMinimize"]
     LOG_HEADER = "INFO: Capability found"
 
     def __init__(self):
@@ -119,7 +119,8 @@ class CapabilityCheck(AnalysisModule):
     def build_env_upstream(self):
         patch = os.path.join(self.path_package, "plugins/capability_check/capability.patch")
         json_path = os.path.join(self.path_package, "plugins/capability_check/capability_patch.json")
-        extra_cmd="python3 SmartPatch -linux {} -patch {}/capability_patch.json".format(os.path.join(self.path_case, "linux"), json_path)
+        smartpatch = os.path.join(self.path_package, "infra/SmartPatch/SmartPatch")
+        extra_cmd="python3 {} -linux {} -patch {}".format(smartpatch, os.path.join(self.path_case, "linux-upstream"), json_path)
         return self.build_mainline_kernel(patch=patch, extra_cmd=extra_cmd)
     
     def generate_report(self):
@@ -138,7 +139,10 @@ class CapabilityCheck(AnalysisModule):
         data = []
         write_monitor_controller = False
 
-        src = os.path.join(self.path_case, "poc.c")
+        if os.path.exists(os.path.join(self.path_case, "PoC_no_repeat.c")):
+            src = os.path.join(os.path.join(self.path_case, "PoC_no_repeat.c"))
+        else:
+            src = os.path.join(self.path_case, "poc.c")
         dst = os.path.join(self.path_case_plugin, "poc.c")
         non_thread_func = ""
         fsrc = open(src, "r")
@@ -238,7 +242,7 @@ class CapabilityCheck(AnalysisModule):
         out1 = []
         n = 0
         if self.syz == None:
-            self.syz = self._init_module(SyzkallerInterface())
+            self.syz: SyzkallerInterface() = self._init_module(SyzkallerInterface())
             self.syz.prepare_on_demand(self.path_case_plugin)
         for i in range(0, len(output)):
             line = output[i]
@@ -251,7 +255,7 @@ class CapabilityCheck(AnalysisModule):
             if not self._build_syz_logparser(self.syz):
                 self.err_msg("Fail to build syz logparser")
                 return None
-            self.syz.pull_cfg_for_cur_case()
+            self.syz.pull_cfg_for_cur_case("linux-upstream")
             src = os.path.join(self.path_case_plugin, "call_trace.log-{}".format(n))
             dst = os.path.join(self.path_case_plugin, "call_trace.report-{}".format(n))
             self.syz.generate_decent_report(src, dst)
@@ -266,7 +270,7 @@ class CapabilityCheck(AnalysisModule):
         t = src_file.split(':')
         file = t[0]
         line = int(t[1])
-        file_path = os.path.join(self.path_case, 'linux', file)
+        file_path = os.path.join(self.path_case, 'linux-upstream', file)
         with open(file_path, 'r') as f:
             text = f.readlines()
             this_line = text[line-1]

@@ -21,7 +21,7 @@ class Network:
             except BrokenPipeError:
                 return -1
             return exitcode
-        return -1
+        return x
     
     def ssh(self, ip, user, port, key, command, wait, timeout):
         ret_queue = queue.Queue()
@@ -34,7 +34,7 @@ class Network:
             except BrokenPipeError:
                 return None
             return pipe_output
-        return None
+        return x
 
     def _scp(self, ip, user, port, key, src, dst, upload, ret_queue):
         if upload:

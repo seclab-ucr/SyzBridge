@@ -354,14 +354,14 @@ def make_syz_commands(text, support_enable_features, i386, repeat=True):
             # If read from repro.command, text[0] was already the command
             return text[0]
         enabled = "-enable="
-        normal_pm = {"arch":"amd64", "threaded":"false", "collide":"false", "sandbox":"none", "fault_call":"-1", "fault_nth":"0"}
+        normal_pm = {"arch":"amd64", "threaded":"false", "collide":"false", "sandbox":"none"}
         for line in text:
             if line.find('{') != -1 and line.find('}') != -1:
                 pm = {}
                 try:
                     pm = json.loads(line[1:])
                 except json.JSONDecodeError:
-                    pm = syzrepro_convert_format(line[1:], repeat)
+                    pm = syzrepro_convert_format(line[1:])
                 for each in normal_pm:
                     if each in pm and pm[each] != "":
                         command += "-" + each + "=" +str(pm[each]).lower() + " "
@@ -376,9 +376,9 @@ def make_syz_commands(text, support_enable_features, i386, repeat=True):
                 else:
                     command += "-procs=1" + " "
                 if "repeat" in pm and pm["repeat"] != "":
-                    if repeat:
+                    if pm["repeat"] == "0" or pm["repeat"] == True:
                         command += "-repeat=" + "0 "
-                    else:
+                    if pm["repeat"] == "1" or pm["repeat"] == False:
                         command += "-repeat=" + "1 "
                 if "slowdown" in pm and pm["slowdown"] != "":
                     command += "-slowdown=" + "1 "
@@ -417,7 +417,7 @@ def make_syz_commands(text, support_enable_features, i386, repeat=True):
                 break
         return command
 
-def syzrepro_convert_format(line, repeat):
+def syzrepro_convert_format(line):
         res = {}
         p = re.compile(r'({| )(\w+):([0-9a-zA-Z-]*)')
         raw = p.sub(r'\1"\2":"\3",', line)
@@ -429,8 +429,7 @@ def syzrepro_convert_format(line, repeat):
             if each == 'Collide':
                 res['collide']=pm[each]
             if each == 'Repeat':
-                if repeat:
-                    res['repeat']=pm[each]
+                res['repeat']=pm[each]
             if each == 'Procs':
                 res['procs']=pm[each]
             if each == 'Sandbox':

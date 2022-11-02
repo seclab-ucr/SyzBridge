@@ -97,16 +97,17 @@ class SyzkallerInterface(AnalysisModule):
     
     @check_syzkaller
     def build_syzkaller(self, arch="amd64", component=None):
-        self.add_dependencies()
+        #self.add_dependencies()
         my_env = os.environ.copy()
         path_project = os.getcwd()
         my_env["PATH"] = os.path.join(path_project, "tools/goroot/bin") + ':' + my_env["PATH"]
         my_env["GOROOT"] = os.path.join(path_project, "tools/goroot/")
         my_env["GOPATH"] = os.path.join(self.path_case_plugin, "gopath")
+        my_env["GO111MODULE"] = "auto"
         if component == None:
-            p = Popen(["make", "TARGETARCH={}".format(arch), "TARGETVMARCH=amd64"], cwd=self.syzkaller_path, env=my_env, stdout=PIPE, stderr=PIPE)
+            p = Popen(["make", "TARGETARCH={}".format(arch), "TARGETVMARCH=amd64"], cwd=self.syzkaller_path, env=my_env, stdout=PIPE, stderr=STDOUT)
         else:
-            p = Popen(["make", "TARGETARCH={}".format(arch), "TARGETVMARCH=amd64", component], cwd=self.syzkaller_path, env=my_env, stdout=PIPE, stderr=PIPE)
+            p = Popen(["make", "TARGETARCH={}".format(arch), "TARGETVMARCH=amd64", component], cwd=self.syzkaller_path, env=my_env, stdout=PIPE, stderr=STDOUT)
         with p.stdout:
             log_anything(p.stdout, self.logger, self.debug)
         exitcode = p.wait()
@@ -128,11 +129,11 @@ class SyzkallerInterface(AnalysisModule):
         my_env["PATH"] = os.path.join(path_project, "tools/goroot/bin") + ':' + my_env["PATH"]
         my_env["GOROOT"] = os.path.join(path_project, "tools/goroot/")
         my_env["GOPATH"] = os.path.join(self.path_case_plugin, "gopath")
-        p = Popen(["go", "get", "github.com/gofrs/flock@v0.8.0"], cwd=self.syzkaller_path, env=my_env, stdout=PIPE, stderr=PIPE)
+        p = Popen(["go", "get", "github.com/gofrs/flock@v0.8.0"], cwd=self.syzkaller_path, env=my_env, stdout=PIPE, stderr=STDOUT)
         with p.stdout:
             log_anything(p.stdout, self.logger, self.debug)
         p.wait()
-        p = Popen(["go", "mod", "vendor"], cwd=self.syzkaller_path, env=my_env, stdout=PIPE, stderr=PIPE)
+        p = Popen(["go", "mod", "vendor"], cwd=self.syzkaller_path, env=my_env, stdout=PIPE, stderr=STDOUT)
         with p.stdout:
             log_anything(p.stdout, self.logger, self.debug)
         p.wait()
@@ -142,9 +143,9 @@ class SyzkallerInterface(AnalysisModule):
         if os.path.exists(self.syzkaller_path):
             shutil.rmtree(self.syzkaller_path, ignore_errors=True)
     
-    def pull_cfg_for_cur_case(self):
+    def pull_cfg_for_cur_case(self, linux):
         self.buil_workdir()
-        linux_path = os.path.join(self.path_case, "linux")
+        linux_path = os.path.join(self.path_case, linux)
         image_path = os.path.join(self.path_case, "img")
         syz_config = cfg_template.format(self.syzkaller_path, linux_path, image_path, "", 4, self.cfg.get_kernel_by_name('upstream').ssh_port)
         self._write_to(syz_config, "gopath/src/github.com/google/syzkaller/workdir/my.cfg")

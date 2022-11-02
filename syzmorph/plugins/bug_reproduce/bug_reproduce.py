@@ -1,6 +1,7 @@
 from audioop import reverse
 import queue, multiprocessing
 import re, os, time, shutil, threading
+from unittest import result
 
 from plugins import AnalysisModule
 from modules.vm import VMInstance
@@ -9,21 +10,26 @@ from infra.strings import *
 from infra.config.vendor import Vendor
 from subprocess import Popen, STDOUT, PIPE, call
 from plugins.modules_analysis import ModulesAnalysis
+from syzmorph.plugins.syz_feature_minimize.syz_feature_minimize import SyzFeatureMinimize
 from .error import *
 
-qemu_ooutput_window = 15
+qemu_output_window = 15
 class BugReproduce(AnalysisModule):
     NAME = "BugReproduce"
     REPORT_START = "======================BugReproduce Report======================"
     REPORT_END =   "==================================================================="
     REPORT_NAME = "Report_BugReproduce"
-    DEPENDENCY_PLUGINS = ["ModulesAnalysis", "CapabilityCheck"]
+    DEPENDENCY_PLUGINS = ["ModulesAnalysis", "CapabilityCheck", "SyzFeatureMinimize"]
 
     FEATURE_LOOP_DEVICE = 1 << 0
     FEATURE_MOD4ENV = 1 << 1
+    FEATURE_NAMESPACE = 1 << 2
 
     def __init__(self):
         super().__init__()
+        self.c_prog = False
+        self.syz_feature = {}
+        self.syz_feature_mini = None
         self.bug_title = ''
         self.results = {}
         self.root_user = None
@@ -98,8 +104,19 @@ class BugReproduce(AnalysisModule):
     def run(self):
         res = {}
         output = queue.Queue()
+
+        if not self.plugin_finished("SyzFeatureMinimize"):
+            self.info_msg("BugReproduce will use C Prog instead")
+            self.c_prog = True
+        else:
+            self.syz_feature_mini = self.cfg.get_plugin(SyzFeatureMinimize.NAME).instance
+            self.syz_feature = self.syz_feature_mini.results
         for distro in self.cfg.get_distros():
             self.info_msg("Reproducing bugs on {}".format(distro.distro_name))
+            if self.syz_feature_mini != None:
+                for each in self.syz_feature:
+                    if not self.syz_feature[each]:
+                        self.results[distro.distro_name]['skip_funcs'].append(each)
             x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="{} reproduce_async-{}".format(self.case_hash, distro.distro_name))
             x.start()
             time.sleep(1)
@@ -121,12 +138,12 @@ class BugReproduce(AnalysisModule):
         res["root"] = True
         
         if not self._skip_regular_reproduce:
-            success, _ = self.reproduce(distro, func=self.capture_kasan, root=True)
+            success, _ = self.reproduce(distro, func=self.capture_kasan, timeout=self.repro_timeout+100, root=True)
             if success:
                 res["triggered"] = True
                 res["bug_title"] = self.bug_title
                 res["root"] = True
-                success, _ = self.reproduce(distro, func=self.capture_kasan, root=False)
+                success, _ = self.reproduce(distro, func=self.capture_kasan, timeout=self.repro_timeout+100, root=False)
                 if success:
                     res["triggered"] = True
                     res["bug_title"] = self.bug_title
@@ -291,6 +308,7 @@ class BugReproduce(AnalysisModule):
         if self.check_poc_capability() and not root:
             need_namespace = True
             self.results[distro.distro_name]['namespace'] = True
+            feature |= self.FEATURE_NAMESPACE
 
         skip_funcs = [r"setup_usb\(\);", r"setup_leak\(\);"]
         data = []
@@ -411,18 +429,11 @@ class BugReproduce(AnalysisModule):
             q.put([res, trigger_hunted_bug])
 
     @expt_handler
-    def tweak_modules(self, qemu: VMInstance, th_index, work_dir, root, missing_modules: list, essential_modules: list, preload_modules: list, poc_feature: int, result_queue: queue.Queue):
-        threading.Thread(target=self._update_qemu_timer_status, args=(th_index, qemu), name="update_qemu_timer_status").start()
+    def tweak_modules(self, qemu: VMInstance, root, missing_modules: list, essential_modules: list, preload_modules: list, poc_feature: int, result_queue: queue.Queue):
+        #threading.Thread(target=self._update_qemu_timer_status, args=(th_index, qemu), name="update_qemu_timer_status").start()
         
         tested_modules = []
         vm_tag = "-".join(qemu.tag.split('-')[:-1])
-        
-        q = queue.Queue()
-        threading.Thread(target=self.warp_qemu_capture_kasan, args=(qemu, th_index, q)).start()
-        
-        if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
-            self.logger.fatal("KASAN is not enabled in kernel!")
-            raise KASANDoesNotEnabled(self.case_hash)
 
         qemu.logger.info("Missing modules: {}".format(missing_modules))
         qemu.logger.info("Loading preload modules: {}".format(preload_modules))
@@ -430,16 +441,16 @@ class BugReproduce(AnalysisModule):
         qemu.logger.info("Loading essential modules {}".format(essential_modules))
         if essential_modules != []:
             self._enable_missing_modules(qemu, essential_modules)
-            res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q)
+            trigger = self._execute(root, qemu, poc_feature)
             if trigger:
                 self.results[vm_tag]["repeat"] = False
                 result_queue.put(self.results)
-                return [res, trigger, qemu.qemu_fail, tested_modules]
-            res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q, repeat=True)
+                return tested_modules
+            trigger = self._execute(root, qemu, poc_feature, repeat=True)
             if trigger:
                 self.results[vm_tag]["repeat"] = True
                 result_queue.put(self.results)
-                return [res, trigger, qemu.qemu_fail, tested_modules]
+                return tested_modules
         
         for module in missing_modules:
             self.set_stage_text("testing {} on {}".format(module, qemu.tag))
@@ -449,47 +460,38 @@ class BugReproduce(AnalysisModule):
             if not self._enable_missing_modules(qemu, [module]):
                 continue
             tested_modules.append(module)
-            res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q)
+            trigger = self._execute(root, qemu, poc_feature)
             if trigger:
                 self.results[vm_tag]["repeat"] = False
                 result_queue.put(self.results)
-                return [res, trigger, qemu.qemu_fail, tested_modules]
-            res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q, repeat=True)
+                return tested_modules
+            trigger = self._execute(root, qemu, poc_feature, repeat=True)
             if trigger:
                 self.results[vm_tag]["repeat"] = True
                 result_queue.put(self.results)
-                return [res, trigger, qemu.qemu_fail, tested_modules]
+                return tested_modules
         result_queue.put(self.results)
-        return [[], False, False, []]
+        return []
     
     @expt_handler
-    def capture_kasan(self, qemu, th_index, work_dir, root, poc_feature, result_queue: queue.Queue):
-        if root:
-            self.set_stage_text("\[root] Reproducing on {}".format(qemu.tag))
-        else:
-            self.set_stage_text("\[user] Reproducing on {}".format(qemu.tag))
-        threading.Thread(target=self._update_qemu_timer_status, args=(th_index, qemu), name="update_qemu_timer_status").start()
-        q = queue.Queue()
-        threading.Thread(target=self.warp_qemu_capture_kasan, args=(qemu, th_index, q)).start()
+    def capture_kasan(self, qemu, root, poc_feature, result_queue: queue.Queue):
+        #threading.Thread(target=self._update_qemu_timer_status, args=(th_index, qemu), name="update_qemu_timer_status").start()
         vm_tag = "-".join(qemu.tag.split('-')[:-1])
 
-        if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
-            self.logger.fatal("KASAN is not enabled in kernel!")
-            raise KASANDoesNotEnabled(self.case_hash)
         if len(self._addition_modules) > 0:
             self.logger.info("Loading addition modules for environment setup: {}".format(self._addition_modules))
             self._enable_missing_modules(qemu, self._addition_modules)
 
-        res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q)
+        trigger = self._execute(root, qemu, poc_feature)
         if trigger:
             self.results[vm_tag]["repeat"] = False
             result_queue.put(self.results)
-            return [res, trigger, qemu.qemu_fail]
-        res, trigger = self._execute_poc(root, qemu, work_dir, poc_feature, q, repeat=True)
+            return
+        trigger = self._execute(root, qemu, poc_feature, repeat=True)
         if trigger:
             self.results[vm_tag]["repeat"] = True
             result_queue.put(self.results)
-        return [res, trigger, qemu.qemu_fail]
+        return
 
     def set_history_status(self):
         for name in self.results:
@@ -504,18 +506,6 @@ class BugReproduce(AnalysisModule):
                 break
             self.set_stage_status("[{}/3] {}/{}".format(index, qemu.timer, qemu.timeout))
             time.sleep(5)
-
-    def _crash_start(self, line):
-        crash_head = [r'BUG: ', r'WARNING:', r'INFO:', r'Unable to handle kernel', 
-                r'general protection fault', r'stack segment:', r'kernel BUG',
-                r'BUG kmalloc-', r'divide error:', r'divide_error:', r'invalid opcode:',
-                r'UBSAN:', r'unregister_netdevice: waiting for', r'Internal error:',
-                r'Unhandled fault:', r'Alignment trap:']
-
-        for each in crash_head:
-            if regx_match(each, line):
-                return True
-        return False
     
     def _check_poc_existence(self, qemu, user):
         out = qemu.command(cmds="ls poc", user=user, wait=True)
@@ -524,17 +514,56 @@ class BugReproduce(AnalysisModule):
                 return False
         return True
 
-    def _execute_poc(self, root, qemu, work_dir, poc_feature, qemu_queue, repeat=False):
+    def _execute(self, root, qemu, poc_feature, repeat=False):
+        if self.c_prog:
+            return self._execute_poc(root, qemu, poc_feature, repeat)
+        else:
+            return self._execute_syz(root, qemu, poc_feature, repeat)
+    
+    def _execute_syz(self, root, qemu: VMInstance, poc_feature, repeat=False):
+        if root:
+            user = self.root_user
+        else:
+            user = self.normal_user
+        syz_feature_mini_path = os.path.join(self.path_case, "SyzFeatureMinimize")
+        features = []
+        for each in self.syz_feature:
+            if self.syz_feature[each]:
+                features.append(each)
+        i386 = False
+        if '386' in self.case['manager']:
+            i386 = True
+        syz_execprog = os.path.join(syz_feature_mini_path, "syz-execprog")
+        syz_executor = os.path.join(syz_feature_mini_path, "syz-executor")
+        testcase = os.path.join(self.path_case, "testcase")
+        qemu.upload(user=user, src=[testcase], dst="~/", wait=True)
+        qemu.upload(user=user, src=[syz_execprog, syz_executor], dst="/", wait=True)
+        qemu.command(cmds="chmod +x /syz-execprog /syz-executor", user=user, wait=True)
+        qemu.logger.info("running PoC")
+        qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user=self.root_user, wait=True)
+        self._check_poc_feature(poc_feature, qemu, user)
+        testcase_text = open(testcase, "r").readlines()
+
+        if poc_feature & self.FEATURE_NAMESPACE:
+            cmds = self.syz_feature_mini.make_syz_command(testcase_text, features, i386, repeat=repeat, sandbox="namespace")
+        else:
+            cmds = self.syz_feature_mini.make_syz_command(testcase_text, features, i386, repeat=repeat)
+        qemu.command(cmds=cmds, user=user, wait=True, timeout=self.repro_timeout)
+
+        time.sleep(5)
+        return qemu.trigger_crash
+
+    def _execute_poc(self, root, qemu: VMInstance, poc_feature, repeat=False):
         if root:
             user = self.root_user
             poc_src = "poc_root.c"
         else:
             user = self.normal_user
             poc_src = "poc_normal.c"
-        poc_path = os.path.join(work_dir, poc_src)
+        poc_path = os.path.join(self.path_case, poc_src)
         qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
-        if os.path.exists(os.path.join(work_dir, "sandbox.h")):
-            sandbox_src = os.path.join(work_dir, "sandbox.h")
+        if os.path.exists(os.path.join(self.path_case, "sandbox.h")):
+            sandbox_src = os.path.join(self.path_case, "sandbox.h")
             qemu.upload(user=user, src=[sandbox_src], dst="~/", wait=True)
         if '386' in self.case['manager']:
             qemu.command(cmds="gcc -m32 -pthread -o poc {}".format(poc_src), user=user, wait=True)
@@ -544,7 +573,6 @@ class BugReproduce(AnalysisModule):
             self.logger.fatal("Fail to compile poc!")
             return [[], False]
 
-        n = int(self.repro_timeout/qemu_ooutput_window)
         if repeat:
             script = os.path.join(self.path_package, "scripts/run-script.sh")
             chmodX(script)
@@ -561,61 +589,15 @@ class BugReproduce(AnalysisModule):
         qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user=self.root_user, wait=True)
         self._check_poc_feature(poc_feature, qemu, user)
         if repeat:
-            qemu.command(cmds="chmod +x run.sh && ./run.sh", user=user, wait=False, timeout=self.repro_timeout)
+            qemu.command(cmds="chmod +x run.sh && ./run.sh", user=user, wait=True, timeout=self.repro_timeout)
         else:
             qemu.command(cmds="rm -rf ./tmp", user=user, wait=True)
             qemu.command(cmds="mkdir ./tmp && mv ./poc ./tmp && cd ./tmp && chmod +x poc && ./poc", user=user, wait=True, timeout=self.repro_timeout)
             qemu.logger.info("Killing PoC")
             qemu.command(cmds="killall poc", user=self.root_user, wait=True)
         self.set_stage_text("gathering output")
-        for _ in range(0, n):
-            try:
-                [res, trigger] = qemu_queue.get(block=True, timeout=qemu_ooutput_window)
-                if trigger:
-                    return res, trigger
-            except queue.Empty:
-                if qemu.no_new_output() and not repeat:
-                    break
-        if repeat:
-            qemu.command(cmds="killall run.sh && killall poc", user=self.root_user, wait=True)
-        return [], False
-                
-    def _qemu_capture_kasan(self, qemu, th_index):
-        qemu_close = False
-        out_begin = 0
-        record_flag = 0
-        crash_flag = 0
-        kasan_flag = 0
-        crash = []
-        res = []
-        trigger_hunted_bug = False
-        while not qemu_close:
-            if qemu.instance.poll() != None:
-                qemu_close = True
-            out_end = len(qemu.output)
-            for line in qemu.output[out_begin:]:
-                if regx_match(call_trace_regx, line) or \
-                regx_match(message_drop_regx, line) or \
-                (self._crash_start(line) and record_flag):
-                    crash_flag = 1
-                if record_flag:
-                    crash.append(line)
-                if (regx_match(boundary_regx, line) and record_flag) or \
-                        regx_match(panic_regx, line) or \
-                        (self._crash_start(line) and record_flag):
-                    if crash_flag == 1:
-                        res.append(crash)
-                        crash = []
-                        trigger_hunted_bug = True
-                        qemu.kill_qemu = True
-                    record_flag = 0
-                    crash_flag = 0
-                    continue
-                if regx_match(boundary_regx, line):
-                    record_flag ^= 1
-                    crash_flag = 0
-            out_begin = out_end
-        return res, trigger_hunted_bug
+        time.sleep(5)
+        return qemu.trigger_crash
 
     def _enable_missing_modules(self, qemu, manual_enable_modules):
         for each in manual_enable_modules:

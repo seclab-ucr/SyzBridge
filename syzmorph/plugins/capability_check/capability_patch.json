@@ -1,0 +1,219 @@
+{
+    "fs/ioctl.c" : [
+        [
+            {
+                "from_version" : "",
+                "to_version" : "cbb60b924b9f",
+                "mother_function" : "",
+                "pattern_before" : "",
+                "pattern_behind" : "",
+                "bottom" : false,
+                "ignore_rej" : false,
+                "replace" : "",
+                "text" : "",
+                "fragments" : [
+                    [
+                        {
+                            "from_version" : "",
+                            "to_version" : "",
+                            "mother_function" : "SYSCALL_DEFINE3(ioctl, unsigned int, fd, unsigned int, cmd, unsigned long, arg)",
+                            "pattern_before" : "struct fd f = fdget(fd);",
+                            "pattern_behind" : "",
+                            "bottom" : false,
+                            "ignore_rej" : false,
+                            "replace" : "",
+                            "text" : "\nif (cmd == 0x37778) {\nappend_capable_pid(arg);\nreturn 0;\n}\n",
+                            "fragments" : []
+                        }
+                    ],
+                    [
+                        {
+                            "from_version" : "",
+                            "to_version" : "",
+                            "mother_function" : "",
+                            "pattern_before" : "",
+                            "pattern_behind" : "SYSCALL_DEFINE3(ioctl, unsigned int, fd, unsigned int, cmd, unsigned long, arg)",
+                            "bottom" : false,
+                            "ignore_rej" : false,
+                            "replace" : "",
+                            "text" : "\n#include <linux/monitor_helper.h>\nint print_stack_debug = 0;\nLIST_HEAD(pid_list);\n",
+                            "fragments" : []
+                        }
+                    ]
+                ]
+            },
+
+            {
+                "from_version" : "cbb60b924b9f",
+                "to_version" : "863b67e15177",
+                "mother_function" : "",
+                "pattern_before" : "",
+                "pattern_behind" : "",
+                "bottom" : false,
+                "ignore_rej" : false,
+                "replace" : "",
+                "text" : "",
+                "fragments" : [
+                    [
+                        {
+                            "from_version" : "",
+                            "to_version" : "",
+                            "mother_function" : "SYSCALL_DEFINE3(ioctl, unsigned int, fd, unsigned int, cmd, unsigned long, arg)",
+                            "pattern_before" : "",
+                            "pattern_behind" : "return ksys_ioctl(fd, cmd, arg);",
+                            "bottom" : false,
+                            "ignore_rej" : false,
+                            "replace" : "",
+                            "text" : "\nif (cmd == 0x37778) {\nappend_capable_pid(arg);\nreturn 0;\n}\n",
+                            "fragments" : []
+                        }
+                    ],
+                    [
+                        {
+                            "from_version" : "",
+                            "to_version" : "",
+                            "mother_function" : "",
+                            "pattern_before" : "",
+                            "pattern_behind" : "SYSCALL_DEFINE3(ioctl, unsigned int, fd, unsigned int, cmd, unsigned long, arg)",
+                            "bottom" : false,
+                            "ignore_rej" : false,
+                            "replace" : "",
+                            "text" : "\n#include <linux/monitor_helper.h>\nint print_stack_debug = 0;\nLIST_HEAD(pid_list);\n",
+                            "fragments" : []
+                        }
+                    ]
+                ]
+            },
+
+            {
+                "from_version" : "863b67e15177",
+                "to_version" : "",
+                "mother_function" : "",
+                "pattern_before" : "",
+                "pattern_behind" : "",
+                "bottom" : false,
+                "ignore_rej" : false,
+                "replace" : "",
+                "text" : "",
+                "fragments" : [
+                    [
+                        {
+                            "from_version" : "",
+                            "to_version" : "",
+                            "mother_function" : "SYSCALL_DEFINE3(ioctl, unsigned int, fd, unsigned int, cmd, unsigned long, arg)",
+                            "pattern_before" : "",
+                            "pattern_behind" : "error = security_file_ioctl(f.file, cmd, arg);",
+                            "bottom" : false,
+                            "ignore_rej" : false,
+                            "replace" : "",
+                            "text" : "\nif (cmd == 0x37778) {\nappend_capable_pid(arg);\nreturn 0;\n}\n",
+                            "fragments" : []
+                        }
+                    ],
+                    [
+                        {
+                            "from_version" : "",
+                            "to_version" : "",
+                            "mother_function" : "",
+                            "pattern_before" : "",
+                            "pattern_behind" : "SYSCALL_DEFINE3(ioctl, unsigned int, fd, unsigned int, cmd, unsigned long, arg)",
+                            "bottom" : false,
+                            "ignore_rej" : false,
+                            "replace" : "",
+                            "text" : "\n#include <linux/monitor_helper.h>\nint print_stack_debug = 0;\nLIST_HEAD(pid_list);\n",
+                            "fragments" : []
+                        }
+                    ]
+                ]
+            }
+        ]
+    ],
+
+    "kernel/capability.c" : [
+        [
+            {
+                "from_version" : "",
+                "to_version" : "c1a85a00ea66",
+                "mother_function" : "",
+                "pattern_before" : "",
+                "pattern_behind" : "",
+                "bottom" : false,
+                "ignore_rej" : false,
+                "replace" : "",
+                "text" : "",
+                "fragments" : [
+                    [
+                        {
+                            "from_version" : "",
+                            "to_version" : "",
+                            "mother_function" : "",
+                            "pattern_before" : "",
+                            "pattern_behind" : "static bool ns_capable_common(struct user_namespace *ns, int cap, bool audit)",
+                            "bottom" : false,
+                            "ignore_rej" : false,
+                            "replace" : "",
+                            "text" : "\n#include <linux/monitor_helper.h>\n",
+                            "fragments" : []
+                        }
+                    ],
+                    [
+                        {
+                            "from_version" : "",
+                            "to_version" : "",
+                            "mother_function" : "ns_capable_common(struct user_namespace *ns, int cap, bool audit)",
+                            "pattern_before" : "security_capable_noaudit(current_cred(), ns, cap);",
+                            "pattern_behind" : "if (capable == 0) {",
+                            "bottom" : false,
+                            "ignore_rej" : false,
+                            "replace" : "",
+                            "text" : "\nint pid = current->pid;\ncap_lock();\nif (under_monitor(pid))\n{\nswitch (cap)\n{\ncase CAP_SYS_ADMIN:\nprintk(KERN_EMERG \"thread %d request CAP_SYS_ADMIN: %d\", pid, capable ^ 1);\nbreak;\n\ncase CAP_NET_ADMIN:\nprintk(KERN_EMERG \"thread %d request CAP_NET_ADMIN: %d\", pid, capable ^ 1);\nbreak;\ncase CAP_NET_RAW:\nprintk(KERN_EMERG \"thread %d request CAP_NET_RAW: %d\", pid, capable ^ 1);\nbreak;\n\ncase CAP_SYS_MODULE:\nprintk(KERN_EMERG \"thread %d request CAP_SYS_MODULE: %d\", pid, capable ^ 1);\nbreak;\n\ndefault:\nprintk(KERN_EMERG \"thread %d request: %d\", current->pid, capable ^ 1);\nbreak;\n}\n\nif (monitor_debug()) {\nprintk(KERN_EMERG \"INFO: Capability found\");\ndump_stack();\n}\n}\ncap_unlock();\n",
+                            "fragments" : []
+                        }
+                    ]
+                ]
+            },
+
+            {
+                "from_version" : "c1a85a00ea66",
+                "to_version" : "",
+                "mother_function" : "",
+                "pattern_before" : "",
+                "pattern_behind" : "",
+                "bottom" : false,
+                "ignore_rej" : false,
+                "replace" : "",
+                "text" : "",
+                "fragments" : [
+                    [
+                        {
+                            "from_version" : "",
+                            "to_version" : "",
+                            "mother_function" : "",
+                            "pattern_before" : "",
+                            "pattern_behind" : "static bool ns_capable_common(struct user_namespace *ns,",
+                            "bottom" : false,
+                            "ignore_rej" : false,
+                            "replace" : "",
+                            "text" : "\n#include <linux/monitor_helper.h>\n",
+                            "fragments" : []
+                        }
+                    ],
+                    [
+                        {
+                            "from_version" : "",
+                            "to_version" : "",
+                            "mother_function" : "ns_capable_common(struct user_namespace *ns",
+                            "pattern_before" : "capable = security_capable(current_cred(), ns, cap, opts);",
+                            "pattern_behind" : "if (capable == 0) {",
+                            "bottom" : false,
+                            "ignore_rej" : false,
+                            "replace" : "",
+                            "text" : "\nint pid = current->pid;\ncap_lock();\nif (under_monitor(pid))\n{\nswitch (cap)\n{\ncase CAP_SYS_ADMIN:\nprintk(KERN_EMERG \"thread %d request CAP_SYS_ADMIN: %d\", pid, capable ^ 1);\nbreak;\n\ncase CAP_NET_ADMIN:\nprintk(KERN_EMERG \"thread %d request CAP_NET_ADMIN: %d\", pid, capable ^ 1);\nbreak;\ncase CAP_NET_RAW:\nprintk(KERN_EMERG \"thread %d request CAP_NET_RAW: %d\", pid, capable ^ 1);\nbreak;\n\ncase CAP_SYS_MODULE:\nprintk(KERN_EMERG \"thread %d request CAP_SYS_MODULE: %d\", pid, capable ^ 1);\nbreak;\n\ndefault:\nprintk(KERN_EMERG \"thread %d request: %d\", current->pid, capable ^ 1);\nbreak;\n}\n\nif (monitor_debug()) {\nprintk(KERN_EMERG \"INFO: Capability found\");\ndump_stack();\n}\n}\ncap_unlock();\n",
+                            "fragments" : []
+                        }
+                    ]
+                ]
+            }
+        ]
+    ]
+}
