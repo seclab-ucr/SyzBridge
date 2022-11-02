@@ -73,6 +73,7 @@ class Case:
         
         self.case_logger.info("https://syzkaller.appspot.com/bug?id={}".format(case_hash))
         
+        syz_prog = self.case['syz_repro']
         c_prog = self.case["c_repro"]
         if c_prog == None:
             c_prog = ""
@@ -81,7 +82,7 @@ class Case:
         script = os.path.join(self.path_package, "scripts/init-case.sh")
         chmodX(script)
         self.case_logger.info("run: scripts/init-case.sh")
-        p = Popen([script, self.path_case, c_prog],
+        p = Popen([script, self.path_case, c_prog, syz_prog],
                 stdout=PIPE,
                 stderr=STDOUT)
         with p.stdout:

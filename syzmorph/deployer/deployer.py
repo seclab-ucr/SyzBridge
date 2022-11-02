@@ -156,7 +156,11 @@ class Deployer(Case, Task):
             if self.cfg.get_plugin(module.NAME).dependency == "strong" or \
                     (self.cfg.get_plugin(module.NAME).dependency == "weak" and self.module_capable(dependency)):
                 depend_cap_text = self.module_name_to_task(dependency)
-                A = self._get_plugin_instance_by_name(dependency)
+                try:
+                    A = self._get_plugin_instance_by_name(dependency)
+                except AttributeError as e:
+                    self.logger.error("Fail to plugin {} that is dependent to {}".format(dependency, module.NAME))
+                    raise e
                 dst_node.add(getattr(Task, depend_cap_text))
                 self._build_dependency_module(getattr(Task, depend_cap_text), A)
                 self.build_task_class(getattr(Task, depend_cap_text), A)
