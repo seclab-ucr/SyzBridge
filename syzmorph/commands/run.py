@@ -226,7 +226,13 @@ class RunCommand(Command):
 
         self.cases = self.read_cases(args.proj)
         if args.case != None:
-            self.cases = {args.case: self.cases[args.case]}
+            if os.path.exists(args.case):
+                t = {}
+                for line in open(args.case, 'r').readlines():
+                    t[line.strip()] = self.cases[line.strip()]
+                self.cases = t
+            else:
+                self.cases = {args.case: self.cases[args.case]}
         if self.args.distro != None:
             for hash_val in self.cases:
                 self.cases[hash_val]['affect'] = self.args.distro
