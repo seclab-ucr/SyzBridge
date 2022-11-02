@@ -496,38 +496,46 @@ class ImageCommand(Command):
     
     def _check_kernel_version(self, qemu: VM):
         out = qemu.command(user=self.ssh_user, cmds="uname -r", wait=True)
-        for line in out:
-            if line == self.kernel_version:
-                passed_check = False
-                if self.enable_feature & self.FEATURE_KASAN != 0:
-                    if self._kernel_config_pre_check(qemu, 'CONFIG_KASAN=y'):
-                        passed_check = True
-                    else:
-                        return False
-                if self.enable_feature & self.FEATURE_UBSAN != 0:
-                    if self._kernel_config_pre_check(qemu, 'CONFIG_UBSAN=y'):
-                        passed_check = True
-                    else:
-                        return False
-                if self.enable_feature & self.FEATURE_FAULT_INJECTION != 0:
-                    if self._kernel_config_pre_check(qemu, 'CONFIG_FAULT_INJECTION=y'):
-                        passed_check = True
-                    else:
-                        return False
-                if self.enable_feature & self.FEATURE_DEBUG != 0:
-                    if self._kernel_config_pre_check(qemu, 'CONFIG_DEBUG_KERNEL=y'):
-                        passed_check = True
-                    else:
-                        return False
-                if passed_check:
-                    self._retrieve_modules(qemu)
-                    qemu.shutdown()
+        if regx_match(r'^(\d+\.\d+\.\d+)', out[1]):
+            kerenl_version = regx_get(r'^(\d+\.\d+\.\d+)', out[1], 0)
+        if regx_match(r'^(\d+\.\d+\.\d+-\d+)', out[1]):
+            kerenl_version = regx_get(r'^(\d+\.\d+\.\d+)-\d+', out[1], 0)
+        if regx_match(r'^(\d+\.\d+\.\d+)', self.kernel_version):
+            self.kernel_version = regx_get(r'^(\d+\.\d+\.\d+)', self.kernel_version, 0)
+        if regx_match(r'^(\d+\.\d+\.\d+-\d+)', self.kernel_version):
+            self.kernel_version = regx_get(r'^(\d+\.\d+\.\d+)-\d+', self.kernel_version, 0)
+
+        if kerenl_version == self.kernel_version:
+            passed_check = False
+            if self.enable_feature & self.FEATURE_KASAN != 0:
+                if self._kernel_config_pre_check(qemu, 'CONFIG_KASAN=y'):
+                    passed_check = True
+                else:
+                    return False
+            if self.enable_feature & self.FEATURE_UBSAN != 0:
+                if self._kernel_config_pre_check(qemu, 'CONFIG_UBSAN=y'):
+                    passed_check = True
+                else:
+                    return False
+            if self.enable_feature & self.FEATURE_FAULT_INJECTION != 0:
+                if self._kernel_config_pre_check(qemu, 'CONFIG_FAULT_INJECTION=y'):
+                    passed_check = True
+                else:
+                    return False
+            if self.enable_feature & self.FEATURE_DEBUG != 0:
+                if self._kernel_config_pre_check(qemu, 'CONFIG_DEBUG_KERNEL=y'):
+                    passed_check = True
+                else:
+                    return False
+            if passed_check:
+                self._retrieve_modules(qemu)
+                qemu.shutdown()
+                return True
+            else:
+                if self.enable_feature == 0:
                     return True
                 else:
-                    if self.enable_feature == 0:
-                        return True
-                    else:
-                        return False
+                    return False
         return False
     
     def _retrieve_modules(self, qemu: VM):
