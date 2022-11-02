@@ -269,7 +269,7 @@ if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
     if [ ! -z "$PATCH" ]; then
       patch -p1 -i $PATCH || exit 2
     fi
-    if [ ! -z $EXTRA_CMD ]; then
+    if [ ! -z "$EXTRA_CMD" ]; then
       eval $EXTRA_CMD || exit 2
     fi
     make -j$N_CORES CC=$COMPILER > make.log 2>&1 || PATCH_TCP_CONG=1
