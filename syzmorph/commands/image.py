@@ -441,7 +441,7 @@ class ImageCommand(Command):
         if regx_match(r'^(\d+\.\d+\.\d+)', out[1]):
             kerenl_version = regx_get(r'^(\d+\.\d+\.\d+)', out[1], 0)
         if regx_match(r'^(\d+\.\d+\.\d+-\d+)', out[1]):
-            kerenl_version = regx_get(r'^(\d+\.\d+\.\d+-\d+)', out[1], 0)
+            kerenl_version = regx_get(r'^(\d+\.\d+\.\d+)-\d+', out[1], 0)
         if kerenl_version != distro.distro_version:
             res.append("Kernel Version Check Failed, {} != {}".format(out[1], distro.distro_version))
         
