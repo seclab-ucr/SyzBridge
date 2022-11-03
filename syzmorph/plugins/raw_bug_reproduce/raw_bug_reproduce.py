@@ -192,7 +192,8 @@ class RawBugReproduce(AnalysisModule):
 
         cmds = make_syz_commands(testcase_text, 0, i386)
         qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user=self.root_user, wait=True)
-        qemu.command(cmds=cmds, user=user, wait=True)
+        qemu.command(cmds=cmds, user=user, timeout=self.repro_timeout, wait=True)
+        qemu.command(cmds="killall syz-executor && killall syz-execprog", user="root", wait=True)
         return
 
     def capture_kasan(self, qemu, root):
@@ -224,7 +225,8 @@ class RawBugReproduce(AnalysisModule):
         # Sleeping for 1 second to ensure everything is ready in vm
         time.sleep(1)
         qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user=self.root_user, wait=True)
-        qemu.command(cmds="chmod +x poc && ./poc", user=user, wait=True)
+        qemu.command(cmds="chmod +x poc && ./poc", user=user, timeout=self.repro_timeout, wait=True)
+        qemu.command(cmds="killall poc", user="root", wait=True)
         return
     
     def _init_results(self):
