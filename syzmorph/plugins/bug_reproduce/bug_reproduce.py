@@ -604,12 +604,13 @@ class BugReproduce(AnalysisModule):
         for each in manual_enable_modules:
             args = self._module_args(each)
             out = qemu.command(cmds="modprobe {}{}".format(each, args), user=self.root_user, wait=True, timeout=60)
-            if 'modprobe: FATAL: Module {} not found in directory'.format(each) in out[1]:
-                raise ModprobePaniced(each)
-            if 'Exec format error' in out[1]:
-                raise ModprobePaniced(each)
-            out = qemu.command(cmds="lsmod | grep {}{}".format(each), user=self.root_user, wait=True)
-            if each not in out[1]:
+            if len(out) > 1:
+                if 'modprobe: FATAL: Module {} not found in directory'.format(each) in out[1]:
+                    raise ModprobePaniced(each)
+                if 'Exec format error' in out[1]:
+                    raise ModprobePaniced(each)
+            out = qemu.command(cmds="lsmod | grep {}".format(each), user=self.root_user, wait=True)
+            if len(out) == 1:
                 raise ModprobePaniced(each)
         return True
     

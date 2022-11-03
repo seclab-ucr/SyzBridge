@@ -213,7 +213,7 @@ class SyzFeatureMinimize(AnalysisModule):
             executor_path = os.path.join(self.path_case_plugin, 'syz-executor')
             execprog_path = os.path.join(self.path_case_plugin, 'syz-execprog')
             qemu.upload(user='root', src=[execprog_path, executor_path], dst='/', wait=True)
-            qemu.command(cmds="chmod +x /syz-executor && chmod +x /syz-execprog", user='root', wait=False, timeout=self.repro_timeout)
+            qemu.command(cmds="chmod +x /syz-executor && chmod +x /syz-execprog", user='root', wait=True, timeout=self.repro_timeout)
 
             syz_prog = open(syz_prog_path, 'r').readlines()
             cmd = self.make_syz_command(syz_prog, features, i386)

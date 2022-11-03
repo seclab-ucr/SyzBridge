@@ -125,8 +125,9 @@ class Launcher(Build):
         return
     
     def _crash_start(self, line):
-        crash_head = [r'BUG: unable to handle kernel'
-                r'general protection fault', r'KASAN:']
+        crash_head = [r'BUG: unable to handle'
+                r'general protection fault', r'KASAN:',
+                r'BUG: kernel NULL pointer dereference']
 
         for each in crash_head:
             if regx_match(each, line):
