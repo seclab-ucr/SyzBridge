@@ -549,6 +549,7 @@ class BugReproduce(AnalysisModule):
         else:
             cmds = self.syz_feature_mini.make_syz_command(testcase_text, features, i386, repeat=repeat)
         qemu.command(cmds=cmds, user=user, wait=True, timeout=self.repro_timeout)
+        qemu.command(cmds="killall syz-executor && killall syz-execprog", user="root", wait=True)
 
         time.sleep(5)
         return qemu.trigger_crash
@@ -593,8 +594,8 @@ class BugReproduce(AnalysisModule):
         else:
             qemu.command(cmds="rm -rf ./tmp", user=user, wait=True)
             qemu.command(cmds="mkdir ./tmp && mv ./poc ./tmp && cd ./tmp && chmod +x poc && ./poc", user=user, wait=True, timeout=self.repro_timeout)
-            qemu.logger.info("Killing PoC")
-            qemu.command(cmds="killall poc", user=self.root_user, wait=True)
+        qemu.logger.info("Killing PoC")
+        qemu.command(cmds="killall poc", user=self.root_user, wait=True)
         self.set_stage_text("gathering output")
         time.sleep(5)
         return qemu.trigger_crash
@@ -602,12 +603,14 @@ class BugReproduce(AnalysisModule):
     def _enable_missing_modules(self, qemu, manual_enable_modules):
         for each in manual_enable_modules:
             args = self._module_args(each)
-            out = qemu.command(cmds="modprobe {}{}".format(each, args), user=self.root_user, wait=True)
-            for line in out:
-                if 'modprobe: FATAL: Module {} not found in directory'.format(each) in line:
-                    raise ModprobePaniced(each)
-                if 'Exec format error' in line:
-                    raise ModprobePaniced(each)
+            out = qemu.command(cmds="modprobe {}{}".format(each, args), user=self.root_user, wait=True, timeout=60)
+            if 'modprobe: FATAL: Module {} not found in directory'.format(each) in out[1]:
+                raise ModprobePaniced(each)
+            if 'Exec format error' in out[1]:
+                raise ModprobePaniced(each)
+            out = qemu.command(cmds="lsmod | grep {}{}".format(each), user=self.root_user, wait=True)
+            if each not in out[1]:
+                raise ModprobePaniced(each)
         return True
     
     def _module_args(self, module):

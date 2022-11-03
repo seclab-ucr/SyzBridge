@@ -90,7 +90,7 @@ class Launcher(Build):
     def _reproduce(self, th_index, func, args, root, work_dir, vm_tag, timeout, **kwargs):
         self.log("New Process for reproducing {}".format(vm_tag))
         self.prepare()
-        qemu = self.launch_qemu(tag=vm_tag, log_suffix=str(th_index), work_path=work_dir, **kwargs)
+        qemu = self.launch_qemu(tag=vm_tag, log_suffix=str(th_index), work_path=work_dir, timeout=timeout, **kwargs)
         self.log("Launched qemu {}".format(vm_tag))
         
         self.run_qemu(qemu, self._capture_crash, th_index, work_dir, root, timeout, func, *args)
@@ -223,13 +223,21 @@ class Launcher(Build):
             try:
                 [res, trigger] = qemu_queue.get(block=True, timeout=qemu_output_window)
                 if trigger:
-                    main_ret = main_func_q.get(block=True)
+                    try:
+                        main_ret = main_func_q.get(block=True, timeout=10)
+                    except queue.Empty:
+                        self.logger.error("crash capturer has finished {} seconds routine but PoC is still running ")
+                        main_ret = None
                     self.logger.info("Reproduce finished, triggered the bug")
                     return [res, trigger, qemu.qemu_fail, main_ret]
             except queue.Empty:
                 if qemu.no_new_output() and not main.is_alive() and not qemu.trigger_crash:
                     break
-        main_ret = main_func_q.get(block=True)
+        try:
+            main_ret = main_func_q.get(block=True, timeout=10)
+        except queue.Empty:
+            self.logger.error("crash capturer has finished {} seconds routine but PoC is still running ")
+            main_ret = None
         self.logger.info("Reproduce finished, didn't trigger bug")
         return [[], False, qemu.qemu_fail, main_ret]
     
