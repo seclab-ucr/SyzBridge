@@ -45,8 +45,8 @@ class SyzFeatureMinimize(AnalysisModule):
         return self._move_to_success
     
     def build_upstream_kernel(self):
-        if self._check_stamp("BUILD_SYZ_FEATURE_MINIMIZE_KERNEL"):
-            return 0
+        if self._check_stamp("BUILD_KERNEL") and not self._check_stamp("BUILD_SYZ_FEATURE_MINIMIZE_KERNEL"):
+            self._remove_stamp("BUILD_KERNEL")
         ret = self.build_mainline_kernel()
         if ret == 0:
             self._create_stamp("BUILD_SYZ_FEATURE_MINIMIZE_KERNEL")
@@ -143,11 +143,11 @@ class SyzFeatureMinimize(AnalysisModule):
                 if "close_fds" in pm and str(pm["close_fds"]).lower() == "true":
                     enabled_features.append("close_fds")
                 if "devlinkpci" in pm and str(pm["devlinkpci"]).lower() == "true":
-                    enabled_features.append("devlink_pci")
+                    enabled_features.append("devlinkpci")
                 if "netdev" in pm and str(pm["netdev"]).lower() == "true":
-                    enabled_features.append("net_dev")
+                    enabled_features.append("netdev")
                 if "resetnet" in pm and str(pm["resetnet"]).lower() == "true":
-                    enabled_features.append("net_reset")
+                    enabled_features.append("resetnet")
                 if "usb" in pm and str(pm["usb"]).lower() == "true":
                     enabled_features.append("usb")
                 if "ieee802154" in pm and str(pm["ieee802154"]).lower() == "true":

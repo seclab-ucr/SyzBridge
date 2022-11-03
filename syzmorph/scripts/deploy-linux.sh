@@ -128,7 +128,7 @@ fi
 cd ..
 
 echo "[+] Building kernel"
-OLD_INDEX=`ls -l linux | rev | cut -d'-' -f 1`
+OLD_INDEX=`ls -l linux-$KERNEL | rev | cut -d'-' -f 1`
 if [ "$OLD_INDEX" != "$INDEX" ] | [ ! -e ./linux-$KERNEL ]; then
   rm -rf "./linux-$KERNEL" || echo "No linux repo"
   if [[ $KERNEL =~ linux-[0-9]+\.[0-9]+\.y$ ]]; then

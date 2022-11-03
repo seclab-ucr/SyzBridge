@@ -190,7 +190,7 @@ class RawBugReproduce(AnalysisModule):
         qemu.command(cmds="chmod +x /syz-execprog /syz-executor", user=user, wait=True)
         testcase_text = open(testcase, "r").readlines()
 
-        cmds = make_syz_commands(testcase_text, 2, i386)
+        cmds = make_syz_commands(testcase_text, 0, i386)
         qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user=self.root_user, wait=True)
         qemu.command(cmds=cmds, user=user, wait=True)
         return
