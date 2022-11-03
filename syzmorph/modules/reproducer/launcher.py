@@ -159,7 +159,7 @@ class Launcher(Build):
                 if regx_match(boundary_regx, line) or \
                         self._crash_start(line):
                     record_flag ^= 1
-                    if crash_flag == 1:
+                    if crash_flag == 1 and crash != []:
                         res.append(crash)
                         crash = []
                         trigger_hunted_bug = True
@@ -175,7 +175,7 @@ class Launcher(Build):
                 if (regx_match(boundary_regx, line) and record_flag) or \
                     self._crash_end(line) or \
                     (self._crash_start(line) and crash_flag):
-                    if crash_flag == 1:
+                    if crash_flag == 1 and crash != []:
                         res.append(crash)
                         crash = []
                         trigger_hunted_bug = True
