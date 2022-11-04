@@ -179,7 +179,7 @@ if [ $PERF = "true" ]; then
     rm -r $DIR/tmp/$BASENAME
 fi
 
-sudo chroot $DIR /bin/bash -c "apt-get update; apt-get install -y trace-cmd vim"
+sudo chroot $DIR /bin/bash -c "apt-get update; apt-get install -y trace-cmd vim libc6-dev-i386"
 
 # Add udev rules for custom drivers.
 # Create a /dev/vim2m symlink for the device managed by the vim2m driver

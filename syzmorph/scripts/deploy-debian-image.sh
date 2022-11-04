@@ -60,7 +60,7 @@ function change_grub() {
 function install_necessary_packages() {
     if [ ! -f ~/.stamp/INSTALL_PACKAGES ]; then
         apt-get update
-        apt-get install -y git trace-cmd psmisc build-essential devscripts fakeroot libncurses-dev gawk flex bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev libiberty-dev autoconf gcc-multilib
+        apt-get install -y git trace-cmd psmisc build-essential devscripts fakeroot libncurses-dev gawk flex bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev libiberty-dev autoconf gcc-multilib libc6-dev-i386
         apt-get build-dep -y linux
 
         systemctl disable hv-kvp-daemon.service || true
