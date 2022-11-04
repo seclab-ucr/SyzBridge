@@ -87,6 +87,7 @@ class RawBugReproduce(AnalysisModule):
             self.syz_feature = self.syz_feature_mini.results
             if self.syz_feature['prog_status'] == SyzFeatureMinimize.C_PROG:
                 self.c_prog = True
+                self.syz_feature.pop('prog_status')
         for distro in self.cfg.get_distros():
             self.info_msg("start reproducing bugs on {}".format(distro.distro_name))
             x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="{} reproduce_async-{}".format(self.case_hash, distro.distro_name))

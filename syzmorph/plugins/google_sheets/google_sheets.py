@@ -18,11 +18,16 @@ class GoogleSheets(AnalysisModule):
     TYPE_SUCCEED = (0.63,0.76,0.78,1.0) # rgba(162, 196, 201, 1)
     TYPE_SUCCEED_NEED_ADAPTATION = (0.27,0.5,0.55,1.0) # rgba(69, 129, 142, 1)
 
+    NOT_TRIGGERED = 0
+    TRIGGERED_BY_ROOT = 1
+    TRIGGERED_BY_NORMAL = 2
+
     def __init__(self):
         super().__init__()
         self.sh = None
         self.idx = 0
         self.case_type = self.TYPE_FAILED
+        self.triggered_by = self.NOT_TRIGGERED
         
     def prepare(self):
         try:
@@ -101,8 +106,8 @@ class GoogleSheets(AnalysisModule):
             self._write_raw_reproducable(wks)
         else:
             self.write_failed_str_to_cell('L'+str(self.idx), wks)
-        self._render_cell_color('A'+str(self.idx), self.case_type, wks)
-        #self._render_row_coloer(wks)
+        #self._render_cell_color('A'+str(self.idx), self.case_type, wks)
+        self._render_row_coloer(wks)
         try:
             if self.manager.module_capable("SlackBot") and \
                     (self.data['reproduce-by-normal'] != "" or self.data['reproduce-by-root'] != ""):
@@ -196,9 +201,11 @@ class GoogleSheets(AnalysisModule):
                         if privilege == 'by normal user':
                             normal_text += "{}-{} {}\n".format(distro, bug_title, json.dumps(result_json[distro]))
                             self.data['reproduce-by-normal'] += "{} ".format(distro)
+                            self.triggered_by = self.TRIGGERED_BY_NORMAL
                         if privilege == 'by root user':
                             root_text += "{}-{} {}\n".format(distro, bug_title, json.dumps(result_json[distro]))
                             self.data['reproduce-by-root'] += "{} ".format(distro)
+                            self.triggered_by = self.TRIGGERED_BY_ROOT
                     if regx_match(failed_regx, line):
                         distros = regx_get(failed_regx, line, 0)
                         fail_text += "{}\n".format(distros)
@@ -278,7 +285,7 @@ class GoogleSheets(AnalysisModule):
         normal_text = ''
         root_text = ''
         fail_text = ''
-        triggered = False
+        triggered_by = self.NOT_TRIGGERED
         if os.path.exists(path_report):
             with open(path_report, "r") as f:
                 report = f.readlines()
@@ -290,11 +297,11 @@ class GoogleSheets(AnalysisModule):
                         if privilege == 'by normal user':
                             normal_text += "{}-{} by normal user\n".format(distro, bug_title)
                             self.data['raw-reproduce-by-normal'] += "{} ".format(distro)
-                            triggered = True
+                            triggered_by = self.TRIGGERED_BY_NORMAL
                         if privilege == 'by root user':
                             root_text += "{}-{} by root user\n".format(distro, bug_title)
                             self.data['raw-reproduce-by-root'] += "{} ".format(distro)
-                            triggered = True
+                            triggered_by = self.TRIGGERED_BY_ROOT
                     if regx_match(failed_regx, line):
                         distros = regx_get(failed_regx, line, 0)
                         fail_text += "{}\n".format(distros)
@@ -305,8 +312,9 @@ class GoogleSheets(AnalysisModule):
         if normal_text != '':
             old_val = wks.get_value('L'+str(self.idx)) + '\n'
             wks.update_value('L'+str(self.idx), old_val + normal_text)
-        if self.case_type == self.TYPE_SUCCEED:
-            if not triggered:
+        if self.triggered_by != self.NOT_TRIGGERED:
+            if triggered_by == self.NOT_TRIGGERED or \
+                    (triggered_by == self.TRIGGERED_BY_ROOT and self.triggered_by == self.TRIGGERED_BY_NORMAL):
                 self.case_type = self.TYPE_SUCCEED_NEED_ADAPTATION
     
     def write_failed_str_to_cell(self, pos, wks):
