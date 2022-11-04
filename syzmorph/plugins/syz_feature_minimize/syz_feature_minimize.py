@@ -222,7 +222,7 @@ class SyzFeatureMinimize(AnalysisModule):
     def _capture_crash(self, qemu: VM, root:bool, features: list, test_c_prog: bool):
         syz_prog_path = os.path.join(self.path_case_plugin, 'testcase')
         qemu.upload(user='root', src=[syz_prog_path], dst='/root', wait=True)
-        qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user=self.root_user, wait=True)
+        qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user='root', wait=True)
         
         if test_c_prog:
             prog2c_cmd = self._make_prog2c_command(syz_prog_path, features, self.i386)
