@@ -372,7 +372,7 @@ def make_syz_commands(text, support_enable_features, i386, repeat=True):
                             command += "-" + each + "=" +str(normal_pm[each]).lower() + " "
                 if "procs" in pm and str(pm["procs"]) != "1":
                     num = int(pm["procs"])
-                    command += "-procs=" + str(num*2) + " "
+                    command += "-procs=" + str(num) + " "
                 else:
                     command += "-procs=1" + " "
                 if "repeat" in pm and pm["repeat"] != "":
