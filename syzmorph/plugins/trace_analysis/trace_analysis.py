@@ -176,7 +176,7 @@ class TraceAnalysis(AnalysisModule):
 
         if syz_repro:
             qemu.upload(user="root", src=[testcase], dst="/root", wait=True)
-            qemu.upload(user="root", src=[syz_executor, syz_execprog], dst="/", wait=True)
+            qemu.upload(user="root", src=[syz_executor, syz_execprog], dst="/tmp", wait=True)
         else:
             poc_src = "poc.c"
             poc_path = os.path.join(self.path_case_plugin, poc_src)

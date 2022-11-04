@@ -291,7 +291,7 @@ class CapabilityCheck(AnalysisModule):
             self.err_msg("Fail to patch syzkaller")
             return False
 
-        syz.build_syzkaller()
+        syz.build_syzkaller('amd64')
         if syz.build_syzkaller(component='all') != 0:
             self.err_msg("Fail to build syzkaller")
             return False

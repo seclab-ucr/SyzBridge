@@ -111,6 +111,8 @@ class BugReproduce(AnalysisModule):
         else:
             self.syz_feature_mini = self.cfg.get_plugin(SyzFeatureMinimize.NAME).instance
             self.syz_feature = self.syz_feature_mini.results
+            if self.syz_feature['prog_status'] == SyzFeatureMinimize.C_PROG:
+                self.c_prog = True
         for distro in self.cfg.get_distros():
             self.info_msg("Reproducing bugs on {}".format(distro.distro_name))
             if self.syz_feature_mini != None:

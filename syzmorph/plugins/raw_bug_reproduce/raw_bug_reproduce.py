@@ -82,6 +82,11 @@ class RawBugReproduce(AnalysisModule):
         if not self.plugin_finished("SyzFeatureMinimize"):
             self.info_msg("BugReproduce will use C Prog instead")
             self.c_prog = True
+        else:
+            self.syz_feature_mini = self.cfg.get_plugin(SyzFeatureMinimize.NAME).instance
+            self.syz_feature = self.syz_feature_mini.results
+            if self.syz_feature['prog_status'] == SyzFeatureMinimize.C_PROG:
+                self.c_prog = True
         for distro in self.cfg.get_distros():
             self.info_msg("start reproducing bugs on {}".format(distro.distro_name))
             x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="{} reproduce_async-{}".format(self.case_hash, distro.distro_name))

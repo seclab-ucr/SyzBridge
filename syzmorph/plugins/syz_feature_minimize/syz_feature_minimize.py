@@ -17,9 +17,13 @@ class SyzFeatureMinimize(AnalysisModule):
     REPORT_END =   "==================================================================="
     REPORT_NAME = "Report_SyzFeatureMinimize"
     DEPENDENCY_PLUGINS = []
+    SYZ_PROG = 0
+    C_PROG = 1
+    BOTH_FAIL = 2
 
     def __init__(self):
         super().__init__()
+        self.i386 = False
         self.syz: SyzkallerInterface = None
         
     def prepare(self):
@@ -47,7 +51,7 @@ class SyzFeatureMinimize(AnalysisModule):
     def build_upstream_kernel(self):
         if self._check_stamp("BUILD_KERNEL") and not self._check_stamp("BUILD_SYZ_FEATURE_MINIMIZE_KERNEL"):
             self._remove_stamp("BUILD_KERNEL")
-        ret = self.build_mainline_kernel()
+        ret = self.build_mainline_kernel(keep_ori_config=True)
         if ret == 0:
             self._create_stamp("BUILD_SYZ_FEATURE_MINIMIZE_KERNEL")
         return ret
@@ -59,34 +63,58 @@ class SyzFeatureMinimize(AnalysisModule):
         if self.syz.pull_syzkaller(commit=syz_commit) != 0:
             self.err_msg("Failed to pull syzkaller")
             return -1
-        if self.syz.build_syzkaller() != 0:
+        arch = 'amd64'
+        if self.i386:
+            arch = '386'
+        if self.syz.build_syzkaller(arch) != 0:
             self.err_msg("Failed to build syzkaller")
             return -1
         return 0
     
-    def minimize_syz_feature(self):
+    def minimize_syz_feature(self, features):
+        self.report.append("PoC originally requires {}".format(features))
+        return self._minimize_syz_feature(features)
+    
+    def test_two_prog(self, features):
+        if self._test_feature(None, features):
+            return self.SYZ_PROG
+        if self.test_PoC(features):
+            return self.C_PROG
+        return self.BOTH_FAIL
+    
+    def get_features(self):
         syz_repro_url = self.case['syz_repro']
         syz_repro = request_get(syz_repro_url).text
         self._write_to(syz_repro, "testcase")
         syzbin_folder = 'linux_amd64'
         if regx_match(r'386', self.case["manager"]):
             syzbin_folder = 'linux_386'
-        shutil.copyfile(os.path.join(self.syz.syzkaller_path, 'bin/{}/syz-execprog'.format(syzbin_folder)), os.path.join(self.path_case_plugin, 'syz-execprog'))
+        shutil.copyfile(os.path.join(self.syz.syzkaller_path, 'bin/linux_amd64/syz-execprog'.format(syzbin_folder)), os.path.join(self.path_case_plugin, 'syz-execprog'))
         shutil.copyfile(os.path.join(self.syz.syzkaller_path, 'bin/{}/syz-executor'.format(syzbin_folder)), os.path.join(self.path_case_plugin, 'syz-executor'))
         shutil.copyfile(os.path.join(self.syz.syzkaller_path, 'bin/syz-prog2c'), os.path.join(self.path_case_plugin, 'syz-prog2c'))
 
         features = self._get_syz_features(syz_repro)
-        self.report.append("PoC originally requires {}".format(features))
-        return self._minimize_syz_feature(features)
+        return features
 
     def run(self):
+        self.i386 = False
+        if regx_match(r'386', self.case["manager"]):
+            self.i386 = True
         if self.build_upstream_kernel() != 0:
             self.err_msg("Failed to build upstream kernel")
             return False
         if self.build_syzkaller() < 0:
             self.err_msg('Failed to build syzkaller')
             return False
-        features = self.minimize_syz_feature()
+        features = self.get_features()
+        prog_status = self.test_two_prog(features)
+        self.results['prog_status'] = prog_status
+        if prog_status == self.BOTH_FAIL:
+            return False
+        if prog_status == self.C_PROG:
+            self.generate_new_PoC(features)
+            return True
+        features = self.minimize_syz_feature(features)
         for key in self.results:
             if key not in features:
                 self.results[key] = False
@@ -102,15 +130,12 @@ class SyzFeatureMinimize(AnalysisModule):
     def generate_new_PoC(self, features):
         self.info_msg("Generating PoC_repeat.c and PoC_no_repeat.c")
         syz_prog_path = os.path.join(self.path_case_plugin, 'testcase')
-        i386 = False
-        if regx_match(r'386', self.case["manager"]):
-            i386 = True
-        prog2c_cmd = self._make_prog2c_command(syz_prog_path, features, i386)
+        prog2c_cmd = self._make_prog2c_command(syz_prog_path, features, self.i386)
         local_command(command='chmod +x syz-prog2c && {} > {}/PoC_repeat.c'.format(prog2c_cmd, self.path_case_plugin), logger=self.logger,\
                 shell=True, cwd=self.syz.path_case_plugin)
         shutil.copyfile(os.path.join(self.path_case_plugin, "PoC_repeat.c"), os.path.join(self.path_case, "PoC_repeat.c"))
         
-        prog2c_cmd = self._make_prog2c_command(syz_prog_path, features, i386, repeat=False)
+        prog2c_cmd = self._make_prog2c_command(syz_prog_path, features, self.i386, repeat=False)
         local_command(command='chmod +x syz-prog2c && {} > {}/PoC_no_repeat.c'.format(prog2c_cmd, self.path_case_plugin), logger=self.logger,\
                 shell=True, cwd=self.syz.path_case_plugin)
         shutil.copyfile(os.path.join(self.path_case_plugin, "PoC_no_repeat.c"), os.path.join(self.path_case, "PoC_no_repeat.c"))
@@ -197,16 +222,15 @@ class SyzFeatureMinimize(AnalysisModule):
     def _capture_crash(self, qemu: VM, root:bool, features: list, test_c_prog: bool):
         syz_prog_path = os.path.join(self.path_case_plugin, 'testcase')
         qemu.upload(user='root', src=[syz_prog_path], dst='/root', wait=True)
-        i386 = False
-        if regx_match(r'386', self.case["manager"]):
-            i386 = True
+        qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user=self.root_user, wait=True)
+        
         if test_c_prog:
-            prog2c_cmd = self._make_prog2c_command(syz_prog_path, features, i386)
+            prog2c_cmd = self._make_prog2c_command(syz_prog_path, features, self.i386)
             local_command(command='chmod +x syz-prog2c && {} > {}/poc.c'.format(prog2c_cmd, self.path_case_plugin), logger=self.logger,\
                 shell=True, cwd=self.syz.path_case_plugin)
             self.info_msg("Convert syz-prog to c prog: {}".format(prog2c_cmd))
             qemu.upload(user='root', src=[os.path.join(self.path_case_plugin, 'poc.c')], dst='/root', wait=True)
-            if i386:
+            if self.i386:
                 qemu.command(cmds="gcc -m32 -pthread -o poc poc.c", user="root", wait=True)
             else:
                 qemu.command(cmds="gcc -pthread -o poc poc.c", user="root", wait=True)
@@ -215,11 +239,11 @@ class SyzFeatureMinimize(AnalysisModule):
         else:
             executor_path = os.path.join(self.path_case_plugin, 'syz-executor')
             execprog_path = os.path.join(self.path_case_plugin, 'syz-execprog')
-            qemu.upload(user='root', src=[execprog_path, executor_path], dst='/', wait=True)
-            qemu.command(cmds="chmod +x /syz-executor && chmod +x /syz-execprog", user='root', wait=True, timeout=self.repro_timeout)
+            qemu.upload(user='root', src=[execprog_path, executor_path], dst='/tmp', wait=True)
+            qemu.command(cmds="chmod +x /tmp/syz-executor && chmod +x /tmp/syz-execprog", user='root', wait=True, timeout=self.repro_timeout)
 
             syz_prog = open(syz_prog_path, 'r').readlines()
-            cmd = self.make_syz_command(syz_prog, features, i386)
+            cmd = self.make_syz_command(syz_prog, features, self.i386)
             self.info_msg("syz command: {}".format(cmd))
             qemu.command(cmds=cmd, user='root', wait=True, timeout=self.repro_timeout)
         return
@@ -229,7 +253,7 @@ class SyzFeatureMinimize(AnalysisModule):
         text = open(testcase_path, 'r').readlines()
 
         enabled = "-enable="
-        normal_pm = {"arch":"amd64", "threaded":"false", "sandbox":"none"}
+        normal_pm = {"arch":"amd64", "threaded":"false", "collide":"false", "sandbox":"none", "fault_call":"-1", "fault_nth":"0"}
         for line in text:
             if line.find('{') != -1 and line.find('}') != -1:
                 pm = {}
@@ -247,15 +271,9 @@ class SyzFeatureMinimize(AnalysisModule):
                     else:
                         if each=='arch' and i386:
                             command += "-" + each + "=386" + " "
-                        else:
-                            if each == "sandbox" and 'no_sandbox' in features:
-                                continue
-                            command += "-" + each + "=" +str(normal_pm[each]).lower() + " "
-                            if each == "sandbox" and str(pm[each]).lower() != "none":
-                                command += "-tmpdir "
                 if "procs" in pm and str(pm["procs"]) != "1":
                     num = int(pm["procs"])
-                    command += "-procs=" + str(num*2) + " "
+                    command += "-procs=" + str(num) + " "
                 else:
                     command += "-procs=1" + " "
                 if repeat:
@@ -264,7 +282,7 @@ class SyzFeatureMinimize(AnalysisModule):
                     command += "-repeat=" + "1 "
                 if "slowdown" in pm and pm["slowdown"] != "":
                     command += "-slowdown=" + "1 "
-                command += "-trace "
+                #command += "-trace "
                 #It makes no sense that limiting the features of syz-execrpog, just enable them all
                 
                 if "tun" in features:
@@ -306,7 +324,7 @@ class SyzFeatureMinimize(AnalysisModule):
             return text[0]
         enabled = "-enable="
 
-        normal_pm = {"arch":"amd64", "threaded":"false", "collide":"false", "sandbox":"none"}
+        normal_pm = {"arch":"amd64", "threaded":"false", "collide":"false", "sandbox":"none", "fault_call":"-1", "fault_nth":"0"}
         for line in text:
             if line.find('{') != -1 and line.find('}') != -1:
                 pm = {}
@@ -333,7 +351,6 @@ class SyzFeatureMinimize(AnalysisModule):
                                     continue
                                 if 'no_sandbox' in features:
                                     continue
-                            command += "-" + each + "=" +str(normal_pm[each]).lower() + " "
                 if "procs" in pm and str(pm["procs"]) != "1":
                     num = int(pm["procs"])
                     command += "-procs=" + str(num*2) + " "

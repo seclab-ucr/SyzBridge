@@ -47,11 +47,11 @@ class SyzkallerInterface(AnalysisModule):
         return True
     
     def check_syzkaller(func):
-        def inner(self, **kwargs):
+        def inner(self, *args):
             if self.syzkaller_path == '':
                 self.case_logger.error("Can not find syzkaller")
                 return -1
-            return func(self, **kwargs)
+            return func(self, *args)
         return inner
     
     def check_binary(self, binary_name):
@@ -96,7 +96,7 @@ class SyzkallerInterface(AnalysisModule):
         return exitcode
     
     @check_syzkaller
-    def build_syzkaller(self, arch="amd64", component=None):
+    def build_syzkaller(self, arch, component=None):
         #self.add_dependencies()
         my_env = os.environ.copy()
         path_project = os.getcwd()

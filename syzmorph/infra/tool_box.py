@@ -354,7 +354,7 @@ def make_syz_commands(text, support_enable_features, i386, repeat=True):
             # If read from repro.command, text[0] was already the command
             return text[0]
         enabled = "-enable="
-        normal_pm = {"arch":"amd64", "threaded":"false", "collide":"false", "sandbox":"none"}
+        normal_pm = {"arch":"amd64", "threaded":"false", "collide":"false", "sandbox":"none", "fault_call":"-1", "fault_nth":"0"}
         for line in text:
             if line.find('{') != -1 and line.find('}') != -1:
                 pm = {}
@@ -368,8 +368,6 @@ def make_syz_commands(text, support_enable_features, i386, repeat=True):
                     else:
                         if each=='arch' and i386:
                             command += "-" + each + "=386" + " "
-                        else:
-                            command += "-" + each + "=" +str(normal_pm[each]).lower() + " "
                 if "procs" in pm and str(pm["procs"]) != "1":
                     num = int(pm["procs"])
                     command += "-procs=" + str(num) + " "
