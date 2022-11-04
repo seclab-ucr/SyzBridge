@@ -36,6 +36,9 @@ class CapabilityCheck(AnalysisModule):
         if not self.build_kernel():
             self.err_msg("Fail to build kernel")
             return False
+        if not self.build_syzkaller():
+            self.err_msg("Fail to build syzkaller")
+            return False
         if not self.tune_poc(debug=True):
             self.err_msg("Fail to tune poc")
             return False
@@ -122,6 +125,15 @@ class CapabilityCheck(AnalysisModule):
         smartpatch = os.path.join(self.path_package, "infra/SmartPatch/SmartPatch")
         extra_cmd="python3 {} -linux {} -patch {}".format(smartpatch, os.path.join(self.path_case, "linux-upstream"), json_path)
         return self.build_mainline_kernel(patch=patch, extra_cmd=extra_cmd)
+    
+    def build_syzkaller(self):
+        if self.syz == None:
+            self.syz: SyzkallerInterface() = self._init_module(SyzkallerInterface())
+            self.syz.prepare_on_demand(self.path_case_plugin)
+        if not self._build_syz_logparser(self.syz):
+                self.err_msg("Fail to build syz logparser")
+                return False
+        return True
     
     def generate_report(self):
         final_report = "\n".join(self.report)
@@ -228,12 +240,12 @@ class CapabilityCheck(AnalysisModule):
         return -1
 
     def _run_poc(self, qemu):
-        p = Popen(["gcc", "-pthread", "-static", "-o", "poc", "poc.c"], cwd=self.path_case_plugin, stderr=PIPE, stdout=PIPE)
-        with p.stdout:
-            self._log_subprocess_output(p.stdout)
-        p.wait()
-        poc_path = os.path.join(self.path_case_plugin, "poc")
-        qemu.upload(user="root", src=[poc_path], dst="/root", wait=True)
+        poc_path = os.path.join(self.path_case_plugin, "poc.c")
+        qemu.upload(user="root", src=[poc_path], dst="~/", wait=True)
+        if '386' in self.case['manager']:
+            qemu.command(cmds="gcc -m32 -pthread -o poc poc.c", user="root", wait=True)
+        else:
+            qemu.command(cmds="gcc -pthread -o poc poc.c", user="root", wait=True)
         qemu.command(cmds="chmod +x ./poc && ./poc", user="root", wait=True)
         return True
     
@@ -241,9 +253,6 @@ class CapabilityCheck(AnalysisModule):
         res = []
         out1 = []
         n = 0
-        if self.syz == None:
-            self.syz: SyzkallerInterface() = self._init_module(SyzkallerInterface())
-            self.syz.prepare_on_demand(self.path_case_plugin)
         for i in range(0, len(output)):
             line = output[i]
             if not regx_match(self._regx_cap, line):
@@ -252,9 +261,6 @@ class CapabilityCheck(AnalysisModule):
             out1 = output[i:]
             call_trace = extrace_call_trace(out1, start_with=self.LOG_HEADER)
             self._write_to("\n".join(call_trace), "call_trace.log-{}".format(n))
-            if not self._build_syz_logparser(self.syz):
-                self.err_msg("Fail to build syz logparser")
-                return None
             self.syz.pull_cfg_for_cur_case("linux-upstream")
             src = os.path.join(self.path_case_plugin, "call_trace.log-{}".format(n))
             dst = os.path.join(self.path_case_plugin, "call_trace.report-{}".format(n))
@@ -291,8 +297,7 @@ class CapabilityCheck(AnalysisModule):
             self.err_msg("Fail to patch syzkaller")
             return False
 
-        syz.build_syzkaller(arch='amd64')
-        if syz.build_syzkaller(component='all') != 0:
+        if syz.build_syzkaller(arch='amd64', component='all') != 0:
             self.err_msg("Fail to build syzkaller")
             return False
         return True
