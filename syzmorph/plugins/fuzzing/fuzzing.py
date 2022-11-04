@@ -133,7 +133,7 @@ class Fuzzing(AnalysisModule):
         if self.syz.patch_syzkaller(patch=patch_path) != 0:
             self.err_msg("Failed to patch syzkaller")
             return -1
-        if self.syz.build_syzkaller('amd64') != 0:
+        if self.syz.build_syzkaller(arch='amd64') != 0:
             self.err_msg("Failed to build syzkaller")
             return -1
         self.path_syzkaller = self.syz.syzkaller_path

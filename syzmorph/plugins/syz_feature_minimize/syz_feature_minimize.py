@@ -66,7 +66,7 @@ class SyzFeatureMinimize(AnalysisModule):
         arch = 'amd64'
         if self.i386:
             arch = '386'
-        if self.syz.build_syzkaller(arch) != 0:
+        if self.syz.build_syzkaller(arch=arch) != 0:
             self.err_msg("Failed to build syzkaller")
             return -1
         return 0

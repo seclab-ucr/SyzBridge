@@ -47,11 +47,11 @@ class SyzkallerInterface(AnalysisModule):
         return True
     
     def check_syzkaller(func):
-        def inner(self, *args):
+        def inner(self, **kwargs):
             if self.syzkaller_path == '':
                 self.case_logger.error("Can not find syzkaller")
                 return -1
-            return func(self, *args)
+            return func(self, **kwargs)
         return inner
     
     def check_binary(self, binary_name):
