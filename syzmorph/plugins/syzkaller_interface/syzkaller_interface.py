@@ -105,8 +105,10 @@ class SyzkallerInterface(AnalysisModule):
         my_env["GOPATH"] = os.path.join(self.path_case_plugin, "gopath")
         my_env["GO111MODULE"] = "auto"
         if component == None:
+            self.logger.info("make TARGETARCH={} TARGETVMARCH=amd64".format(arch))
             p = Popen(["make", "TARGETARCH={}".format(arch), "TARGETVMARCH=amd64"], cwd=self.syzkaller_path, env=my_env, stdout=PIPE, stderr=STDOUT)
         else:
+            self.logger.info("make TARGETARCH={} TARGETVMARCH=amd64 {}".format(arch, component))
             p = Popen(["make", "TARGETARCH={}".format(arch), "TARGETVMARCH=amd64", component], cwd=self.syzkaller_path, env=my_env, stdout=PIPE, stderr=STDOUT)
         with p.stdout:
             log_anything(p.stdout, self.logger, self.debug)

@@ -265,6 +265,9 @@ class CapabilityCheck(AnalysisModule):
             src = os.path.join(self.path_case_plugin, "call_trace.log-{}".format(n))
             dst = os.path.join(self.path_case_plugin, "call_trace.report-{}".format(n))
             self.syz.generate_decent_report(src, dst)
+            if not os.path.exists(dst):
+                self.logger.error("Cannot generate capability report for {}".format(cap_name))
+                return res
             f = open(dst, "r")
             txt = f.readlines()
             f.close()
@@ -296,7 +299,7 @@ class CapabilityCheck(AnalysisModule):
         if syz.patch_syzkaller(patch=patch) != 0:
             self.err_msg("Fail to patch syzkaller")
             return False
-
+        syz.build_syzkaller(arch='amd64')
         if syz.build_syzkaller(arch='amd64', component='all') != 0:
             self.err_msg("Fail to build syzkaller")
             return False
