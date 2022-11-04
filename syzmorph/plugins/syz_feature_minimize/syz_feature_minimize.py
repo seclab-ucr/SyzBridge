@@ -297,7 +297,7 @@ class SyzFeatureMinimize(AnalysisModule):
         return command
 
     def make_syz_command(self, text, features: list, i386: bool, repeat=None, sandbox=""):
-        command = "/syz-execprog -executor=/syz-executor "
+        command = "/tmp/syz-execprog -executor=/tmp/syz-executor "
         if text[0][:len(command)] == command:
             # If read from repro.command, text[0] was already the command
             return text[0]
