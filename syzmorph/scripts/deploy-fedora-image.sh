@@ -147,11 +147,14 @@ function compile_fedora() {
         fi
         enable_feature=$((enable_feature>>1))
         patch -p1 -f -i ~/kernel_spec.patch || sed -i 's/%define listnewconfig_fail 1/%define listnewconfig_fail 0/' kernel.spec
-        CONTINUEONERROR=`grep CONTINUEONERROR ./process_configs.sh`
-        if [ -z $CONTINUEONERROR ]; then
-            mv process_configs.sh process_configs.sh.bk
-            mv ~/process_configs.sh ./
-            chmod +x ./process_configs.sh
+        if [ ${code_name} == "31" ]; then
+            sed -i 's/.\/process_configs.sh -i kernel %{rpmversion}/.\/process_configs.sh $OPTS kernel %{rpmversion}/' kernel.spec
+        else
+            if [ -z "$(grep CONTINUEONERROR ./process_configs.sh)" ]; then
+                mv process_configs.sh process_configs.sh.bk
+                mv ~/process_configs.sh ./
+                chmod +x ./process_configs.sh
+            fi
         fi
         dnf -y builddep kernel.spec
 

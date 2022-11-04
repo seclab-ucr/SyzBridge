@@ -186,8 +186,8 @@ class RawBugReproduce(AnalysisModule):
         syz_executor = os.path.join(syz_feature_mini_path, "syz-executor")
         testcase = os.path.join(self.path_case, "testcase")
         qemu.upload(user=user, src=[testcase], dst="~/", wait=True)
-        qemu.upload(user=user, src=[syz_execprog, syz_executor], dst="/", wait=True)
-        qemu.command(cmds="chmod +x /syz-execprog /syz-executor", user=user, wait=True)
+        qemu.upload(user=user, src=[syz_execprog, syz_executor], dst="/tmp", wait=True)
+        qemu.command(cmds="chmod +x /tmp/syz-execprog /tmp/syz-executor", user=user, wait=True)
         testcase_text = open(testcase, "r").readlines()
 
         cmds = make_syz_commands(testcase_text, 0, i386)

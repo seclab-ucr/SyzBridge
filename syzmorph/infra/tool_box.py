@@ -349,7 +349,7 @@ def set_compiler_version(time, config_url):
     return ret
 
 def make_syz_commands(text, support_enable_features, i386, repeat=True):
-        command = "/syz-execprog -executor=/syz-executor "
+        command = "/tmp/syz-execprog -executor=/tmp/syz-executor "
         if text[0][:len(command)] == command:
             # If read from repro.command, text[0] was already the command
             return text[0]
