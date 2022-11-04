@@ -68,8 +68,11 @@ class SyzFeatureMinimize(AnalysisModule):
         syz_repro_url = self.case['syz_repro']
         syz_repro = request_get(syz_repro_url).text
         self._write_to(syz_repro, "testcase")
-        shutil.copyfile(os.path.join(self.syz.syzkaller_path, 'bin/linux_amd64/syz-execprog'), os.path.join(self.path_case_plugin, 'syz-execprog'))
-        shutil.copyfile(os.path.join(self.syz.syzkaller_path, 'bin/linux_amd64/syz-executor'), os.path.join(self.path_case_plugin, 'syz-executor'))
+        syzbin_folder = 'linux_amd64'
+        if regx_match(r'386', self.case["manager"]):
+            syzbin_folder = 'linux_386'
+        shutil.copyfile(os.path.join(self.syz.syzkaller_path, 'bin/{}/syz-execprog'.format(syzbin_folder)), os.path.join(self.path_case_plugin, 'syz-execprog'))
+        shutil.copyfile(os.path.join(self.syz.syzkaller_path, 'bin/{}/syz-executor'.format(syzbin_folder)), os.path.join(self.path_case_plugin, 'syz-executor'))
         shutil.copyfile(os.path.join(self.syz.syzkaller_path, 'bin/syz-prog2c'), os.path.join(self.path_case_plugin, 'syz-prog2c'))
 
         features = self._get_syz_features(syz_repro)
