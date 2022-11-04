@@ -47,8 +47,10 @@ class SyzbotCommand(Command):
                             'Use \'effective_cycle_start\' and \'effective_cycle_end\' in config file')
         parser.add_argument('--filter-by-hash', nargs='?',
                             help='[file|string] Rule out specific hash or a file that contains a list of hashs\n')
-        parser.add_argument('--check-vul-exist', action='store_true',
-                            help='[bool] Check if bug exist, this option only applies on fixed section\n')
+        parser.add_argument('--filter-by-fixes-tag', action='store_true',
+                            help='[bool] Check if patch fixes tag exist in target kernel, this option only applies on fixed section\n')
+        parser.add_argument('--filter-by-patch', action='store_true',
+                            help='[bool] Check if patch exist  in target kernel, this option only applies on fixed section\n')
         parser.add_argument('--addition', action='store_true',
                             help='[bool] add additional cases\n')
     
@@ -106,7 +108,8 @@ class SyzbotCommand(Command):
             filter_by_reported=self.args.filter_by_reported, filter_by_closed=self.args.filter_by_closed, 
             filter_by_c_prog=self.args.filter_by_c_prog, filter_by_kernel=self.args.filter_by_kernel,
             filter_by_distro_effective_cycle=self.args.filter_by_distro_effective_cycle,
-            check_vul_exist=self.args.check_vul_exist, filter_by_hashs=filter_by_hash,
+            filter_by_fixes_tag=self.args.filter_by_fixes_tag, filter_by_patch=self.args.filter_by_patch,
+            filter_by_hashs=filter_by_hash,
             cfg=self.cfg, debug=self.args.debug, log_path = self.proj_dir)
         
         try:
@@ -176,7 +179,8 @@ class SyzbotCommand(Command):
         self.logger.info("[*] filter_by_closed: {}".format(self.args.filter_by_closed))
         self.logger.info("[*] filter_by_kernel: {}".format(self.args.filter_by_kernel))
         self.logger.info("[*] filter_by_c_prog: {}".format(self.args.filter_by_c_prog))
-        self.logger.info("[*] check_vul_exist: {}".format(self.args.check_vul_exist))
+        self.logger.info("[*] filter_by_fixes_tag: {}".format(self.args.filter_by_fixes_tag))
+        self.logger.info("[*] filter_by_patch: {}".format(self.args.filter_by_patch))
 
     def save_cases(self, cases, name):
         cases_json_path = os.path.join(self.proj_dir, "cases.json")

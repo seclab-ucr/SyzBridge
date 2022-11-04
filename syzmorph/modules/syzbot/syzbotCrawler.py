@@ -23,7 +23,7 @@ class Crawler:
                  url="https://syzkaller.appspot.com/upstream/fixed",
                  keyword=[], max_retrieve=99999, filter_by_reported="", log_path = ".", cfg=None,
                  filter_by_closed="", filter_by_c_prog=False, filter_by_kernel=[], 
-                 check_vul_exist=False, filter_by_hashs=[],
+                 filter_by_fixes_tag=False, filter_by_patch=False, filter_by_hashs=[],
                  filter_by_distro_effective_cycle=False, include_high_risk=True, debug=False):
         self.url = url
         if type(keyword) == list:
@@ -63,7 +63,8 @@ class Crawler:
                 self.filter_by_closed[0] = n[0]
                 self.filter_by_closed[1] = n[1]
         self.filter_by_c_prog = filter_by_c_prog
-        self.check_vul_exist = check_vul_exist
+        self.filter_by_fixes_tag = filter_by_fixes_tag
+        self.filter_by_patch = filter_by_patch
         self.filter_by_kernel = filter_by_kernel
         self.filter_by_hashs = filter_by_hashs
         self._fixes = {}
@@ -74,9 +75,10 @@ class Crawler:
         self.thread_lock = None
 
     def run(self):
-        if self.check_vul_exist:
+        if self.filter_by_fixes_tag or self.filter_by_patch:
             self.logger.info("Wait for distro VMs are ready")
             if not self.wait_for_distro_vm_ready():
+                self.distro_vm_kill()
                 return
         cases_hash, high_risk_impacts = self.gather_cases()
         for each in cases_hash:
@@ -91,7 +93,7 @@ class Crawler:
                     (patch_url in high_risk_impacts and not self.include_high_risk):
                     continue
                 self._patches[patch_url] = True
-            if self.check_vul_exist:
+            if self.filter_by_fixes_tag or self.filter_by_patch:
                 if patch_url == None or not self.check_excluded_distro(each['Hash'], patch_url):
                     self.logger.debug("{} does not have a fixes tag or a patch url".format(each['Hash']))
                     if each['Hash'] in self.cases:
@@ -108,7 +110,7 @@ class Crawler:
                     self.cases[each['Hash']]['affect'] = None
                 self.cases[each['Hash']]['title'] = each['Title']
                 self.cases[each['Hash']]['patch'] = self._patch_info
-        if self.check_vul_exist:
+        if self.filter_by_fixes_tag or self.filter_by_patch:
             self.distro_vm_kill()
         return
     
@@ -152,38 +154,43 @@ class Crawler:
         # Fedora has different kernel folder name, use * to match it
         kernel_folder = "~/{}/*kernel".format(os.path.basename(distro.distro_src))
 
-        blame_commits = self._get_commit_from_msg(distro, vm, kernel_folder, fixes_commit_msg)
-        self.logger.debug("{}: Buggy commit blames to commits: {}".format(distro.distro_name, blame_commits))
-        for hash_val in blame_commits:
-            ret = self._commit_is_ancestor(distro, vm, kernel_folder, hash_val, 'HEAD')
-            self.logger.debug("Commit {} is ancestor of HEAD: {}".format(hash_val, ret))
-            if not ret:
-                self.logger.debug('{}: Buggy commit does not exist'.format(distro.distro_name))
+        if self.filter_by_fixes_tag:
+            blame_commits = self._get_commit_from_msg(distro, vm, kernel_folder, fixes_commit_msg)
+            self.logger.debug("{}: Buggy commit blames to commits: {}".format(distro.distro_name, blame_commits))
+            for hash_val in blame_commits:
+                ret = self._commit_is_ancestor(distro, vm, kernel_folder, hash_val, 'HEAD')
+                self.logger.debug("Commit {} is ancestor of HEAD: {}".format(hash_val, ret))
+                if not ret:
+                    self.logger.debug('{}: Buggy commit does not exist'.format(distro.distro_name))
+                    return False
+            
+            if len(blame_commits) == 0:
                 return False
-        
-        if len(blame_commits) == 0:
-            return False
 
-        blame_commits = self._get_commit_from_msg(distro, vm, kernel_folder, patch_commit_msg)
-        self.logger.debug("{}: Patch commit blames to commits: {}".format(distro.distro_name, blame_commits))
-        for hash_val in blame_commits:
-            ret = self._commit_is_ancestor(distro, vm, kernel_folder, hash_val, 'HEAD')
-            self.logger.debug("{}: Commit {} is ancestor of HEAD: {}".format(distro.distro_name, hash_val, ret))
-            if ret:
-                self.logger.debug('{}: Patch commit exists in'.format(distro.distro_name))
-                return False
-        
+        if self.filter_by_patch:
+            blame_commits = self._get_commit_from_msg(distro, vm, kernel_folder, patch_commit_msg)
+            self.logger.debug("{}: Patch commit blames to commits: {}".format(distro.distro_name, blame_commits))
+            for hash_val in blame_commits:
+                ret = self._commit_is_ancestor(distro, vm, kernel_folder, hash_val, 'HEAD')
+                self.logger.debug("{}: Commit {} is ancestor of HEAD: {}".format(distro.distro_name, hash_val, ret))
+                if ret:
+                    self.logger.debug('{}: Patch commit exists in'.format(distro.distro_name))
+                    return False
+            
         self.logger.debug('{} is vulnerable'.format(distro.distro_name))
         return True
 
     def fedora_is_vulnerable(self, distro: Vendor, vul_version, patched_version):
-        self.logger.debug("Compare buggy version {} and distro version {}".format(vul_version, distro.distro_version))
-        if not self.is_newer_version(vul_version, distro.distro_version):
-            return False
-        self.logger.debug("Compare patched version {} and distro version {}".format(patched_version, distro.distro_version))
-        if self.is_newer_version(patched_version, distro.distro_version):
-            if distro.distro_name not in self._fixes['exclude']:
+        if self.filter_by_fixes_tag:
+            self.logger.debug("Compare buggy version {} and distro version {}".format(vul_version, distro.distro_version))
+            if not self.is_newer_version(vul_version, distro.distro_version):
                 return False
+        
+        if self.filter_by_patch:
+            self.logger.debug("Compare patched version {} and distro version {}".format(patched_version, distro.distro_version))
+            if self.is_newer_version(patched_version, distro.distro_version):
+                if distro.distro_name not in self._fixes['exclude']:
+                    return False
         return True
 
     def debian_is_vulnerable(self, distro: Vendor, fixes_commit_msg, patch_commit_msg):
@@ -212,13 +219,15 @@ class Crawler:
 
         self.logger.debug("{}: current commit is {}".format(distro.distro_name, cur_commit))
         
-        blame_fixes_commits = self._get_commit_from_msg(distro, None, repo_path, fixes_commit_msg, "origin/linux-{}.y".format(major_version))
-        if len(blame_fixes_commits) == 0:
-            return False
+        if self.filter_by_fixes_tag:
+            blame_fixes_commits = self._get_commit_from_msg(distro, None, repo_path, fixes_commit_msg, "origin/linux-{}.y".format(major_version))
+            if len(blame_fixes_commits) == 0:
+                return False
         
-        blame_patch_commits = self._get_commit_from_msg(distro, None, repo_path, patch_commit_msg, "origin/linux-{}.y".format(major_version))
-        if len(blame_patch_commits) == 0:
-            return False
+        if self.filter_by_patch:
+            blame_patch_commits = self._get_commit_from_msg(distro, None, repo_path, patch_commit_msg, "origin/linux-{}.y".format(major_version))
+            if len(blame_patch_commits) == 0:
+                return False
         
         self.thread_lock.acquire()
         out = local_command(command="git stash -u && git checkout origin/linux-{}.y".format(major_version), cwd=repo_path, shell=True, redir_err=False)
@@ -231,24 +240,27 @@ class Crawler:
             self.logger.error("Fail to checkout branch linux-{}.y".format(major_version))
             self.thread_lock.release()
             return False
-        for hash_val in blame_fixes_commits:
-            ret = self._commit_is_ancestor(distro, None, repo_path, hash_val, cur_commit)
-            self.logger.debug("{}: Commit {} is ancestor of {}: {}".format(distro.distro_name, hash_val, cur_commit, ret))
-            if not ret:
-                self.logger.debug('{}: Buggy commit exists'.format(distro.distro_name))
-                self.thread_lock.release()
-                return False
         
-        self.logger.debug("{}: fixes tag is ancestor of current commit".format(distro.distro_name))
+        if self.filter_by_fixes_tag:
+            for hash_val in blame_fixes_commits:
+                ret = self._commit_is_ancestor(distro, None, repo_path, hash_val, cur_commit)
+                self.logger.debug("{}: Commit {} is ancestor of {}: {}".format(distro.distro_name, hash_val, cur_commit, ret))
+                if not ret:
+                    self.logger.debug('{}: Buggy commit exists'.format(distro.distro_name))
+                    self.thread_lock.release()
+                    return False
+            
+            self.logger.debug("{}: fixes tag is ancestor of current commit".format(distro.distro_name))
         
-        for hash_val in blame_patch_commits:
-            ret = self._commit_is_ancestor(distro, None, repo_path, hash_val, cur_commit)
-            self.logger.debug("{}: Commit {} is ancestor of {}: {}".format(distro.distro_name, hash_val, cur_commit, ret))
-            if ret:
-                self.logger.debug('{}: Patch commit exists'.format(distro.distro_name))
-                self.thread_lock.release()
-                return False
-        self.logger.debug("{}: patch is not ancestor of current commit".format(distro.distro_name))
+        if self.filter_by_patch:
+            for hash_val in blame_patch_commits:
+                ret = self._commit_is_ancestor(distro, None, repo_path, hash_val, cur_commit)
+                self.logger.debug("{}: Commit {} is ancestor of {}: {}".format(distro.distro_name, hash_val, cur_commit, ret))
+                if ret:
+                    self.logger.debug('{}: Patch commit exists'.format(distro.distro_name))
+                    self.thread_lock.release()
+                    return False
+            self.logger.debug("{}: patch is not ancestor of current commit".format(distro.distro_name))
         self.thread_lock.release()
         
         self.logger.debug('{} is vulnerable'.format(distro.distro_name))
@@ -310,12 +322,11 @@ class Crawler:
         report_date = today-timedelta(days=date_diff)
         self.logger.debug("bug was reported {} days ago ({})".format(date_diff, report_date))
         for distro in self.cfg.get_all_distros():
-            """
             if distro.effective_cycle_start != "":
                 effective_start_date_diff = today - pd.to_datetime(distro.effective_cycle_start).date()
                 if date_diff > effective_start_date_diff.days:
                     continue
-            """
+
             # As long as distro is still in support, we should pick them.
             if distro.effective_cycle_end != "":
                 effective_end_date_diff = today - pd.to_datetime(distro.effective_cycle_end).date()
@@ -329,7 +340,7 @@ class Crawler:
         self.logger.debug("Bug might affects {}".format(res))
         if res == None:
             return None
-        if self.check_vul_exist:
+        if self.filter_by_fixes_tag:
             for fix in self._patch_info['fixes']:
                 self.logger.debug("Exclude {}".format(fix))
                 for each in fix['exclude']:
@@ -486,9 +497,10 @@ class Crawler:
         if hash_val in self.filter_by_hashs:
             self.logger.debug("Skip {} because it's filtered by hash match".format(hash_val))
             return
-        if self.check_vul_exist:
+        if self.filter_by_fixes_tag or self.filter_by_patch:
             self.logger.info("Wait for distro VMs are ready")
             if not self.wait_for_distro_vm_ready():
+                self.distro_vm_kill()
                 return
         self.logger.info("retreive one case: %s",hash_val)
         patch_url = self.get_patch_url(hash_val)
@@ -496,11 +508,11 @@ class Crawler:
             self.distro_vm_kill()
             return
         self._patch_info = {'url': None, 'fixes':[]}
-        if self.check_vul_exist:
+        if self.filter_by_fixes_tag or self.filter_by_patch:
             if patch_url == None or not self.check_excluded_distro(hash_val, patch_url):
                 self.logger.error("{} does not have a fixes tag or a patch url".format(hash_val))
                 self.cases.pop(hash_val)
-                if self.check_vul_exist:
+                if self.self.filter_by_fixes_tag or self.filter_by_patch:
                     self.distro_vm_kill()
                 return
         if self.filter_by_distro_effective_cycle:
@@ -509,14 +521,14 @@ class Crawler:
             if len(self.cases[hash_val]['affect']) == 0:
                 self.logger.error("{} does not affect any distro within its life cycle".format(hash_val))
                 self.cases.pop(hash_val)
-                if self.check_vul_exist:
+                if self.filter_by_fixes_tag or self.filter_by_patch:
                     self.distro_vm_kill()
                 return
         else:
             self.cases[hash_val]['affect'] = None
         self.cases[hash_val]['title'] = self.get_title_of_case(hash_val)
         self.cases[hash_val]['patch'] = self._patch_info
-        if self.check_vul_exist:
+        if self.filter_by_fixes_tag or self.filter_by_patch:
             self.distro_vm_kill()
         return self.cases[hash_val]
     
