@@ -131,11 +131,13 @@ class SyzFeatureMinimize(AnalysisModule):
         self.info_msg("Generating PoC_repeat.c and PoC_no_repeat.c")
         syz_prog_path = os.path.join(self.path_case_plugin, 'testcase')
         prog2c_cmd = self._make_prog2c_command(syz_prog_path, features, self.i386)
+        self.logger.info("syz-prog2c for PoC_repeat: {}".format(prog2c_cmd))
         local_command(command='chmod +x syz-prog2c && {} > {}/PoC_repeat.c'.format(prog2c_cmd, self.path_case_plugin), logger=self.logger,\
                 shell=True, cwd=self.syz.path_case_plugin)
         shutil.copyfile(os.path.join(self.path_case_plugin, "PoC_repeat.c"), os.path.join(self.path_case, "PoC_repeat.c"))
         
         prog2c_cmd = self._make_prog2c_command(syz_prog_path, features, self.i386, repeat=False)
+        self.logger.info("syz-prog2c for PoC_no_repeat: {}".format(prog2c_cmd))
         local_command(command='chmod +x syz-prog2c && {} > {}/PoC_no_repeat.c'.format(prog2c_cmd, self.path_case_plugin), logger=self.logger,\
                 shell=True, cwd=self.syz.path_case_plugin)
         shutil.copyfile(os.path.join(self.path_case_plugin, "PoC_no_repeat.c"), os.path.join(self.path_case, "PoC_no_repeat.c"))

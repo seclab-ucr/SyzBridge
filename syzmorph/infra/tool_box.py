@@ -500,7 +500,7 @@ def clone_repo(repo_url, repo_path):
     ret = call(['git', 'clone', repo_url, repo_path])
     return ret
 
-def local_command(command, cwd=None, shell=False, redir_err=True, logger=None):
+def local_command(command, cwd=None, shell=False, redir_err=False, logger=None):
     out = []
     if redir_err:
         p = Popen(args=command, shell=shell, cwd=cwd, stdout=PIPE, stderr=PIPE)

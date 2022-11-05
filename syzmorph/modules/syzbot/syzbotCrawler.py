@@ -512,7 +512,7 @@ class Crawler:
             if patch_url == None or not self.check_excluded_distro(hash_val, patch_url):
                 self.logger.error("{} does not have a fixes tag or a patch url".format(hash_val))
                 self.cases.pop(hash_val)
-                if self.self.filter_by_fixes_tag or self.filter_by_patch:
+                if self.filter_by_fixes_tag or self.filter_by_patch:
                     self.distro_vm_kill()
                 return
         if self.filter_by_distro_effective_cycle:
