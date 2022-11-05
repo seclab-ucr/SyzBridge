@@ -141,7 +141,7 @@ class SyzFeatureMinimize(AnalysisModule):
         self.logger.info("syz-prog2c for PoC_no_repeat: {}".format(prog2c_cmd))
         local_command(command='chmod +x syz-prog2c && {} > {}/PoC_no_repeat.c'.format(prog2c_cmd, self.path_case_plugin), logger=self.logger,\
                 shell=True, cwd=self.syz.path_case_plugin)
-        if not self._file_is_empty(os.path.join(self.path_case_plugin, "PoC_repeat.c")):
+        if not self._file_is_empty(os.path.join(self.path_case_plugin, "PoC_no_repeat.c")):
             shutil.copyfile(os.path.join(self.path_case_plugin, "PoC_no_repeat.c"), os.path.join(self.path_case, "PoC_no_repeat.c"))
 
     def generate_report(self):
