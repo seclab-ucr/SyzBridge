@@ -134,13 +134,15 @@ class SyzFeatureMinimize(AnalysisModule):
         self.logger.info("syz-prog2c for PoC_repeat: {}".format(prog2c_cmd))
         local_command(command='chmod +x syz-prog2c && {} > {}/PoC_repeat.c'.format(prog2c_cmd, self.path_case_plugin), logger=self.logger,\
                 shell=True, cwd=self.syz.path_case_plugin)
-        shutil.copyfile(os.path.join(self.path_case_plugin, "PoC_repeat.c"), os.path.join(self.path_case, "PoC_repeat.c"))
+        if not self._file_is_empty(os.path.join(self.path_case_plugin, "PoC_repeat.c")):
+            shutil.copyfile(os.path.join(self.path_case_plugin, "PoC_repeat.c"), os.path.join(self.path_case, "PoC_repeat.c"))
         
         prog2c_cmd = self._make_prog2c_command(syz_prog_path, features, self.i386, repeat=False)
         self.logger.info("syz-prog2c for PoC_no_repeat: {}".format(prog2c_cmd))
         local_command(command='chmod +x syz-prog2c && {} > {}/PoC_no_repeat.c'.format(prog2c_cmd, self.path_case_plugin), logger=self.logger,\
                 shell=True, cwd=self.syz.path_case_plugin)
-        shutil.copyfile(os.path.join(self.path_case_plugin, "PoC_no_repeat.c"), os.path.join(self.path_case, "PoC_no_repeat.c"))
+        if not self._file_is_empty(os.path.join(self.path_case_plugin, "PoC_repeat.c")):
+            shutil.copyfile(os.path.join(self.path_case_plugin, "PoC_no_repeat.c"), os.path.join(self.path_case, "PoC_no_repeat.c"))
 
     def generate_report(self):
         final_report = "\n".join(self.report)
@@ -154,6 +156,9 @@ class SyzFeatureMinimize(AnalysisModule):
     def cleanup(self):
         super().cleanup()
 
+    def _file_is_empty(self, file):
+        return open(file, 'r').read() == ''
+        
     def _get_syz_features(self, syz_repro):
         enabled_features = []
         for line in syz_repro.split('\n'):
@@ -289,10 +294,16 @@ class SyzFeatureMinimize(AnalysisModule):
                 
                 if "tun" in features:
                     enabled += "tun,"
+                    if '-sandbox' not in command:
+                        command += "-sandbox=none -tmpdir "
                 if "binfmt_misc" in features:
                     enabled += "binfmt_misc,"
+                    if '-sandbox' not in command:
+                        command += "-sandbox=none -tmpdir "
                 if "cgroups" in features:
                     enabled += "cgroups,"
+                    if '-sandbox' not in command:
+                        command += "-sandbox=none -tmpdir "
                 if "close_fds" in features:
                     enabled += "close_fds,"
                 if "devlinkpci" in features:
@@ -309,8 +320,12 @@ class SyzFeatureMinimize(AnalysisModule):
                     enabled += "sysctl,"
                 if "vhci" in features:
                     enabled += "vhci,"
+                    if '-sandbox' not in command:
+                        command += "-sandbox=none -tmpdir "
                 if "wifi" in features:
                     enabled += "wifi," 
+                    if '-sandbox' not in command:
+                        command += "-sandbox=none -tmpdir "
                 
                 if enabled[-1] == ',':
                     command += enabled[:-1] + " testcase"
