@@ -106,6 +106,10 @@ class GoogleSheets(AnalysisModule):
             self._write_raw_reproducable(wks)
         else:
             self.write_failed_str_to_cell('L'+str(self.idx), wks)
+        if self.plugin_finished("SyzFeatureMinimize"):
+            self._write_syz_feature_minimize(wks)
+        else:
+            self.write_failed_str_to_cell('M'+str(self.idx), wks)
         #self._render_cell_color('A'+str(self.idx), self.case_type, wks)
         self._render_row_coloer(wks)
         try:
@@ -132,6 +136,7 @@ class GoogleSheets(AnalysisModule):
             wks.update_value('J1', 'syzscope')
             wks.update_value('K1', 'fuzzing')
             wks.update_value('L1', 'raw_bug_reproduce')
+            wks.update_value('M1', 'syz_feature_minimize')
     
     def generate_report(self):
         final_report = "\n".join(self.report)
@@ -175,8 +180,7 @@ class GoogleSheets(AnalysisModule):
         l = []
         for distro in self.cfg.get_distros():
             l.append(distro.distro_name)
-        old_val = wks.get_value('D'+str(self.idx)) + '\n'
-        wks.update_value('D'+str(self.idx), old_val+"\n".join(l))
+        wks.update_value('D'+str(self.idx), "\n".join(l))
     
     def _write_reproducable(self, wks: pygsheets.Worksheet):
         self.data['reproduce-by-normal'] = ""
@@ -213,20 +217,16 @@ class GoogleSheets(AnalysisModule):
         if normal_text != '' or root_text != '':
             self.case_type = self.TYPE_SUCCEED
 
-        old_val = wks.get_value('E'+str(self.idx)) + '\n'
-        wks.update_value('E'+str(self.idx), old_val + normal_text)
-        old_val = wks.get_value('F'+str(self.idx)) + '\n'
-        wks.update_value('F'+str(self.idx), old_val + root_text)
-        old_val = wks.get_value('G'+str(self.idx)) + '\n'
-        wks.update_value('G'+str(self.idx), old_val + fail_text)
+        wks.update_value('E'+str(self.idx), normal_text)
+        wks.update_value('F'+str(self.idx), root_text)
+        wks.update_value('G'+str(self.idx), fail_text)
 
     def _write_module_analysis(self, wks: pygsheets.Worksheet):
         self.data['modules-analysis'] = ""
         path_result = os.path.join(self.path_case, "ModulesAnalysis", "results.json")
         result_json = json.load(open(path_result, 'r'))
         v = json.dumps(result_json)
-        old_val = wks.get_value('H'+str(self.idx)) + '\n'
-        new_data = old_val + v
+        new_data = v
         if len(new_data) > 50000:
             new_data = new_data[:49999]
         wks.update_value('H'+str(self.idx), new_data)
@@ -271,8 +271,7 @@ class GoogleSheets(AnalysisModule):
             with open(path_report, "r") as f:
                 report = f.readlines()
                 t = ''.join(report)
-                old_val = wks.get_value('K'+str(self.idx)) + '\n'
-                wks.update_value('K'+str(self.idx), old_val + t)
+                wks.update_value('K'+str(self.idx), t)
                 self.data['fuzzing'] = t
     
     def _write_raw_reproducable(self, wks: pygsheets.Worksheet):
@@ -307,19 +306,23 @@ class GoogleSheets(AnalysisModule):
                         fail_text += "{}\n".format(distros)
                         self.data['raw-failed-on'] += "{} ".format(distros)
         if root_text != '':
-            old_val = wks.get_value('L'+str(self.idx)) + '\n'
-            wks.update_value('L'+str(self.idx), old_val + root_text)
+            wks.update_value('L'+str(self.idx), root_text)
         if normal_text != '':
-            old_val = wks.get_value('L'+str(self.idx)) + '\n'
-            wks.update_value('L'+str(self.idx), old_val + normal_text)
+            wks.update_value('L'+str(self.idx), normal_text)
         if self.triggered_by != self.NOT_TRIGGERED:
             if triggered_by == self.NOT_TRIGGERED or \
                     (triggered_by == self.TRIGGERED_BY_ROOT and self.triggered_by == self.TRIGGERED_BY_NORMAL):
                 self.case_type = self.TYPE_SUCCEED_NEED_ADAPTATION
     
+    def _write_syz_feature_minimize(self, wks: pygsheets.Worksheet):
+        path_results = os.path.join(self.path_case, "SyzFeatureMinimize", "results.json")
+        if os.path.exists(path_results):
+            result_json = json.load(open(path_results, "r"))
+            v = json.dumps(result_json)
+            wks.update_value('M'+str(self.idx), v)
+
     def write_failed_str_to_cell(self, pos, wks):
-        old_val = wks.get_value(pos) + '\n' + "failed"
-        self._write_to_cell(pos, old_val, wks)
+        self._write_to_cell(pos, "failed", wks)
 
     def _write_to_cell(self, pos, text, wks):
         wks.update_value(pos, text)
