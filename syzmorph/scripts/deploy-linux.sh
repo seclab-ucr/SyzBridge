@@ -129,7 +129,7 @@ cd ..
 
 echo "[+] Building kernel"
 OLD_INDEX=`ls -l linux-$KERNEL | rev | cut -d'-' -f 1`
-if [ "$OLD_INDEX" != "$INDEX" ] | [ ! -e ./linux-$KERNEL ]; then
+if [ "$OLD_INDEX" != "$INDEX" ] || [ ! -e ./linux-$KERNEL ]; then
   rm -rf "./linux-$KERNEL" || echo "No linux repo"
   if [[ $KERNEL =~ linux-[0-9]+\.[0-9]+\.y$ ]]; then
     KERNEL="stable"
@@ -152,6 +152,8 @@ if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
     if [ $COMMIT == "0" ]; then
       cd linux-$LINUX_VERSION || get_linux $LINUX_REPO $LINUX_VERSION
     else
+      # If terminate syzmorph with ctrl+c, some git repo may still be protected
+      rm .git/index.lock || true 
       git stash || echo "it's ok"
       make clean > /dev/null || echo "it's ok"
       git clean -fdx > /dev/null || echo "it's ok"
@@ -272,7 +274,7 @@ if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
     if [ ! -z "$EXTRA_CMD" ]; then
       eval $EXTRA_CMD || exit 2
     fi
-    make -j$N_CORES CC=$COMPILER > make.log 2>&1 || PATCH_TCP_CONG=1
+    make -j$N_CORES CC=$COMPILER > make.log 2>&1 || cat make.log && PATCH_TCP_CONG=1
     if [ $PATCH_TCP_CONG == 1 ]; then
       echo "[+] Patching TCP congestion control"
 

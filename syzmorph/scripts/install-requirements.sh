@@ -121,8 +121,3 @@ if [ ! -f "$TOOLS_PATH/.stamp/SETUP_SYZKALLER" ]; then
   git clone https://github.com/google/syzkaller.git
   touch $TOOLS_PATH/.stamp/SETUP_SYZKALLER
 fi
-
-#BUG: If multiple instances are running, may clean up others' flag
-echo "[+] Clean unfinished jobs"
-rm linux-*/.git/index.lock || echo "Removing index.lock"
-echo "All set"
