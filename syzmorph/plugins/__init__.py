@@ -232,9 +232,9 @@ class AnalysisModule:
         plugin = self.cfg.get_plugin(self.analyzor.NAME)
         res = self._read_analyzor_results()
         if res == None:
-            plugin.instance.finish = False
+            plugin.instance.finish = self._check_stamp("FINISH_" + self.analyzor.NAME.upper())
         else:
-            plugin.instance.finish = True
+            plugin.instance.finish = self._check_stamp("FINISH_" + self.analyzor.NAME.upper())
             plugin.instance.results = res
         return
     
@@ -255,14 +255,14 @@ class AnalysisModule:
 
     def _check_dependencies_finished(self):
         plugin = self.cfg.get_plugin(self.analyzor.NAME)
-        if plugin != None:
-            if plugin.dependency == "weak":
-                return True
         dependencies = self.analyzor.DEPENDENCY_PLUGINS
-        for plugin in dependencies:
-            if not self._check_stamp("FINISH_" + plugin.upper()):
-                self.analyzor.logger.error("{} is not finished before {}, terminate {}".format(plugin, self.analyzor.NAME, self.analyzor.NAME))
-                return False
+        for plugin_name in dependencies:
+            plugin = self.cfg.get_plugin(plugin_name)
+            if plugin != None:
+                if not plugin.instance.finish:
+                    if plugin.dependency == "strong":
+                        return False
+                    self.analyzor.logger.error("{} has a dependency {} not finished".format(self.analyzor.NAME, plugin_name))
         return True
     
     def _build_plugin_folder(self):

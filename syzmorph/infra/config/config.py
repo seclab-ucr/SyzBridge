@@ -58,7 +58,7 @@ class Config:
         for module_name in module_folder:
             try:
                 module = importlib.import_module("plugins.{}".format(module_name))
-                setattr(module, "dependency", "strong")
+                setattr(module, "dependency", "weak")
                 class_name = convert_folder_name_to_plugin_name(module_name)
                 new_class = getattr(module, class_name)
                 setattr(module, 'instance', new_class())
