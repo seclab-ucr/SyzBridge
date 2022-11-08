@@ -322,10 +322,14 @@ class Crawler:
         report_date = today-timedelta(days=date_diff)
         self.logger.debug("bug was reported {} days ago ({})".format(date_diff, report_date))
         for distro in self.cfg.get_all_distros():
+            # Distro release date is not important to bug dataset as long as 
+            # the patch hasn't been applied to that distro
+            """
             if distro.effective_cycle_start != "":
                 effective_start_date_diff = today - pd.to_datetime(distro.effective_cycle_start).date()
                 if date_diff > effective_start_date_diff.days:
                     continue
+            """
 
             # As long as distro is still in support, we should pick them.
             if distro.effective_cycle_end != "":
