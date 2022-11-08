@@ -30,9 +30,6 @@ class TraceAnalysis(AnalysisModule):
         except AttributeError:
             self.err_msg("Failed to get timeout")
             return False
-        if not self.manager.has_c_repro:
-            self.err_msg("Case does not have c reproducer")
-            return False
         syzcalljson = os.path.join(self.path_package, "plugins/trace_analysis/syzcall2syscall.json")
         if not os.path.exists(syzcalljson):
             self.err_msg("Cannot find syzcall2syscall.json")

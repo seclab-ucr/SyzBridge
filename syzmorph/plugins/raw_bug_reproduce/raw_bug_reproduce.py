@@ -41,9 +41,6 @@ class RawBugReproduce(AnalysisModule):
         except AttributeError:
             self.err_msg("Failed to get timeout")
             return False
-        if not self.manager.has_c_repro:
-            self.info_msg("Case does not have c reproducer")
-            return False
         return self.prepare_on_demand()
     
     def prepare_on_demand(self):
@@ -85,7 +82,7 @@ class RawBugReproduce(AnalysisModule):
         else:
             self.syz_feature_mini = self.cfg.get_plugin(SyzFeatureMinimize.NAME).instance
             self.syz_feature = self.syz_feature_mini.results
-            if self.syz_feature['prog_status'] == SyzFeatureMinimize.C_PROG:
+            if 'prog_status' in self.syz_feature and self.syz_feature['prog_status'] == SyzFeatureMinimize.C_PROG:
                 self.c_prog = True
                 self.syz_feature.pop('prog_status')
         for distro in self.cfg.get_distros():

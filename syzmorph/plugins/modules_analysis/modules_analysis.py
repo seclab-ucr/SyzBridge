@@ -79,10 +79,10 @@ class ModulesAnalysis(AnalysisModule):
             self.err_msg("Module {} is not prepared".format(ModulesAnalysis.NAME))
             return False
         self.report.append(ModulesAnalysis.REPORT_START)
+        if not self.plugin_finished("TraceAnalysis"):
+            self.err_msg("ModulesAnalysis requires TraceAnalysis to be finished")
+            return False
 
-        #self.logger.info("[Modules analysis] Checking modules in KASAN report")
-        #self.check_kasan_report()
-        #self.logger.info("[Modules analysis] Checking modules in ftrace")
         try:
             self.check_ftrace()
         except TraceAnalysisError as e:

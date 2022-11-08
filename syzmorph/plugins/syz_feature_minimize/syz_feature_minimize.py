@@ -76,9 +76,9 @@ class SyzFeatureMinimize(AnalysisModule):
         return self._minimize_syz_feature(features)
     
     def test_two_prog(self, features):
-        if self._test_feature(None, features):
+        if self._test_feature(None, features, repeat=True):
             return self.SYZ_PROG
-        if self.test_PoC(features):
+        if self.test_PoC(features, repeat=True):
             return self.C_PROG
         return self.BOTH_FAIL
     
@@ -109,6 +109,7 @@ class SyzFeatureMinimize(AnalysisModule):
         features = self.get_features()
         prog_status = self.test_two_prog(features)
         self.results['prog_status'] = prog_status
+        self.info_msg("self.results: {} {}".format(self.results, self))
         if prog_status == self.BOTH_FAIL:
             return False
         if prog_status == self.C_PROG:
@@ -116,14 +117,14 @@ class SyzFeatureMinimize(AnalysisModule):
             return True
         features = self.minimize_syz_feature(features)
         for key in self.results:
-            if key not in features:
+            if key not in features and key != 'prog_status':
                 self.results[key] = False
         #ret = self.test_PoC(features)
         self.generate_new_PoC(features)
         return True
 
-    def test_PoC(self, features: list):
-        if not self._test_feature(None, features, test_c_prog=True):
+    def test_PoC(self, features: list, repeat=False):
+        if not self._test_feature(None, features, test_c_prog=True, repeat=repeat):
             return False
         return True
     
@@ -212,7 +213,7 @@ class SyzFeatureMinimize(AnalysisModule):
             self.results['no_sandbox'] = True
         return essential_features
     
-    def _test_feature(self, rule_out_feature, essential_features: list, test_c_prog=False):
+    def _test_feature(self, rule_out_feature, essential_features: list, test_c_prog=False, repeat=False, sandbox=""):
         self.info_msg("=======================================")
         self.info_msg("Testing ruling out feature: {}".format(rule_out_feature))
         self.info_msg("Testing essential feature: {}".format(essential_features))
@@ -221,18 +222,18 @@ class SyzFeatureMinimize(AnalysisModule):
             new_features.remove(rule_out_feature)
         upstream = self.cfg.get_kernel_by_name('upstream')
         upstream.repro.init_logger(self.logger)
-        _, triggered, _ = upstream.repro.reproduce(func=self._capture_crash, func_args=(new_features, test_c_prog,), vm_tag='test feature {}'.format(rule_out_feature),\
+        _, triggered, _ = upstream.repro.reproduce(func=self._capture_crash, func_args=(new_features, test_c_prog, repeat, sandbox), vm_tag='test feature {}'.format(rule_out_feature),\
             timeout=self.repro_timeout + 100, attempt=self.repro_attempt, root=True, work_dir=self.path_case_plugin, c_hash=self.case_hash)
         self.info_msg("crash triggered: {}".format(triggered))
         return triggered
 
-    def _capture_crash(self, qemu: VM, root:bool, features: list, test_c_prog: bool):
+    def _capture_crash(self, qemu: VM, root:bool, features: list, test_c_prog: bool, repeat: bool, sandbox: str):
         syz_prog_path = os.path.join(self.path_case_plugin, 'testcase')
         qemu.upload(user='root', src=[syz_prog_path], dst='/root', wait=True)
         qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user='root', wait=True)
         
         if test_c_prog:
-            prog2c_cmd = self._make_prog2c_command(syz_prog_path, features, self.i386)
+            prog2c_cmd = self._make_prog2c_command(syz_prog_path, features, self.i386, repeat=repeat)
             local_command(command='chmod +x syz-prog2c && {} > {}/poc.c'.format(prog2c_cmd, self.path_case_plugin), logger=self.logger,\
                 shell=True, cwd=self.syz.path_case_plugin)
             self.info_msg("Convert syz-prog to c prog: {}".format(prog2c_cmd))
@@ -250,7 +251,7 @@ class SyzFeatureMinimize(AnalysisModule):
             qemu.command(cmds="chmod +x /tmp/syz-executor && chmod +x /tmp/syz-execprog", user='root', wait=True, timeout=self.repro_timeout)
 
             syz_prog = open(syz_prog_path, 'r').readlines()
-            cmd = self.make_syz_command(syz_prog, features, self.i386)
+            cmd = self.make_syz_command(syz_prog, features, self.i386, repeat=repeat, sandbox=sandbox)
             self.info_msg("syz command: {}".format(cmd))
             qemu.command(cmds=cmd, user='root', wait=True, timeout=self.repro_timeout)
         return
@@ -260,7 +261,7 @@ class SyzFeatureMinimize(AnalysisModule):
         text = open(testcase_path, 'r').readlines()
 
         enabled = "-enable="
-        normal_pm = {"arch":"amd64", "threaded":"false", "collide":"false", "sandbox":"none", "fault_call":"-1", "fault_nth":"0"}
+        normal_pm = {"arch":"amd64", "threaded":"false", "collide":"false", "sandbox":"none", "fault_call":"-1", "fault_nth":"0", "tmpdir":"false", "segv":"false"}
         for line in text:
             if line.find('{') != -1 and line.find('}') != -1:
                 pm = {}
@@ -295,15 +296,21 @@ class SyzFeatureMinimize(AnalysisModule):
                 if "tun" in features:
                     enabled += "tun,"
                     if '-sandbox' not in command:
-                        command += "-sandbox=none -tmpdir "
+                        command += "-sandbox=none "
+                    if '-tmpdir' not in command:
+                        command += "-tmpdir "
                 if "binfmt_misc" in features:
                     enabled += "binfmt_misc,"
                     if '-sandbox' not in command:
-                        command += "-sandbox=none -tmpdir "
+                        command += "-sandbox=none "
+                    if '-tmpdir' not in command:
+                        command += "-tmpdir "
                 if "cgroups" in features:
                     enabled += "cgroups,"
                     if '-sandbox' not in command:
-                        command += "-sandbox=none -tmpdir "
+                        command += "-sandbox=none "
+                    if '-tmpdir' not in command:
+                        command += "-tmpdir "
                 if "close_fds" in features:
                     enabled += "close_fds,"
                 if "devlinkpci" in features:
@@ -321,11 +328,15 @@ class SyzFeatureMinimize(AnalysisModule):
                 if "vhci" in features:
                     enabled += "vhci,"
                     if '-sandbox' not in command:
-                        command += "-sandbox=none -tmpdir "
+                        command += "-sandbox=none "
+                    if '-tmpdir' not in command:
+                        command += "-tmpdir "
                 if "wifi" in features:
                     enabled += "wifi," 
                     if '-sandbox' not in command:
-                        command += "-sandbox=none -tmpdir "
+                        command += "-sandbox=none "
+                    if '-tmpdir' not in command:
+                        command += "-tmpdir "
                 
                 if enabled[-1] == ',':
                     command += enabled[:-1] + " testcase"
