@@ -95,6 +95,7 @@ class CaseCommand(Command):
             work_folder.append('error')
             show = self.read_case_from_folder('error')
             self.print_case_info(show)
+        n = 0
         if args.remove_stamp != []:
             for hash_val in self.cases:
                 for stamp in args.remove_stamp:
@@ -102,7 +103,8 @@ class CaseCommand(Command):
                         stamp_path = os.path.join(self.proj_dir, folder, hash_val[:7], '.stamp', stamp)
                         if os.path.exists(stamp_path):
                             os.remove(stamp_path)
-            print("Remove finish stamp {} from {} cases".format(args.remove_stamp, len(self.cases)))
+                            n += 1
+            print("Remove finish stamp {} from {} cases".format(args.remove_stamp, n))
         if args.prepare4debug != None:
             if args.case == None:
                 print('Please specify a case hash for debug')
