@@ -49,12 +49,12 @@ class TraceAnalysis(AnalysisModule):
             self.err_msg("Module {} is not prepared".format(self.NAME))
             return False
 
-        for _ in range(0,3):
+        for i in range(0,3):
             self.err_msg("Starting retrieving trace from upstream")
             cfg = self.cfg.get_kernel_by_name('upstream')
             if cfg == None:
                 break
-            trace_upstream = self._get_trace(cfg)
+            trace_upstream = self._get_trace(i, cfg)
             if trace_upstream == None:
                 self.err_msg("Failed to get upstream trace, try again")
                 continue
@@ -316,7 +316,7 @@ exit $EXIT_CODE""".format(modprobe_cmd, cmd)
             f.write(trace_poc_text)
         return script_path
     
-    def _get_trace(self, distro):
+    def _get_trace(self, idx, distro):
         self.set_stage_text("Getting trace from {}".format(distro.distro_name))
         self.info_msg("Generating trace for {}".format(distro.distro_name))
         trace_path = os.path.join(self.path_case_plugin, "trace-{}.report".format(distro.distro_name))
@@ -328,7 +328,7 @@ exit $EXIT_CODE""".format(modprobe_cmd, cmd)
                 return None
 
         qemu = distro.repro.launch_qemu(self.case_hash, tag="{}-trace".format(distro.distro_name), work_path=self.path_case_plugin, 
-        log_name="qemu-{}.log".format(distro.distro_name), timeout=self.trace_timeout, snapshot=False)
+        log_name="qemu-{}-{}.log".format(distro.distro_name, idx), timeout=self.trace_timeout, snapshot=False)
         qemu.run(alternative_func=self._run_trace_cmd, args=("trace-{}".format(distro.distro_name), ))
         done = qemu.wait()
         qemu.kill_vm()

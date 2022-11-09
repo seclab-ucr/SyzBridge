@@ -419,7 +419,10 @@ def syzrepro_convert_format(line):
         res = {}
         p = re.compile(r'({| )(\w+):([0-9a-zA-Z-]*)')
         raw = p.sub(r'\1"\2":"\3",', line)
-        new_line =raw[:raw.find('}')-1] + "}"
+        if raw[raw.find('}')-1] == ',':
+            new_line =raw[:raw.find('}')-1] + "}"
+        else:
+            new_line = raw
         if 'LegacyOptions' in new_line:
             idx = new_line.index('LegacyOptions') - 3
             new_line = new_line[:idx] + "}"
