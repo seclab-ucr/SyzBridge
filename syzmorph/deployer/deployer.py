@@ -66,11 +66,14 @@ class Deployer(Case, Task):
             if not self.analysis.prepare():
                 self.logger.error("Fail to prepare {}".format(self.analysis.name))
                 return 1
-            if self.analysis.run():
-                self.analysis.generate_report()
-                self.analysis.create_stamp()
-            else:
-                self.analysis.null_results()
+            try:
+                if self.analysis.run():
+                    self.analysis.generate_report()
+                    self.analysis.create_stamp()
+                else:
+                    self.analysis.null_results()
+            except PluginRuntimeError:
+                return 1
             self.case_logger.info("task {} has finished".format(analyzor_module.NAME))
             if not self._success:
                 self._success = self.analysis.success()

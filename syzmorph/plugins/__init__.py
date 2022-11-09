@@ -83,7 +83,7 @@ class AnalysisModule:
                 self.main_logger.exception("Case {} caught exception in plugin {}: {}".format(self.case_hash, self.analyzor.NAME, e))
                 tb = traceback.format_exc()
                 self.main_logger.error(tb)
-                return False
+                raise PluginRuntimeError("Case {} caught exception in plugin {}: {}".format(self.case_hash, self.analyzor.NAME, e))
             return ret
         return inner
     
