@@ -81,7 +81,7 @@ class RawBugReproduce(AnalysisModule):
             self.c_prog = True
         else:
             self.syz_feature_mini = self.cfg.get_plugin(SyzFeatureMinimize.NAME).instance
-            self.syz_feature = self.syz_feature_mini.results
+            self.syz_feature = self.syz_feature_mini.results.copy()
             if 'prog_status' in self.syz_feature and self.syz_feature['prog_status'] == SyzFeatureMinimize.C_PROG:
                 self.c_prog = True
                 self.syz_feature.pop('prog_status')

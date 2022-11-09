@@ -258,8 +258,7 @@ class SyzFeatureMinimize(AnalysisModule):
     
     def _extract_prog_options(self, prog):
         options = []
-        chmodX(prog)
-        out = local_command(command="{} -h".format(prog), logger=self.logger, shell=True, cwd=self.syz.path_case_plugin)
+        out = local_command(command="chmod +x {0} && {0} -h".format(prog), logger=self.logger, shell=True, cwd=self.syz.path_case_plugin)
         for line in out:
             if regx_match(r'^( )+-([a-z0-9A-Z_]+)', line):
                 op = regx_get(r'^( )+-([a-z0-9A-Z_]+)', line, 1)
@@ -348,12 +347,6 @@ class SyzFeatureMinimize(AnalysisModule):
                         command += "-sandbox=none "
                     if '-tmpdir' not in command:
                         command += "-tmpdir "
-                
-                if enabled[-1] == ',':
-                    command += enabled[:-1] + " testcase"
-                else:
-                    command += "testcase"
-                break
         return command
 
     def make_syz_command(self, text, features: list, i386: bool, repeat=None, sandbox=""):
