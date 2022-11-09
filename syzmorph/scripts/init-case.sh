@@ -20,7 +20,7 @@ if [ ! -d ".stamp" ]; then
     mkdir .stamp
 fi
 
-curl $C_PROG > poc.c
+curl $C_PROG > poc.c || true
 curl $SYZ_PROG > testcase
 
 exit 0
