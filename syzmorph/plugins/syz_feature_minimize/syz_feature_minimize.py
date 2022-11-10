@@ -258,7 +258,7 @@ class SyzFeatureMinimize(AnalysisModule):
     
     def _extract_prog_options(self, prog):
         options = []
-        out = local_command(command="chmod +x {0} && {0} -h".format(prog), logger=self.logger, shell=True, cwd=self.syz.path_case_plugin)
+        out = local_command(command="chmod +x {0} && {0} -h".format(prog), logger=self.logger, shell=True, cwd=self.path_case_plugin)
         for line in out:
             if regx_match(r'^( )+-([a-z0-9A-Z_]+)', line):
                 op = regx_get(r'^( )+-([a-z0-9A-Z_]+)', line, 1)
