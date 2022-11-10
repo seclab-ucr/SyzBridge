@@ -69,11 +69,11 @@ class TraceAnalysis(AnalysisModule):
         affect_distros = self.cfg.get_distros()
         for i in range(0, len(affect_distros)):
             distro = affect_distros[i]
-            for _ in range(0,3):
+            for i in range(0,3):
                 self.results[distro.distro_name] = False
                 self.info_msg("Starting retrieving trace from {}".format(distro.distro_name))
                 self.set_stage_text("Getting trace from {} [{}/{}]".format(cfg.repro.distro_name, i, len(affect_distros)))
-                trace_vendor = self._get_trace(distro)
+                trace_vendor = self._get_trace(i, distro)
                 if trace_vendor is None:
                     self.err_msg("Failed to get vendor trace, try again")
                     continue
