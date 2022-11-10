@@ -347,6 +347,7 @@ class SyzFeatureMinimize(AnalysisModule):
                         command += "-sandbox=none "
                     if '-tmpdir' not in command:
                         command += "-tmpdir "
+                break
         return command
 
     def make_syz_command(self, text, features: list, i386: bool, repeat=None, sandbox=""):
