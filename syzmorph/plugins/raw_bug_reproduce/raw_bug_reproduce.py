@@ -24,7 +24,6 @@ class RawBugReproduce(AnalysisModule):
 
     def __init__(self):
         super().__init__()
-        self.c_prog = False
         self.bug_title = ''
         self.root_user = None
         self.normal_user = None
@@ -76,15 +75,6 @@ class RawBugReproduce(AnalysisModule):
     def run(self):
         res = {}
         output = queue.Queue()
-        if not self.plugin_finished("SyzFeatureMinimize"):
-            self.info_msg("BugReproduce will use C Prog instead")
-            self.c_prog = True
-        else:
-            self.syz_feature_mini = self.cfg.get_plugin(SyzFeatureMinimize.NAME).instance
-            self.syz_feature = self.syz_feature_mini.results.copy()
-            if 'prog_status' in self.syz_feature and self.syz_feature['prog_status'] == SyzFeatureMinimize.C_PROG:
-                self.c_prog = True
-                self.syz_feature.pop('prog_status')
         for distro in self.cfg.get_distros():
             self.info_msg("start reproducing bugs on {}".format(distro.distro_name))
             x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="{} reproduce_async-{}".format(self.case_hash, distro.distro_name))
@@ -171,33 +161,8 @@ class RawBugReproduce(AnalysisModule):
         self._write_to(final_report, self.REPORT_NAME)
 
     def _execute(self, qemu, root):
-        if self.c_prog:
-            self._run_poc(qemu, root)
-        else:
-            self._execute_syz(qemu, root)
+        self._run_poc(qemu, root)
     
-    def _execute_syz(self, qemu: VMInstance, root):
-        if root:
-            user = self.root_user
-        else:
-            user = self.normal_user
-        syz_feature_mini_path = os.path.join(self.path_case, "SyzFeatureMinimize")
-        i386 = False
-        if '386' in self.case['manager']:
-            i386 = True
-        syz_execprog = os.path.join(syz_feature_mini_path, "syz-execprog")
-        syz_executor = os.path.join(syz_feature_mini_path, "syz-executor")
-        testcase = os.path.join(self.path_case, "testcase")
-        qemu.upload(user=user, src=[testcase], dst="~/", wait=True)
-        qemu.upload(user=user, src=[syz_execprog, syz_executor], dst="/tmp", wait=True)
-        qemu.command(cmds="chmod +x /tmp/syz-execprog /tmp/syz-executor", user=user, wait=True)
-        testcase_text = open(testcase, "r").readlines()
-
-        cmds = make_syz_commands(testcase_text, 0, i386)
-        qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user=self.root_user, wait=True)
-        qemu.command(cmds=cmds, user=user, timeout=self.repro_timeout, wait=True)
-        qemu.command(cmds="killall syz-executor && killall syz-execprog", user="root", wait=True)
-        return
 
     def capture_kasan(self, qemu, root):
         self._execute(qemu, root)
