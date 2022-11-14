@@ -203,11 +203,11 @@ class SyzFeatureMinimize(AnalysisModule):
     def _minimize_syz_feature(self, features: list):
         essential_features = features.copy()
         for rule_out_feature in features:
-            if self._test_feature(rule_out_feature, essential_features):
+            if self._test_feature(rule_out_feature, essential_features, repeat=True):
                 essential_features.remove(rule_out_feature)
         essential_features.append('no_sandbox')
         self.results['no_sandbox'] = False
-        if not self._test_feature(None, essential_features):
+        if not self._test_feature(None, essential_features, repeat=True):
             essential_features.remove('no_sandbox')
         if 'no_sandbox' in essential_features:
             self.results['no_sandbox'] = True
