@@ -51,6 +51,8 @@ class SyzbotCommand(Command):
                             help='[bool] Check if patch fixes tag exist in target kernel, this option only applies on fixed section\n')
         parser.add_argument('--filter-by-patch', action='store_true',
                             help='[bool] Check if patch exist  in target kernel, this option only applies on fixed section\n')
+        parser.add_argument('--match-single-distro', action='store_true',
+                            help='[bool] Match the closest distro from date\n')
         parser.add_argument('--addition', action='store_true',
                             help='[bool] add additional cases\n')
     
@@ -109,7 +111,7 @@ class SyzbotCommand(Command):
             filter_by_c_prog=self.args.filter_by_c_prog, filter_by_kernel=self.args.filter_by_kernel,
             filter_by_distro_effective_cycle=self.args.filter_by_distro_effective_cycle,
             filter_by_fixes_tag=self.args.filter_by_fixes_tag, filter_by_patch=self.args.filter_by_patch,
-            filter_by_hashs=filter_by_hash,
+            filter_by_hashs=filter_by_hash, match_single_distro=self.args.match_single_distro,
             cfg=self.cfg, debug=self.args.debug, log_path = self.proj_dir)
         
         try:

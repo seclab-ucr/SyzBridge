@@ -24,7 +24,8 @@ class Crawler:
                  keyword=[], max_retrieve=99999, filter_by_reported="", log_path = ".", cfg=None,
                  filter_by_closed="", filter_by_c_prog=False, filter_by_kernel=[], 
                  filter_by_fixes_tag=False, filter_by_patch=False, filter_by_hashs=[],
-                 filter_by_distro_effective_cycle=False, include_high_risk=True, debug=False):
+                 filter_by_distro_effective_cycle=False, match_single_distro=False,
+                 include_high_risk=True, debug=False):
         self.url = url
         if type(keyword) == list:
             self.keyword = keyword
@@ -42,6 +43,7 @@ class Crawler:
         self.filter_by_closed = [-1, -1]
         self.filter_by_distro_effective_cycle = filter_by_distro_effective_cycle
         self.distro_vm = {}
+        self.match_single_distro = match_single_distro
         if filter_by_reported != "":
             n = filter_by_reported.split('-')
             n[0] = int(n[0])
@@ -321,21 +323,26 @@ class Crawler:
         today = date.today()
         report_date = today-timedelta(days=date_diff)
         self.logger.debug("bug was reported {} days ago ({})".format(date_diff, report_date))
+        closest_date = None
         for distro in self.cfg.get_all_distros():
-            # Distro release date is not important to bug dataset as long as 
-            # the patch hasn't been applied to that distro
-            """
-            if distro.effective_cycle_start != "":
-                effective_start_date_diff = today - pd.to_datetime(distro.effective_cycle_start).date()
-                if date_diff > effective_start_date_diff.days:
-                    continue
-            """
-
             # As long as distro is still in support, we should pick them.
             if distro.effective_cycle_end != "":
                 effective_end_date_diff = today - pd.to_datetime(distro.effective_cycle_end).date()
                 if date_diff <= effective_end_date_diff.days:
                     continue
+
+            # Distro release date is not important to bug dataset as long as 
+            # the patch hasn't been applied to that distro
+            if self.match_single_distro:
+                if distro.effective_cycle_start != "":
+                    effective_start_date_diff = today - pd.to_datetime(distro.effective_cycle_start).date()
+                    if date_diff > effective_start_date_diff.days:
+                        continue
+                    if closest_date == None or closest_date > effective_start_date_diff.days:
+                        closest_date = effective_start_date_diff.days
+                        if len(res) > 0:
+                            res = []
+
             res.append(distro.distro_name)
         return res
 
