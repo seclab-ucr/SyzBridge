@@ -1,5 +1,5 @@
 import threading
-from tkinter.tix import Tree
+import socket
 import traceback
 import time
 import os, queue
@@ -293,9 +293,24 @@ class VMInstance(Network):
             return False
         return False
     
+    def get_unused_port(self):
+        """
+        Get an empty port for the Pyro nameservr by opening a socket on random port,
+        getting port number, and closing it [not atomic, so race condition is possible...]
+        Might be better to open with port 0 (random) and then figure out what port it used.
+        """
+        so = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        so.bind(('localhost', 0))
+        _, port = so.getsockname()
+        so.close()
+        return port
+
     def setup_distros(self, port, image, linux, key, mem="2G", cpu="2", gdb_port=None, mon_port=None, timeout=None, kasan_multi_shot=0, snapshot=True):
         #self.qemu_ready_bar = r'(\w+ login:)|(Ubuntu \d+\.\d+\.\d+ LTS ubuntu20 ttyS0)'
-        self.port = port
+        if port == None:
+            self.port = self.get_unused_port()
+        else:
+            self.port = port
         self.image = image
         self.key = key
         self.timeout = timeout
@@ -322,7 +337,10 @@ class VMInstance(Network):
                         "kvm-intel.eptad=1", "kvm-intel.enable_shadow_vmcs=1", "kvm-intel.pml=1", \
                         "kvm-intel.enable_apicv=1, panic_on_warn=0"]
         gdb_arg = ""
-        self.port = port
+        if port == None:
+            self.port = self.get_unused_port()
+        else:
+            self.port = port
         self.image = image
         self.linux = linux
         self.key = key

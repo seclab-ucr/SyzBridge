@@ -6,7 +6,7 @@ from modules.reproducer import Reproducer
 
 class Vendor():
     def __init__(self, cfg):
-        self.keys_must_have = ["distro_image", "ssh_port", "ssh_key", "distro_name", "distro_code_name", "distro_version", "type", "root_user", "normal_user"]
+        self.keys_must_have = ["distro_image", "ssh_key", "distro_name", "distro_code_name", "distro_version", "type", "root_user", "normal_user"]
         self.default_modules = {}
         self.optional_modules = {}
         self.blacklist_modules = {}
@@ -34,7 +34,7 @@ class Vendor():
                 if key not in cfg:
                     raise ParseConfigError(key)
         if cfg["type"] == "upstream":
-            for key in ["ssh_port", "ssh_key", "type", "distro_image", "distro_name"]:
+            for key in ["ssh_key", "type", "distro_image", "distro_name"]:
                 if key not in cfg:
                     raise ParseConfigError(key)
         for key in cfg:
