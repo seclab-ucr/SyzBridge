@@ -1,4 +1,5 @@
 import os, shutil
+import socket
 
 from modules.vm.instance import VMInstance
 from subprocess import Popen, PIPE, STDOUT
@@ -40,6 +41,13 @@ class Build():
         if self.kernel.type == VMInstance.UPSTREAM:
             self.create_snapshot(self.kernel.distro_image, path_image, self.kernel.distro_name)
             self._symlink(self.kernel.ssh_key, os.path.join(path_image, "stretch.img.key"))
+    
+    def _get_unused_port(self):
+        so = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        so.bind(('localhost', 0))
+        _, port = so.getsockname()
+        so.close()
+        return port
     
     def _setup(self):
         self.normal_user = self.kernel.normal_user
@@ -83,6 +91,8 @@ class Build():
     
     @ssh_port.setter
     def ssh_port(self, port):
+        if port == None:
+            port = self._get_unused_port()
         self._ssh_port = port + self.index
     
     @property

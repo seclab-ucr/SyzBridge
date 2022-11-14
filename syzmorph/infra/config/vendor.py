@@ -1,4 +1,5 @@
 import os, json
+import socket
 
 from infra.error import *
 from infra.tool_box import *
@@ -159,6 +160,13 @@ class Vendor():
                 return name
         return ""
 
+    def _get_unused_port(self):
+        so = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        so.bind(('localhost', 0))
+        _, port = so.getsockname()
+        so.close()
+        return port
+
     @property
     def repro(self):
         return self._repro
@@ -242,6 +250,8 @@ class Vendor():
     
     @property
     def ssh_port(self):
+        if self._ssh_port == None:
+            return self._get_unused_port()
         return self._ssh_port
     
     @ssh_port.setter
@@ -252,6 +262,8 @@ class Vendor():
 
     @property
     def gdb_port(self):
+        if self._gdb_port == None:
+            return self._get_unused_port()
         return self._gdb_port
     
     @gdb_port.setter
@@ -262,6 +274,8 @@ class Vendor():
 
     @property
     def mon_port(self):
+        if self._mon_port == None:
+            return self._get_unused_port()
         return self._mon_port
     
     @mon_port.setter
