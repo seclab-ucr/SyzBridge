@@ -28,16 +28,29 @@ class GoogleSheets(AnalysisModule):
         self.idx = 0
         self.case_type = self.TYPE_FAILED
         self.triggered_by = self.NOT_TRIGGERED
+        self.private_sheet = None
+        self.p_wks: pygsheets.Spreadsheet = None
+        self.main_sheet = None
+        self.m_wks: pygsheets.Spreadsheet = None
         
     def prepare(self):
+        plugin = self.cfg.get_plugin(self.NAME)
+        if plugin == None:
+            self.err_msg("No such plugin: {}".format(self.NAME))
         try:
-            plugin = self.cfg.get_plugin(self.NAME)
-            if plugin == None:
-                self.err_msg("No such plugin: {}".format(self.NAME))
             credential = plugin.credential
         except AttributeError:
             self.err_msg("Credential not found in config file")
             return False
+        try:
+            self.main_sheet = plugin.main_sheet
+        except AttributeError:
+            self.err_msg("main_sheet is not specified in configuration")
+            return False
+        try:
+            self.private_sheet = plugin.private_sheet
+        except AttributeError:
+            pass
         return self.prepare_on_demand(credential, self.args.proj)
     
     def prepare_on_demand(self, credential, proj):
@@ -69,23 +82,37 @@ class GoogleSheets(AnalysisModule):
     
     def write_case_result(self, sh: pygsheets.Spreadsheet):
         self.data = {}
-        wks = sh.sheet1
+        if self.private_sheet != None:
+            try:
+                self.p_wks = sh.worksheet_by_title(self.private_sheet)
+            except pygsheets.WorksheetNotFound:
+                self.p_wks = sh.add_worksheet(self.private_sheet)
+        try:
+            self.m_wks = sh.worksheet_by_title(self.main_sheet)
+        except pygsheets.WorksheetNotFound:
+            self.m_wks = sh.add_worksheet(self.main_sheet)
+        
+        self.fill_sheet(self.p_wks)
+        self.fill_sheet(self.m_wks, append=True)
+        return
+    
+    def fill_sheet(self, wks: pygsheets.Spreadsheet, append=False):
         self.create_banner(wks)
         self.idx = self.case_in_sheets(wks)
         self._write_hash(wks)
         self._write_title(wks)
         self._write_url(wks)
-        self._write_affect_distro(wks)
+        self._write_affect_distro(wks, append)
 
         if self.plugin_finished("BugReproduce"):
-            self._write_reproducable(wks)
+            self._write_reproducable(wks, append)
         else:
             self.write_failed_str_to_cell('E'+str(self.idx), wks)
             self.write_failed_str_to_cell('F'+str(self.idx), wks)
             self.write_failed_str_to_cell('G'+str(self.idx), wks)
 
         if self.plugin_finished("ModulesAnalysis"):
-            self._write_module_analysis(wks)
+            self._write_module_analysis(wks, append)
         else:
             self.write_failed_str_to_cell('H'+str(self.idx), wks)
 
@@ -103,7 +130,7 @@ class GoogleSheets(AnalysisModule):
         else:
             self.write_failed_str_to_cell('K'+str(self.idx), wks)
         if self.plugin_finished("RawBugReproduce"):
-            self._write_raw_reproducable(wks)
+            self._write_raw_reproducable(wks, append)
         else:
             self.write_failed_str_to_cell('L'+str(self.idx), wks)
         if self.plugin_finished("SyzFeatureMinimize"):
@@ -176,13 +203,17 @@ class GoogleSheets(AnalysisModule):
         self.data['url'] = url
         wks.update_value('C'+str(self.idx), "=HYPERLINK(\"https://syzkaller.appspot.com/bug?id=\"&A{}, \"url\")".format(self.idx))
     
-    def _write_affect_distro(self, wks: pygsheets.Worksheet):
+    def _write_affect_distro(self, wks: pygsheets.Worksheet, append):
         l = []
         for distro in self.cfg.get_distros():
             l.append(distro.distro_name)
-        wks.update_value('D'+str(self.idx), "\n".join(l))
+        if append:
+            old_val = wks.get_value('D'+str(self.idx)) + '\n'
+            wks.update_value('D'+str(self.idx), old_val+"\n".join(l))
+        else:
+            wks.update_value('D'+str(self.idx), "\n".join(l))
     
-    def _write_reproducable(self, wks: pygsheets.Worksheet):
+    def _write_reproducable(self, wks: pygsheets.Worksheet, append):
         self.data['reproduce-by-normal'] = ""
         self.data['reproduce-by-root'] = ""
         self.data['failed-on'] = ""
@@ -217,19 +248,34 @@ class GoogleSheets(AnalysisModule):
         if normal_text != '' or root_text != '':
             self.case_type = self.TYPE_SUCCEED
 
-        wks.update_value('E'+str(self.idx), normal_text)
-        wks.update_value('F'+str(self.idx), root_text)
-        wks.update_value('G'+str(self.idx), fail_text)
+        if append:
+            old_val = wks.get_value('E'+str(self.idx)) + '\n'
+            wks.update_value('E'+str(self.idx), old_val + normal_text)
+            old_val = wks.get_value('F'+str(self.idx)) + '\n'
+            wks.update_value('F'+str(self.idx), old_val + root_text)
+            old_val = wks.get_value('G'+str(self.idx)) + '\n'
+            wks.update_value('G'+str(self.idx), old_val + fail_text)
+        else:
+            wks.update_value('E'+str(self.idx), normal_text)
+            wks.update_value('F'+str(self.idx), root_text)
+            wks.update_value('G'+str(self.idx), fail_text)
 
-    def _write_module_analysis(self, wks: pygsheets.Worksheet):
+    def _write_module_analysis(self, wks: pygsheets.Worksheet, append):
         self.data['modules-analysis'] = ""
         path_result = os.path.join(self.path_case, "ModulesAnalysis", "results.json")
         result_json = json.load(open(path_result, 'r'))
         v = json.dumps(result_json)
-        new_data = v
-        if len(new_data) > 50000:
-            new_data = new_data[:49999]
-        wks.update_value('H'+str(self.idx), new_data)
+        if append:
+            old_val = wks.get_value('H'+str(self.idx)) + '\n'
+            new_data = old_val + v
+            if len(new_data) > 50000:
+                new_data = new_data[:49999]
+            wks.update_value('H'+str(self.idx), new_data)
+        else:
+            new_data = v
+            if len(new_data) > 50000:
+                new_data = new_data[:49999]
+            wks.update_value('H'+str(self.idx), new_data)
 
     def _write_capability_check(self, wks: pygsheets.Worksheet):
         res = {}
@@ -274,7 +320,7 @@ class GoogleSheets(AnalysisModule):
                 wks.update_value('K'+str(self.idx), t)
                 self.data['fuzzing'] = t
     
-    def _write_raw_reproducable(self, wks: pygsheets.Worksheet):
+    def _write_raw_reproducable(self, wks: pygsheets.Worksheet, append):
         self.data['raw-reproduce-by-normal'] = ""
         self.data['raw-reproduce-by-root'] = ""
         self.data['raw-failed-on'] = ""
@@ -306,9 +352,17 @@ class GoogleSheets(AnalysisModule):
                         fail_text += "{}\n".format(distros)
                         self.data['raw-failed-on'] += "{} ".format(distros)
         if root_text != '':
-            wks.update_value('L'+str(self.idx), root_text)
+            if append:
+                old_val = wks.get_value('L'+str(self.idx)) + '\n'
+                wks.update_value('L'+str(self.idx), old_val + root_text)
+            else:
+                wks.update_value('L'+str(self.idx), root_text)
         if normal_text != '':
-            wks.update_value('L'+str(self.idx), normal_text)
+            if append:
+                old_val = wks.get_value('L'+str(self.idx)) + '\n'
+                wks.update_value('L'+str(self.idx), old_val + normal_text)
+            else:
+                wks.update_value('L'+str(self.idx), normal_text)
         if self.triggered_by != self.NOT_TRIGGERED:
             if triggered_by == self.NOT_TRIGGERED or \
                     (triggered_by == self.TRIGGERED_BY_ROOT and self.triggered_by == self.TRIGGERED_BY_NORMAL):
