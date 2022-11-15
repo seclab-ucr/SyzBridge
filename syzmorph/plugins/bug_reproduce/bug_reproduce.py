@@ -182,7 +182,9 @@ class BugReproduce(AnalysisModule):
                 self.results[distro.distro_name]['root'] = res['root']
             else:
                 if self.check_module_priviledge(essential_modules):
-                    res["root"] = False
+                    success, _ = success, _ = self.reproduce(distro, func=self.tweak_modules, func_args=(essential_modules, [], [],), attempt=1, root=False, log_prefix='verify module loading', timeout=self.repro_timeout + 300)
+                    if success:
+                        res["root"] = False
                 self.report.append("{} requires loading [{}] to trigger the bug".format(distro.distro_name, ",".join(essential_modules)))
                 self.results[distro.distro_name]['missing_module'] = essential_modules
                 self.results[distro.distro_name]['minimized'] = True
@@ -208,7 +210,7 @@ class BugReproduce(AnalysisModule):
                 self.report.append("{} is not in loadable list".format(e))
         return ret
     
-    def minimize_modules(self, distro, missing_modules: list, essential_modules: list):
+    def minimize_modules(self, distro, missing_modules: list, essential_modules: list, root=True):
         missing_modules = missing_modules[::-1][1:]
         self.info_msg("{} is minimizing modules list {}, current essential list {}".format(distro.distro_name, missing_modules, essential_modules))
         success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, essential_modules, []), root=True, attempt=1, log_prefix='minimize', timeout=len(missing_modules) * self.repro_timeout + 300)

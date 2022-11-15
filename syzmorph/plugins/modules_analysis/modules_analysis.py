@@ -25,6 +25,7 @@ class ModulesAnalysis(AnalysisModule):
     MODULE_IN_BLACKLIST = 3
     MODULE_REQUIRED_LOADING_BY_ROOT = 4
     MODULE_REQUIRED_LOADING_BY_NON_ROOT = 5
+    MODULE_IS_IMPLICIT = 6
 
     def __init__(self):
         super().__init__()
@@ -130,6 +131,10 @@ class ModulesAnalysis(AnalysisModule):
         return True
     
     def determine_module_attr(self, src_file, begin_node, distro: Vendor, hook_end_node, skip_src_check=False):
+        imp_dev = self._check_implicit_module(begin_node.function_name)
+        if imp_dev != None:
+            potential_module = self._get_implicit_module(imp_dev)
+            self.results[potential_module]['missing'][distro.distro_name] = {'distro_name': distro.distro_name, 'distro_version': distro.distro_version, 'type': self.MODULE_IS_IMPLICIT, 'missing_reason': 'Module is implicit'}
         ret = self.module_check(distro, src_file, skip_src_check=skip_src_check)
         self.info_msg("({})Module {} in {} {}".format(begin_node.function_name, self.vul_module, distro.distro_name, ret))
         if ret == None or ret == self.MODULE_ENABLED:
@@ -378,6 +383,27 @@ class ModulesAnalysis(AnalysisModule):
         except KeyError:
             return []
     
+    def _check_implicit_module(self, func_name):
+        net_dev_query = ["dev_get_by_index_rcu", "__dev_get_by_index"]
+        block_dev_query = ["blk_request_module"]
+        char_dev_query = ["chrdev_open"]
+        if func_name in net_dev_query:
+            return "net"
+        if func_name in block_dev_query:
+            return "block"
+        if func_name in char_dev_query:
+            return "char"
+        return None
+    
+    def _get_implicit_module(self, dev):
+        if dev == "net":
+            return "ipip"
+        if dev == "block":
+            return ""
+        if dev == "char":
+            return ""
+        return None
+
     def _prepare_gdb(self, distro: Vendor):
         vmlinux = distro.repro.vmlinux
         image = distro.repro.image_path

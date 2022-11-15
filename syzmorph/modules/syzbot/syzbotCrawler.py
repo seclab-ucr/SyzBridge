@@ -75,13 +75,17 @@ class Crawler:
         else:
             self.cfg = None
         self.thread_lock = None
-
-    def run(self):
         if self.filter_by_fixes_tag or self.filter_by_patch:
             self.logger.info("Wait for distro VMs are ready")
             if not self.wait_for_distro_vm_ready():
                 self.distro_vm_kill()
                 return
+
+    def __del__(self):
+        if self.filter_by_fixes_tag or self.filter_by_patch:
+            self.distro_vm_kill()
+
+    def run(self):
         cases_hash, high_risk_impacts = self.gather_cases()
         for each in cases_hash:
             self._patch_info = {'url': None, 'fixes':[]}
@@ -112,8 +116,6 @@ class Crawler:
                     self.cases[each['Hash']]['affect'] = None
                 self.cases[each['Hash']]['title'] = each['Title']
                 self.cases[each['Hash']]['patch'] = self._patch_info
-        if self.filter_by_fixes_tag or self.filter_by_patch:
-            self.distro_vm_kill()
         return
     
     def wait_for_distro_vm_ready(self):
@@ -508,23 +510,15 @@ class Crawler:
         if hash_val in self.filter_by_hashs:
             self.logger.debug("Skip {} because it's filtered by hash match".format(hash_val))
             return
-        if self.filter_by_fixes_tag or self.filter_by_patch:
-            self.logger.info("Wait for distro VMs are ready")
-            if not self.wait_for_distro_vm_ready():
-                self.distro_vm_kill()
-                return
         self.logger.info("retreive one case: %s",hash_val)
         patch_url = self.get_patch_url(hash_val)
         if self.retreive_case(hash_val) == -1:
-            self.distro_vm_kill()
             return
         self._patch_info = {'url': None, 'fixes':[]}
         if self.filter_by_fixes_tag or self.filter_by_patch:
             if patch_url == None or not self.check_excluded_distro(hash_val, patch_url):
                 self.logger.error("{} does not have a fixes tag or a patch url".format(hash_val))
                 self.cases.pop(hash_val)
-                if self.filter_by_fixes_tag or self.filter_by_patch:
-                    self.distro_vm_kill()
                 return
         if self.filter_by_distro_effective_cycle:
             report_date = self.case_first_crash(hash_val)
@@ -532,15 +526,11 @@ class Crawler:
             if len(self.cases[hash_val]['affect']) == 0:
                 self.logger.error("{} does not affect any distro within its life cycle".format(hash_val))
                 self.cases.pop(hash_val)
-                if self.filter_by_fixes_tag or self.filter_by_patch:
-                    self.distro_vm_kill()
                 return
         else:
             self.cases[hash_val]['affect'] = None
         self.cases[hash_val]['title'] = self.get_title_of_case(hash_val)
         self.cases[hash_val]['patch'] = self._patch_info
-        if self.filter_by_fixes_tag or self.filter_by_patch:
-            self.distro_vm_kill()
         return self.cases[hash_val]
     
     def case_first_crash(self, hash_val):
