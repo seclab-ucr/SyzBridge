@@ -137,8 +137,8 @@ class GoogleSheets(AnalysisModule):
             self._write_syz_feature_minimize(wks)
         else:
             self.write_failed_str_to_cell('M'+str(self.idx), wks)
-        #self._render_cell_color('A'+str(self.idx), self.case_type, wks)
-        self._render_row_coloer(wks)
+        self._render_cell_color('A'+str(self.idx), self.case_type, wks)
+        #self._render_row_coloer(wks) # Too many requests
         try:
             if self.manager.module_capable("SlackBot") and \
                     (self.data['reproduce-by-normal'] != "" or self.data['reproduce-by-root'] != ""):
