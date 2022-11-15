@@ -1,4 +1,3 @@
-from syzmorph.deployer.error import PluginRuntimeError
 
 class CannotFindConfigForObject(Exception):
     def __init__(self, obj, *args: object) -> None:
