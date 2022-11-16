@@ -183,7 +183,7 @@ class Crawler:
             
         self.logger.debug('{} is vulnerable'.format(distro.distro_name))
         return True
-
+    """
     def fedora_is_vulnerable(self, distro: Vendor, vul_version, patched_version):
         if self.filter_by_fixes_tag:
             self.logger.debug("Compare buggy version {} and distro version {}".format(vul_version, distro.distro_version))
@@ -196,8 +196,9 @@ class Crawler:
                 if distro.distro_name not in self._fixes['exclude']:
                     return False
         return True
+    """
 
-    def debian_is_vulnerable(self, distro: Vendor, fixes_commit_msg, patch_commit_msg):
+    def debian_fedora_is_vulnerable(self, distro: Vendor, fixes_commit_msg, patch_commit_msg):
         repo_path = os.getcwd()+"/tools/linux-stable-0"
         cur_commit = None
         self.thread_lock.acquire()
@@ -230,8 +231,6 @@ class Crawler:
         
         if self.filter_by_patch:
             blame_patch_commits = self._get_commit_from_msg(distro, None, repo_path, patch_commit_msg, "origin/linux-{}.y".format(major_version))
-            if len(blame_patch_commits) == 0:
-                return False
         
         self.thread_lock.acquire()
         out = local_command(command="git stash -u && git checkout origin/linux-{}.y".format(major_version), cwd=repo_path, shell=True, redir_err=False)
@@ -422,11 +421,11 @@ class Crawler:
                 self.logger.debug("{} is not vulnerable to this bug".format(distro.distro_name))
                 self._fixes['exclude'].append(distro.distro_name)
         if 'fedora' in distro.distro_name.lower():
-            if not self.fedora_is_vulnerable(distro, vul_version, patched_version):
+            if not self.debian_fedora_is_vulnerable(distro, fixes_commit_msg, patch_commit_msg):
                 self.logger.debug("{} is not vulnerable to this bug".format(distro.distro_name))
                 self._fixes['exclude'].append(distro.distro_name)
         if 'debian' in distro.distro_name.lower():
-            if not self.debian_is_vulnerable(distro, fixes_commit_msg, patch_commit_msg):
+            if not self.debian_fedora_is_vulnerable(distro, fixes_commit_msg, patch_commit_msg):
                 self.logger.debug("{} is not vulnerable to this bug".format(distro.distro_name))
                 self._fixes['exclude'].append(distro.distro_name)
 
