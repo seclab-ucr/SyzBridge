@@ -49,9 +49,8 @@ class SyzCrashVerification(AnalysisModule):
     def success(self):
         return self._move_to_success
     
-    def minimize_syz_feature(self, features):
-        self.report.append("PoC originally requires {}".format(features))
-        return self._minimize_syz_feature(features)
+    def minimize_syz_feature(self):
+        return self._minimize_syz_feature()
     
     def test_two_prog(self, features):
         if self._test_feature(None, features):
@@ -75,22 +74,29 @@ class SyzCrashVerification(AnalysisModule):
         for crash in os.listdir(self.crash_main):
             self.crash_path = os.path.join(self.crash_main, crash)
             testcase_path = os.path.join(self.crash_path, 'repro.prog')
+            if not os.path.exists(testcase_path):
+                self.main_logger.info("{} doesn't have testcase".format(crash))
+                continue
+            if os.path.exists(os.path.join(self.crash_path, 'repro.cprog')):
+                continue
             if not self.test(testcase_path):
-                self.logger.info("{} fail to extract c prog".format(crash))
+                self.main_logger.info("{} fail to extract c prog".format(crash))
+            else:
+                self.main_logger.info("{} trigger as non-root".format(crash))
     
     def test(self, testcase_path):
-        features = self.get_features(testcase_path)
-        prog_status = self.test_two_prog(features)
-        self.results['prog_status'] = prog_status
-        self.info_msg("self.results: {} {}".format(self.results, self))
-        if prog_status == self.BOTH_FAIL:
+        features = self.minimize_syz_feature()
+        if features == None:
             return False
-        if prog_status == self.C_PROG:
-            self.generate_new_PoC(features)
-            return True
-        features = self.minimize_syz_feature(features)
-        if self.test_PoC(features, root=True):
-            return self.generate_new_PoC(features, testcase_path)
+        if not self.test_PoC(features, root=True):
+            return False
+        if self.test_PoC(features, root=False):
+            self.generate_low_priv_file(testcase_path)
+            shutil.copyfile(os.path.join(self.path_case_plugin, "poc_normal.c"), os.path.join(self.crash_path, "repro.cprog"))
+            shutil.copyfile(os.path.join(self.path_case_plugin, "sandbox.h"), os.path.join(self.crash_path, "sandbox.h"))
+        else:
+            shutil.copyfile(os.path.join(self.path_case_plugin, "poc_root.c"), os.path.join(self.crash_path, "repro.cprog"))
+            return False
         return True
 
     def test_PoC(self, features: list, repeat=False, root=True):
@@ -98,13 +104,65 @@ class SyzCrashVerification(AnalysisModule):
             return False
         return True
     
+    def tune_poc(self, root: bool):
+        feature = 0
+
+        data = []
+        src = os.path.join(self.path_case_plugin, "poc.c")
+        if not root:
+            dst = os.path.join(self.path_case_plugin, "poc_normal.c")
+        else:
+            dst = os.path.join(self.path_case_plugin, "poc_root.c")
+
+        if os.path.exists(dst):
+            os.remove(dst)
+
+        main_func = ""
+        insert_line = []
+        fsrc = open(src, "r")
+        fdst = open(dst, "w")
+
+        code = fsrc.readlines()
+        fsrc.close()
+        text = "".join(code)
+        if text.find("int main") != -1:
+            main_func = r"^int main"
+
+        for i in range(0, len(code)):
+            line = code[i].strip()
+            if insert_line != []:
+                for t in insert_line:
+                    if i == t[0]:
+                        data.append(t[1])
+                        insert_line.remove(t)
+            data.append(code[i])
+            if regx_match(main_func, line):
+                data.insert(len(data)-1, "#include \"sandbox.h\"\n")
+                insert_line.append([i+2, "setup_sandbox();\n"])
+
+        if data != []:
+            fdst.writelines(data)
+            fdst.close()
+            src = os.path.join(self.path_package, "plugins/syz_crash_verification/sandbox.h")
+            dst = os.path.join(self.path_case_plugin, "sandbox.h")
+            shutil.copyfile(src, dst)
+        else:
+            self.err_msg("Cannot find real PoC function")
+        return feature
+    
     def generate_new_PoC(self, features, testcase_path):
         self.info_msg("Generating PoC_repeat.c and PoC_no_repeat.c")
         syz_prog_path = testcase_path
         prog2c_cmd = self._make_prog2c_command(syz_prog_path, features, self.i386)
         self.logger.info("syz-prog2c for PoC_repeat: {}".format(prog2c_cmd))
         local_command(command='chmod +x syz-prog2c && {} > {}/repro.cprog'.format(prog2c_cmd, self.crash_path), logger=self.logger,\
-                shell=True, cwd=self.syz.path_case_plugin)
+                shell=True, cwd=self.path_case_plugin)
+    
+    def generate_low_priv_file(self, testcase_path):
+        crash_path = os.path.dirname(testcase_path)
+        with open(crash_path+"/repro.low-privilege", 'w') as f:
+            f.write("true")
+        return
 
     def generate_report(self):
         final_report = "\n".join(self.report)
@@ -161,15 +219,14 @@ class SyzCrashVerification(AnalysisModule):
             self.results[each] = True
         return enabled_features 
     
-    def _minimize_syz_feature(self, features: list):
-        essential_features = features.copy()
-        for rule_out_feature in features:
-            if self._test_feature(rule_out_feature, essential_features):
-                essential_features.remove(rule_out_feature)
+    def _minimize_syz_feature(self):
+        essential_features = []
         essential_features.append('no_sandbox')
         self.results['no_sandbox'] = False
         if not self._test_feature(None, essential_features):
             essential_features.remove('no_sandbox')
+            if not self._test_feature(None, essential_features):
+                return None
         if 'no_sandbox' in essential_features:
             self.results['no_sandbox'] = True
         return essential_features
@@ -194,19 +251,25 @@ class SyzCrashVerification(AnalysisModule):
         else:
             user = 'etenal'
         syz_prog_path = os.path.join(self.crash_path, 'repro.prog')
-        qemu.upload(user='root', src=[syz_prog_path], dst='/root', wait=True)
+        qemu.upload(user='root', src=[syz_prog_path], dst='/root/testcase', wait=True)
         qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user='root', wait=True)
         
         if test_c_prog:
             prog2c_cmd = self._make_prog2c_command(syz_prog_path, features, self.i386, repeat=repeat)
             local_command(command='chmod +x syz-prog2c && {} > {}/poc.c'.format(prog2c_cmd, self.path_case_plugin), logger=self.logger,\
-                shell=True, cwd=self.syz.path_case_plugin)
+                shell=True, cwd=self.path_case_plugin)
+            self.tune_poc(root)
             self.info_msg("Convert syz-prog to c prog: {}".format(prog2c_cmd))
-            qemu.upload(user=user, src=[os.path.join(self.path_case_plugin, 'poc.c')], dst='~/', wait=True)
-            if self.i386:
-                qemu.command(cmds="gcc -m32 -pthread -o poc poc.c", user=user, wait=True)
+            if root:
+                poc_file = "poc_root.c"
             else:
-                qemu.command(cmds="gcc -pthread -o poc poc.c", user=user, wait=True)
+                poc_file = "poc_normal.c" 
+            sandbox_path = os.path.join(self.path_case_plugin, 'sandbox.h')
+            qemu.upload(user=user, src=[os.path.join(self.path_case_plugin, poc_file), sandbox_path], dst='~/', wait=True)
+            if self.i386:
+                qemu.command(cmds="gcc -m32 -pthread -o poc {}".format(poc_file), user=user, wait=True)
+            else:
+                qemu.command(cmds="gcc -pthread -o poc {}".format(poc_file), user=user, wait=True)
             
             qemu.command(cmds="./poc", user=user, wait=True, timeout=self.repro_timeout)
         else:
