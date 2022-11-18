@@ -12,7 +12,7 @@ class Network:
     
     def scp(self, ip, user, port, key, src, dst, upload, wait):
         ret_queue = queue.Queue()
-        x = threading.Thread(target=self._scp, args=(ip, user, port, key, src, dst, upload, ret_queue), name="scp logger")
+        x = threading.Thread(target=self._scp, args=(ip, user, port, key, src, dst, upload, ret_queue), name="scp logger", daemon=True)
         x.start()
         if wait:
             x.join()
@@ -25,7 +25,7 @@ class Network:
     
     def ssh(self, ip, user, port, key, command, wait, timeout):
         ret_queue = queue.Queue()
-        x = threading.Thread(target=self._ssh, args=(ip, user, port, key, command, ret_queue, timeout), name="ssh logger")
+        x = threading.Thread(target=self._ssh, args=(ip, user, port, key, command, ret_queue, timeout), name="ssh logger", daemon=True)
         x.start()
         if wait:
             x.join()
@@ -73,11 +73,11 @@ class Network:
         stdout=PIPE,
         stderr=STDOUT)
         if timeout != None:
-            x = threading.Thread(target=set_timer, args=(timeout, p, ), name="ssh timer")
+            x = threading.Thread(target=set_timer, args=(timeout, p, ), name="ssh timer", daemon=True)
             x.start()
         else:
             # Even timeout is not set, we still launch a timer thread to monitor whether the process is still alive
-            x = threading.Thread(target=set_timer, args=(-1, p, ), name="ssh timer")
+            x = threading.Thread(target=set_timer, args=(-1, p, ), name="ssh timer", daemon=True)
             x.start()
         start = len(self.pipe_output)
         with p.stdout:

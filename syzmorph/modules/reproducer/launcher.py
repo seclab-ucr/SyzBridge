@@ -209,7 +209,7 @@ class Launcher(Build):
 
     def _capture_crash(self, qemu, th_index, work_dir, root, timeout, func, *args):
         qemu_queue = queue.Queue()
-        threading.Thread(target=self.warp_qemu_capture_crash, args=(qemu, qemu_queue), name="qemu_crash_capturer").start()
+        threading.Thread(target=self.warp_qemu_capture_crash, args=(qemu, qemu_queue), name="qemu_crash_capturer", daemon=True).start()
         """"
         if not self._kernel_config_pre_check(qemu, "CONFIG_KASAN=y"):
             self.logger.fatal("KASAN is not enabled in kernel!")
@@ -217,7 +217,7 @@ class Launcher(Build):
         """
         
         main_func_q = queue.Queue()
-        main = threading.Thread(target=self._wrap_main_func, args=(main_func_q, func, qemu, root,) + args)
+        main = threading.Thread(target=self._wrap_main_func, args=(main_func_q, func, qemu, root,) + args, daemon=True)
         main.start()
 
         n = int(timeout/qemu_output_window)

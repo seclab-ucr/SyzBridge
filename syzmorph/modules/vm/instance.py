@@ -111,8 +111,8 @@ class VMInstance(Network):
 
         x = threading.Thread(target=self.monitor_execution, name="{} qemu killer".format(self.tag))
         x.start()
-        x1 = threading.Thread(target=self.__log_qemu, args=(p.stdout,), name="{} qemu logger".format(self.tag))
-        x2 = threading.Thread(target=self._new_output_timer, name="{} qemu output timer".format(self.tag))
+        x1 = threading.Thread(target=self.__log_qemu, args=(p.stdout,), name="{} qemu logger".format(self.tag), daemon=True)
+        x2 = threading.Thread(target=self._new_output_timer, name="{} qemu output timer".format(self.tag), daemon=True)
         x1.start()
         x2.start()
 
