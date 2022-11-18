@@ -20,6 +20,14 @@ class Launcher(Build):
         self.case_logger = manager.case_logger
         self.debug = manager.debug
         self.queue = multiprocessing.Queue()
+        self.crash_head = [r'BUG: unable to handle'
+                r'general protection fault', r'KASAN:',
+                r'BUG: kernel NULL pointer dereference']
+        self.crash_tail = [r'------------\[ cut here \]------------',
+                    r'---\[ end trace [a-zA-Z0-9]+ \]---',
+                    r'Rebooting in \d+ seconds..',
+                    r'Kernel panic']
+        self._setup_crash_capturer()
         
     def save_crash_log(self, log_msg, name):
         with open("{}/crash_log-{}".format(self.path_case, name), "w+") as f:
@@ -125,21 +133,13 @@ class Launcher(Build):
         return
     
     def _crash_start(self, line):
-        crash_head = [r'BUG: unable to handle'
-                r'general protection fault', r'KASAN:',
-                r'BUG: kernel NULL pointer dereference']
-
-        for each in crash_head:
+        for each in self.crash_head:
             if regx_match(each, line):
                 return True
         return False
     
     def _crash_end(self, line):
-        crash_tail = [r'------------\[ cut here \]------------',
-                    r'---\[ end trace [a-zA-Z0-9]+ \]---',
-                    r'Rebooting in \d+ seconds..',
-                    r'Kernel panic']
-        for each in crash_tail:
+        for each in self.crash_tail:
             if regx_match(each, line):
                 return True
         return False
@@ -205,6 +205,20 @@ class Launcher(Build):
     def _wrap_main_func(self, main_func_q, func, *args):
         ret = func(*args)
         main_func_q.put(ret)
+        return
+
+    def _setup_crash_capturer(self):
+        try:
+            head = self.kernel.crash_head
+            self.crash_head = head
+        except AttributeError:
+            pass
+    
+        try:
+            tail = self.kernel.crash_tail
+            self.crash_head = tail
+        except AttributeError:
+            pass
         return
 
     def _capture_crash(self, qemu, th_index, work_dir, root, timeout, func, *args):

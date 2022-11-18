@@ -93,6 +93,7 @@ class RunCommand(Command):
         case = self.cases[hash_val]
         dp = Deployer(owner=self, index=index, case_hash=hash_val, case=case)
         dp.deploy()
+        self.logger.info("{} exit".format(hash_val))
         del dp
 
     def prepare_cases(self, index,):
