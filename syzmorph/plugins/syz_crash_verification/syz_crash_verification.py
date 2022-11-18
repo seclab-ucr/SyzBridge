@@ -24,6 +24,7 @@ class SyzCrashVerification(AnalysisModule):
     def __init__(self):
         super().__init__()
         self.i386 = False
+        self.testcase_path = None
         self.syz: SyzkallerInterface = None
         
     def prepare(self):
@@ -73,17 +74,38 @@ class SyzCrashVerification(AnalysisModule):
         shutil.copyfile(os.path.join(self.syzkaller_path, 'bin/syz-prog2c'), os.path.join(self.path_case_plugin, 'syz-prog2c'))
         for crash in os.listdir(self.crash_main):
             self.crash_path = os.path.join(self.crash_main, crash)
-            testcase_path = os.path.join(self.crash_path, 'repro.prog')
-            if not os.path.exists(testcase_path):
+            self.testcase_path = os.path.join(self.crash_path, 'repro.prog')
+            if not os.path.exists(self.testcase_path):
                 self.main_logger.info("{} doesn't have testcase".format(crash))
-                continue
+                if not self.extract_testcase():
+                    self.main_logger.error("{} fail to extract testcase".format(crash))
+                    continue
+                else:
+                    self.testcase_path = os.path.join(self.crash_path, "repro.tmp_prog")
             if os.path.exists(os.path.join(self.crash_path, 'repro.cprog')):
                 continue
-            if not self.test(testcase_path):
+            if not self.test(self.testcase_path):
                 self.main_logger.info("{} fail to extract c prog".format(crash))
             else:
                 self.main_logger.info("{} trigger as non-root".format(crash))
     
+    def extract_testcase(self):
+        magic_text = 'MAGIC?!CALL -> '
+        log_path = os.path.join(self.crash_path, "log0")
+        tmp_testcase = os.path.join(self.crash_path, "repro.tmp_prog")
+        if not os.path.exists(log_path):
+            return False
+        with open(log_path, "r") as f:
+            text = f.readlines()
+            for line in text:
+                line = line.strip()
+                if line.startswith(magic_text):
+                    syscall_text = line[len(magic_text):]
+                if 'request_module:' in line:
+                    super()._write_to(syscall_text, tmp_testcase)
+                    return True
+        return False
+
     def test(self, testcase_path):
         features = self.minimize_syz_feature()
         if features == None:
@@ -250,7 +272,7 @@ class SyzCrashVerification(AnalysisModule):
             user = 'root'
         else:
             user = 'etenal'
-        syz_prog_path = os.path.join(self.crash_path, 'repro.prog')
+        syz_prog_path = self.testcase_path
         qemu.upload(user='root', src=[syz_prog_path], dst='/root/testcase', wait=True)
         qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user='root', wait=True)
         
