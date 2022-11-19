@@ -1,5 +1,5 @@
 import pygsheets
-
+import time
 
 from infra.tool_box import *
 from plugins import AnalysisModule
@@ -67,14 +67,17 @@ class GoogleSheets(AnalysisModule):
 
     def handle_error(func):
         def inner(self):
-            try:
-                ret = func(self)
-                return True
-            except Exception as e:
-                self.err_msg("GoogleSheets error: {}".format(e))
-                return False
+            for _ in range(0, 3):
+                try:
+                    ret = func(self)
+                    return ret
+                except Exception as e:
+                    self.err_msg("GoogleSheets error: {}".format(e))
+                    # Sometimes the request is exceed the limits set by Google
+                    time.sleep(60)
         return inner
 
+    @handle_error
     def run(self):
         self.write_case_result(self.sh)
         self.set_stage_text("Done")
