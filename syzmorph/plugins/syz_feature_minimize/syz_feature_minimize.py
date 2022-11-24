@@ -272,6 +272,7 @@ class SyzFeatureMinimize(AnalysisModule):
         options = self._extract_prog_options('./syz-prog2c')
 
         enabled = "-enable="
+        disable = "-disable="
         normal_pm = {"arch":"amd64", "threaded":"false", "collide":"false", "sandbox":"none", "fault_call":"-1", "fault_nth":"0", "tmpdir":"false", "segv":"false", "slowdown":"1"}
         for line in text:
             if line.find('{') != -1 and line.find('}') != -1:
@@ -309,45 +310,76 @@ class SyzFeatureMinimize(AnalysisModule):
                         command += "-sandbox=none "
                     if '-tmpdir' not in command:
                         command += "-tmpdir "
+                else:
+                    disable += "tun,"
                 if "binfmt_misc" in features:
                     enabled += "binfmt_misc,"
                     if '-sandbox' not in command:
                         command += "-sandbox=none "
                     if '-tmpdir' not in command:
                         command += "-tmpdir "
+                else:
+                    disable += "binfmt_misc,"
                 if "cgroups" in features:
                     enabled += "cgroups,"
                     if '-sandbox' not in command:
                         command += "-sandbox=none "
                     if '-tmpdir' not in command:
                         command += "-tmpdir "
+                else:
+                    disable += "cgroups,"
                 if "close_fds" in features:
                     enabled += "close_fds,"
+                else:
+                    disable += "close_fds,"
                 if "devlinkpci" in features:
                     enabled += "devlink_pci,"
+                else:
+                    disable += "devlink_pci,"
                 if "netdev" in features:
                     enabled += "net_dev,"
+                else:
+                    disable += "net_dev,"
                 if "resetnet" in features:
                     enabled += "net_reset,"
+                else:
+                    disable += "net_reset,"
                 if "usb" in features:
                     enabled += "usb,"
+                else:
+                    disable += "usb,"
                 if "ieee802154" in features:
                     enabled += "ieee802154,"
+                else:
+                    disable += "ieee802154,"
                 if "sysctl" in features:
                     enabled += "sysctl,"
+                else:
+                    disable += "sysctl,"
                 if "vhci" in features:
                     enabled += "vhci,"
                     if '-sandbox' not in command:
                         command += "-sandbox=none "
                     if '-tmpdir' not in command:
                         command += "-tmpdir "
+                else:
+                    disable += "vhci,"
                 if "wifi" in features:
                     enabled += "wifi," 
                     if '-sandbox' not in command:
                         command += "-sandbox=none "
                     if '-tmpdir' not in command:
                         command += "-tmpdir "
+                else:
+                    disable += "wifi,"
                 break
+        if enabled[-1] == ',':
+            enabled = enabled[:-1]
+            command += enabled[:-1] + " "
+        if disable[-1] == ',':
+            disable = disable[:-1]
+            command += disable[:-1] + " "
+        command += "testcase"
         return command
 
     def make_syz_command(self, text, features: list, i386: bool, repeat=None, sandbox=""):
@@ -357,7 +389,7 @@ class SyzFeatureMinimize(AnalysisModule):
             # If read from repro.command, text[0] was already the command
             return text[0]
         enabled = "-enable="
-
+        disable = "-disable="
         normal_pm = {"arch":"amd64", "threaded":"false", "collide":"false", "sandbox":"none", "fault_call":"-1", "fault_nth":"0", "slowdown":"1"}
         for line in text:
             if line.find('{') != -1 and line.find('}') != -1:
@@ -405,32 +437,58 @@ class SyzFeatureMinimize(AnalysisModule):
                 
                 if "tun" in features:
                     enabled += "tun,"
+                else:
+                    disable += "tun,"
                 if "binfmt_misc" in features:
                     enabled += "binfmt_misc,"
+                else:
+                    disable += "binfmt_misc,"
                 if "cgroups" in features:
                     enabled += "cgroups,"
+                else:
+                    disable += "cgroups,"
                 if "close_fds" in features:
                     enabled += "close_fds,"
+                else:
+                    disable += "close_fds,"
                 if "devlinkpci" in features:
                     enabled += "devlink_pci,"
+                else:
+                    disable += "devlink_pci,"
                 if "netdev" in features:
                     enabled += "net_dev,"
+                else:
+                    disable += "net_dev,"
                 if "resetnet" in features:
                     enabled += "net_reset,"
+                else:
+                    disable += "net_reset,"
                 if "usb" in features:
                     enabled += "usb,"
+                else:
+                    disable += "usb,"
                 if "ieee802154" in features:
                     enabled += "ieee802154,"
+                else:
+                    disable += "ieee802154,"
                 if "sysctl" in features:
                     enabled += "sysctl,"
+                else:
+                    disable += "sysctl,"
                 if "vhci" in features:
                     enabled += "vhci,"
-                if "wifi" in features:
-                    enabled += "wifi," 
-                
-                if enabled[-1] == ',':
-                    command += enabled[:-1] + " testcase"
                 else:
-                    command += "testcase"
+                    disable += "vhci,"
+                if "wifi" in features:
+                    enabled += "wifi,"
+                else:
+                    disable += "wifi,"
                 break
+        if enabled[-1] == ',':
+            enabled = enabled[:-1]
+            command += enabled[:-1] + " "
+        if disable[-1] == ',':
+            disable = disable[:-1]
+            command += disable[:-1] + " "
+        command += "testcase"
         return command

@@ -107,6 +107,7 @@ class BugReproduce(AnalysisModule):
             self.c_prog = True
         else:
             self.syz_feature_mini = self.cfg.get_plugin(SyzFeatureMinimize.NAME).instance
+            self.syz_feature_mini.path_case_plugin = os.path.join(self.path_case, self.NAME)
             self.syz_feature = self.syz_feature_mini.results.copy()
             self.logger.info("Receive syz_feature: {} {}".format(self.syz_feature, self.syz_feature_mini))
             if self.syz_feature['prog_status'] == SyzFeatureMinimize.C_PROG:
@@ -182,7 +183,7 @@ class BugReproduce(AnalysisModule):
                 self.results[distro.distro_name]['root'] = res['root']
             else:
                 if self.check_module_priviledge(essential_modules):
-                    success, _ = success, _ = self.reproduce(distro, func=self.tweak_modules, func_args=(essential_modules, [], [],), attempt=1, root=False, log_prefix='verify module loading', timeout=self.repro_timeout + 300)
+                    success, _ = self.reproduce(distro, func=self.tweak_modules, func_args=(essential_modules, [], [],), attempt=1, root=False, log_prefix='verify module loading', timeout=self.repro_timeout + 300)
                     if success:
                         res["root"] = False
                 self.report.append("{} requires loading [{}] to trigger the bug".format(distro.distro_name, ",".join(essential_modules)))
@@ -363,7 +364,7 @@ class BugReproduce(AnalysisModule):
             if '*hash = \'0\' + (char)(a1 % 10);' in line:
                 data.pop()
                 data.append('*hash = \'0\' + (char)(a1 % 2);\n')
-                if 'use' not in self.results[distro.distro_name]['device_tuning']:
+                if 'usb' not in self.results[distro.distro_name]['device_tuning']:
                     self.results[distro.distro_name]['device_tuning'].append('usb')
 
             if 'setup_loop_device' in line:

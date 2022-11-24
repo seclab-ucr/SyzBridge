@@ -76,7 +76,8 @@ class SyzCrashVerification(AnalysisModule):
             self.crash_path = os.path.join(self.crash_main, crash)
             self.testcase_path = os.path.join(self.crash_path, 'repro.prog')
             if not os.path.exists(self.testcase_path):
-                self.main_logger.info("{} doesn't have testcase".format(crash))
+                #self.main_logger.info("No repro.prog in {}".format(crash))
+                #continue
                 if not self.extract_testcase():
                     self.main_logger.error("{} fail to extract testcase".format(crash))
                     continue
@@ -84,12 +85,14 @@ class SyzCrashVerification(AnalysisModule):
                     self.testcase_path = os.path.join(self.crash_path, "repro.tmp_prog")
             if os.path.exists(os.path.join(self.crash_path, 'repro.cprog')):
                 continue
+            self.main_logger.info("testing {}".format(crash))
             if not self.test(self.testcase_path):
                 self.main_logger.info("{} fail to extract c prog".format(crash))
             else:
                 self.main_logger.info("{} trigger as non-root".format(crash))
     
     def extract_testcase(self):
+        syscall_text = ""
         magic_text = 'MAGIC?!CALL -> '
         log_path = os.path.join(self.crash_path, "log0")
         tmp_testcase = os.path.join(self.crash_path, "repro.tmp_prog")
@@ -98,9 +101,10 @@ class SyzCrashVerification(AnalysisModule):
         with open(log_path, "r") as f:
             text = f.readlines()
             for line in text:
-                line = line.strip()
+                if 'executing program 0' in line:
+                    syscall_text = ""
                 if line.startswith(magic_text):
-                    syscall_text = line[len(magic_text):]
+                    syscall_text += line[len(magic_text):]
                 if 'request_module:' in line:
                     super()._write_to(syscall_text, tmp_testcase)
                     return True
@@ -263,7 +267,7 @@ class SyzCrashVerification(AnalysisModule):
         ubuntu = self.cfg.get_kernel_by_name('ubuntu-fuzzing')
         ubuntu.repro.init_logger(self.logger)
         _, triggered, _ = ubuntu.repro.reproduce(func=self._capture_crash, func_args=(new_features, test_c_prog, repeat, sandbox), vm_tag='test feature {}'.format(rule_out_feature),\
-            timeout=self.repro_timeout + 100, attempt=self.repro_attempt, root=root, work_dir=self.path_case_plugin, c_hash=self.case_hash)
+            timeout=self.repro_timeout + 100, attempt=self.repro_attempt, root=root, work_dir=self.crash_path, c_hash=self.case_hash)
         self.info_msg("crash triggered: {}".format(triggered))
         return triggered
 
@@ -307,6 +311,7 @@ class SyzCrashVerification(AnalysisModule):
         return
     
     def _make_prog2c_command(self, testcase_path, features: list, i386: bool, repeat=True):
+        option = False
         command = "./syz-prog2c -prog {} ".format(testcase_path)
         text = open(testcase_path, 'r').readlines()
 
@@ -314,6 +319,7 @@ class SyzCrashVerification(AnalysisModule):
         normal_pm = {"arch":"amd64", "threaded":"false", "collide":"false", "sandbox":"none", "fault_call":"-1", "fault_nth":"0", "tmpdir":"false", "segv":"false"}
         for line in text:
             if line.find('{') != -1 and line.find('}') != -1:
+                option = True
                 pm = {}
                 try:
                     pm = json.loads(line[1:])
@@ -389,13 +395,15 @@ class SyzCrashVerification(AnalysisModule):
                         command += "-tmpdir "
                 
                 if enabled[-1] == ',':
-                    command += enabled[:-1] + " testcase"
-                else:
-                    command += "testcase"
+                    command += enabled[:-1]
                 break
+        if not option:
+            command += "-arch=amd64 -threaded=false -collide=false -procs=1 -repeat=1"
+        command += " testcase"
         return command
 
     def make_syz_command(self, text, features: list, i386: bool, repeat=None, sandbox=""):
+        option = False
         command = "/tmp/syz-execprog -executor=/tmp/syz-executor "
         if text[0][:len(command)] == command:
             # If read from repro.command, text[0] was already the command
@@ -405,6 +413,7 @@ class SyzCrashVerification(AnalysisModule):
         normal_pm = {"arch":"amd64", "threaded":"false", "collide":"false", "sandbox":"none", "fault_call":"-1", "fault_nth":"0"}
         for line in text:
             if line.find('{') != -1 and line.find('}') != -1:
+                option = True
                 pm = {}
                 try:
                     pm = json.loads(line[1:])
@@ -475,8 +484,10 @@ class SyzCrashVerification(AnalysisModule):
                     enabled += "wifi," 
                 
                 if enabled[-1] == ',':
-                    command += enabled[:-1] + " testcase"
-                else:
-                    command += "testcase"
+                    command += enabled[:-1]
                 break
+        if not option:
+            command += "-arch=amd64 -threaded=false -collide=false -procs=1 -repeat=1 "
+            command += "-disable=tun,binfmt_misc,cgroups,close_fds,devlink_pci,net_dev,net_reset,usb,ieee802154,sysctl,vhci,wifi "
+        command += " testcase"
         return command
