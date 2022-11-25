@@ -107,7 +107,7 @@ class BugReproduce(AnalysisModule):
             self.c_prog = True
         else:
             self.syz_feature_mini = self.cfg.get_plugin(SyzFeatureMinimize.NAME).instance
-            self.syz_feature_mini.path_case_plugin = os.path.join(self.path_case, self.NAME)
+            self.syz_feature_mini.path_case_plugin = os.path.join(self.path_case, SyzFeatureMinimize.NAME)
             self.syz_feature = self.syz_feature_mini.results.copy()
             self.logger.info("Receive syz_feature: {} {}".format(self.syz_feature, self.syz_feature_mini))
             if self.syz_feature['prog_status'] == SyzFeatureMinimize.C_PROG:
@@ -186,6 +186,7 @@ class BugReproduce(AnalysisModule):
                     success, _ = self.reproduce(distro, func=self.tweak_modules, func_args=(essential_modules, [], [],), attempt=1, root=False, log_prefix='verify module loading', timeout=self.repro_timeout + 300)
                     if success:
                         res["root"] = False
+                        self.results[distro.distro_name]['unprivileged_module_loading'] = True
                 self.report.append("{} requires loading [{}] to trigger the bug".format(distro.distro_name, ",".join(essential_modules)))
                 self.results[distro.distro_name]['missing_module'] = essential_modules
                 self.results[distro.distro_name]['minimized'] = True
@@ -314,7 +315,7 @@ class BugReproduce(AnalysisModule):
             self.results[distro.distro_name]['namespace'] = True
             feature |= self.FEATURE_NAMESPACE
 
-        skip_funcs = [r"setup_usb\(\);", r"setup_leak\(\);"]
+        skip_funcs = ["setup_usb();", "setup_leak();"]
         data = []
         src = os.path.join(self.path_case, "poc.c")
         if not root:
@@ -364,14 +365,12 @@ class BugReproduce(AnalysisModule):
             if '*hash = \'0\' + (char)(a1 % 10);' in line:
                 data.pop()
                 data.append('*hash = \'0\' + (char)(a1 % 2);\n')
-                if 'usb' not in self.results[distro.distro_name]['device_tuning']:
-                    self.results[distro.distro_name]['device_tuning'].append('usb')
 
             if 'setup_loop_device' in line:
                 if not (feature & self.FEATURE_LOOP_DEVICE):
                     feature |= self.FEATURE_LOOP_DEVICE
-                    if 'loop' not in self.results[distro.distro_name]['device_tuning']:
-                        self.results[distro.distro_name]['device_tuning'].append('loop')
+                    if 'loop_dev' not in self.results[distro.distro_name]['device_tuning']:
+                        self.results[distro.distro_name]['device_tuning'].append('loop_dev')
             
             if 'hwsim80211_create_device' in line:
                 if not (feature & self.FEATURE_MOD4ENV):
@@ -379,6 +378,7 @@ class BugReproduce(AnalysisModule):
                     self.results[distro.distro_name]['env_modules'].append('mac80211_hwsim')
                 if 'mac80211_hwsim' not in self._addition_modules:
                     self._addition_modules.append('mac80211_hwsim')
+                    self.results[distro.distro_name]['unprivileged_module_loading'] = True
 
         if data != []:
             fdst.writelines(data)
@@ -530,10 +530,6 @@ class BugReproduce(AnalysisModule):
         else:
             user = self.normal_user
         syz_feature_mini_path = os.path.join(self.path_case, "SyzFeatureMinimize")
-        features = []
-        for each in self.syz_feature:
-            if self.syz_feature[each]:
-                features.append(each)
         i386 = False
         if '386' in self.case['manager']:
             i386 = True
@@ -549,9 +545,9 @@ class BugReproduce(AnalysisModule):
         testcase_text = open(testcase, "r").readlines()
 
         if poc_feature & self.FEATURE_NAMESPACE:
-            cmds = self.syz_feature_mini.make_syz_command(testcase_text, features, i386, repeat=repeat, sandbox="namespace")
+            cmds = self.syz_feature_mini.make_syz_command(testcase_text, self.syz_feature, i386, repeat=repeat, sandbox="namespace")
         else:
-            cmds = self.syz_feature_mini.make_syz_command(testcase_text, features, i386, repeat=repeat)
+            cmds = self.syz_feature_mini.make_syz_command(testcase_text, self.syz_feature, i386, repeat=repeat)
         qemu.command(cmds=cmds, user=user, wait=True, timeout=self.repro_timeout)
         qemu.command(cmds="killall syz-executor && killall syz-execprog", user="root", wait=True)
 
@@ -660,6 +656,7 @@ class BugReproduce(AnalysisModule):
             distro_result['repeat'] = False
             distro_result['hash'] = self.case['hash']
             distro_result['trigger'] = False
+            distro_result['unprivileged_module_loading'] = False
             self.results[distro.distro_name] = distro_result
     
     def _BugChecker(self, report):

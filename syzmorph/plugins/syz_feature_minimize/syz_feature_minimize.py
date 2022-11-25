@@ -108,18 +108,14 @@ class SyzFeatureMinimize(AnalysisModule):
             return False
         features = self.get_features()
         prog_status = self.test_two_prog(features)
-        self.results['prog_status'] = prog_status
+        features['prog_status'] = prog_status
         self.info_msg("self.results: {} {}".format(self.results, self))
         if prog_status == self.BOTH_FAIL:
-            return False
+            prog_status = self.SYZ_PROG
         if prog_status == self.C_PROG:
             self.generate_new_PoC(features)
             return True
         features = self.minimize_syz_feature(features)
-        for key in self.results:
-            if key not in features and key != 'prog_status':
-                self.results[key] = False
-        #ret = self.test_PoC(features)
         self.generate_new_PoC(features)
         return True
 
@@ -161,7 +157,7 @@ class SyzFeatureMinimize(AnalysisModule):
         return open(file, 'r').read() == ''
         
     def _get_syz_features(self, syz_repro):
-        enabled_features = []
+        features = {}
         for line in syz_repro.split('\n'):
             if line.find('{') != -1 and line.find('}') != -1:
                 try:
@@ -170,47 +166,25 @@ class SyzFeatureMinimize(AnalysisModule):
                     self.case_logger.info("Using old syz_repro")
                     pm = syzrepro_convert_format(line[1:])
                 
-                if "tun" in pm and str(pm["tun"]).lower() == "true":
-                    enabled_features.append("tun")
-                if "binfmt_misc" in pm and str(pm["binfmt_misc"]).lower() == 'true':
-                    enabled_features.append("binfmt_misc")
-                if "cgroups" in pm and str(pm["cgroups"]).lower() == "true":
-                    enabled_features.append("cgroups")
-                if "close_fds" in pm and str(pm["close_fds"]).lower() == "true":
-                    enabled_features.append("close_fds")
-                if "devlinkpci" in pm and str(pm["devlinkpci"]).lower() == "true":
-                    enabled_features.append("devlinkpci")
-                if "netdev" in pm and str(pm["netdev"]).lower() == "true":
-                    enabled_features.append("netdev")
-                if "resetnet" in pm and str(pm["resetnet"]).lower() == "true":
-                    enabled_features.append("resetnet")
-                if "usb" in pm and str(pm["usb"]).lower() == "true":
-                    enabled_features.append("usb")
-                if "ieee802154" in pm and str(pm["ieee802154"]).lower() == "true":
-                    enabled_features.append("ieee802154")
-                if "sysctl" in pm and str(pm["sysctl"]).lower() == "true":
-                    enabled_features.append("sysctl")
-                if "vhci" in pm and str(pm["vhci"]).lower() == "true":
-                    enabled_features.append("vhci")
-                if "wifi" in pm and str(pm["wifi"]).lower() == "true":
-                    enabled_features.append("wifi")
+                for each in ["tun", "binfmt_misc", "cgroups", "close_fds", "devlinkpci", "netdev", "resetnet", "usb", "ieee802154", "sysctl", "vhci", "wifi"]:
+                    if each in pm:
+                        features[each] = pm[each]
                 break
-        self.info_msg("Enabled features: {}".format(enabled_features))
-        for each in enabled_features:
-            self.results[each] = True
-        return enabled_features 
+        self.info_msg("features: {}".format(features))
+        for each in features:
+            self.results[each] = features[each]
+        return features 
     
     def _minimize_syz_feature(self, features: list):
         essential_features = features.copy()
         for rule_out_feature in features:
-            if self._test_feature(rule_out_feature, essential_features, repeat=True):
-                essential_features.remove(rule_out_feature)
-        essential_features.append('no_sandbox')
-        self.results['no_sandbox'] = False
+            if features[rule_out_feature]:
+                if self._test_feature(rule_out_feature, essential_features, repeat=True):
+                    essential_features[rule_out_feature] = False
+        essential_features['no_sandbox'] = True
         if not self._test_feature(None, essential_features, repeat=True):
-            essential_features.remove('no_sandbox')
-        if 'no_sandbox' in essential_features:
-            self.results['no_sandbox'] = True
+            essential_features['no_sandbox'] = False
+        self.results = essential_features
         return essential_features
     
     def _test_feature(self, rule_out_feature, essential_features: list, test_c_prog=False, repeat=False, sandbox=""):
@@ -219,7 +193,7 @@ class SyzFeatureMinimize(AnalysisModule):
         self.info_msg("Testing essential feature: {}".format(essential_features))
         new_features = essential_features.copy()
         if rule_out_feature in new_features:
-            new_features.remove(rule_out_feature)
+            new_features[rule_out_feature] = False
         upstream = self.cfg.get_kernel_by_name('upstream')
         upstream.repro.init_logger(self.logger)
         _, triggered, _ = upstream.repro.reproduce(func=self._capture_crash, func_args=(new_features, test_c_prog, repeat, sandbox), vm_tag='test feature {}'.format(rule_out_feature),\
@@ -266,7 +240,7 @@ class SyzFeatureMinimize(AnalysisModule):
                     options.append(op)
         return options
 
-    def _make_prog2c_command(self, testcase_path, features: list, i386: bool, repeat=True):
+    def _make_prog2c_command(self, testcase_path, features: dict, i386: bool, repeat=True):
         command = "./syz-prog2c -prog {} ".format(testcase_path)
         text = open(testcase_path, 'r').readlines()
         options = self._extract_prog_options('./syz-prog2c')
@@ -283,7 +257,7 @@ class SyzFeatureMinimize(AnalysisModule):
                     pm = syzrepro_convert_format(line[1:])
                 for each in normal_pm:
                     if each in pm and pm[each] != "" and each in options:
-                        if each == "sandbox" and 'no_sandbox' in features:
+                        if each == "sandbox" and 'no_sandbox' in features and features['no_sandbox']:
                             continue
                         command += "-" + each + "=" +str(pm[each]).lower() + " "
                         if each == "sandbox" and str(pm[each]).lower() != "none":
@@ -305,80 +279,68 @@ class SyzFeatureMinimize(AnalysisModule):
                 #It makes no sense that limiting the features of syz-execrpog, just enable them all
                 
                 if "tun" in features:
-                    enabled += "tun,"
-                    if '-sandbox' not in command:
-                        command += "-sandbox=none "
-                    if '-tmpdir' not in command:
-                        command += "-tmpdir "
-                else:
-                    disable += "tun,"
+                    if features['tun']:
+                        enabled += "tun,"
+                        if '-sandbox' not in command:
+                            command += "-sandbox=none "
+                        if '-tmpdir' not in command:
+                            command += "-tmpdir "
                 if "binfmt_misc" in features:
-                    enabled += "binfmt_misc,"
-                    if '-sandbox' not in command:
-                        command += "-sandbox=none "
-                    if '-tmpdir' not in command:
-                        command += "-tmpdir "
-                else:
-                    disable += "binfmt_misc,"
+                    if features["binfmt_misc"]:
+                        enabled += "binfmt_misc,"
+                        if '-sandbox' not in command:
+                            command += "-sandbox=none "
+                        if '-tmpdir' not in command:
+                            command += "-tmpdir "
                 if "cgroups" in features:
-                    enabled += "cgroups,"
-                    if '-sandbox' not in command:
-                        command += "-sandbox=none "
-                    if '-tmpdir' not in command:
-                        command += "-tmpdir "
-                else:
-                    disable += "cgroups,"
+                    if features["cgroups"]:
+                        enabled += "cgroups,"
+                        if '-sandbox' not in command:
+                            command += "-sandbox=none "
+                        if '-tmpdir' not in command:
+                            command += "-tmpdir "
                 if "close_fds" in features:
-                    enabled += "close_fds,"
-                else:
-                    disable += "close_fds,"
+                    if features["close_fds"]:
+                        enabled += "close_fds,"
                 if "devlinkpci" in features:
-                    enabled += "devlink_pci,"
-                else:
-                    disable += "devlink_pci,"
+                    if features["devlinkpci"]:
+                        enabled += "devlink_pci,"
                 if "netdev" in features:
-                    enabled += "net_dev,"
-                else:
-                    disable += "net_dev,"
+                    if features["netdev"]:
+                        enabled += "net_dev,"
                 if "resetnet" in features:
-                    enabled += "net_reset,"
-                else:
-                    disable += "net_reset,"
+                    if features["resetnet"]:
+                        enabled += "net_reset,"
                 if "usb" in features:
-                    enabled += "usb,"
-                else:
-                    disable += "usb,"
+                    if features["usb"]:
+                        enabled += "usb,"
                 if "ieee802154" in features:
-                    enabled += "ieee802154,"
-                else:
-                    disable += "ieee802154,"
+                    if features["ieee802154"]:
+                        enabled += "ieee802154,"
                 if "sysctl" in features:
-                    enabled += "sysctl,"
-                else:
-                    disable += "sysctl,"
+                    if features["sysctl"]:
+                        enabled += "sysctl,"
                 if "vhci" in features:
-                    enabled += "vhci,"
-                    if '-sandbox' not in command:
-                        command += "-sandbox=none "
-                    if '-tmpdir' not in command:
-                        command += "-tmpdir "
-                else:
-                    disable += "vhci,"
+                    if features["vhci"]:
+                        enabled += "vhci,"
+                        if '-sandbox' not in command:
+                            command += "-sandbox=none "
+                        if '-tmpdir' not in command:
+                            command += "-tmpdir "
                 if "wifi" in features:
-                    enabled += "wifi," 
-                    if '-sandbox' not in command:
-                        command += "-sandbox=none "
-                    if '-tmpdir' not in command:
-                        command += "-tmpdir "
-                else:
-                    disable += "wifi,"
+                    if features["wifi"]:
+                        enabled += "wifi," 
+                        if '-sandbox' not in command:
+                            command += "-sandbox=none "
+                        if '-tmpdir' not in command:
+                            command += "-tmpdir "
                 break
         if enabled[-1] == ',':
             enabled = enabled[:-1]
-            command += enabled[:-1] + " "
+            command += enabled + " "
         if disable[-1] == ',':
             disable = disable[:-1]
-            command += disable[:-1] + " "
+            command += disable + " "
         command += "testcase"
         return command
 
@@ -404,7 +366,7 @@ class SyzFeatureMinimize(AnalysisModule):
                             if sandbox != "":
                                 command += "-" + each + "=" + sandbox + " "
                                 continue
-                            if 'no_sandbox' in features:
+                            if 'no_sandbox' in features and features['no_sandbox']:
                                 continue
                         command += "-" + each + "=" +str(pm[each]).lower() + " "
                     else:
@@ -415,7 +377,7 @@ class SyzFeatureMinimize(AnalysisModule):
                                 if sandbox != "":
                                     command += "-" + each + "=" + sandbox + " "
                                     continue
-                                if 'no_sandbox' in features:
+                                if 'no_sandbox' in features and features['no_sandbox']:
                                     continue
                 if "procs" in pm and str(pm["procs"]) != "1":
                     num = int(pm["procs"])
@@ -436,59 +398,71 @@ class SyzFeatureMinimize(AnalysisModule):
                 #It makes no sense that limiting the features of syz-execrpog, just enable them all
                 
                 if "tun" in features:
-                    enabled += "tun,"
-                else:
-                    disable += "tun,"
+                    if features["tun"]:
+                        enabled += "tun,"
+                    else:
+                        disable += "tun,"
                 if "binfmt_misc" in features:
-                    enabled += "binfmt_misc,"
-                else:
-                    disable += "binfmt_misc,"
+                    if features["binfmt_misc"]:
+                        enabled += "binfmt_misc,"
+                    else:
+                        disable += "binfmt_misc,"
                 if "cgroups" in features:
-                    enabled += "cgroups,"
-                else:
-                    disable += "cgroups,"
+                    if features["cgroups"]:
+                        enabled += "cgroups,"
+                    else:
+                        disable += "cgroups,"
                 if "close_fds" in features:
-                    enabled += "close_fds,"
-                else:
-                    disable += "close_fds,"
+                    if features["close_fds"]:
+                        enabled += "close_fds,"
+                    else:
+                        disable += "close_fds,"
                 if "devlinkpci" in features:
-                    enabled += "devlink_pci,"
-                else:
-                    disable += "devlink_pci,"
+                    if features["devlinkpci"]:
+                        enabled += "devlink_pci,"
+                    else:
+                        disable += "devlink_pci,"
                 if "netdev" in features:
-                    enabled += "net_dev,"
-                else:
-                    disable += "net_dev,"
+                    if features["netdev"]:
+                        enabled += "net_dev,"
+                    else:
+                        disable += "net_dev,"
                 if "resetnet" in features:
-                    enabled += "net_reset,"
-                else:
-                    disable += "net_reset,"
+                    if features["resetnet"]:
+                        enabled += "net_reset,"
+                    else:
+                        disable += "net_reset,"
                 if "usb" in features:
-                    enabled += "usb,"
-                else:
-                    disable += "usb,"
+                    if features["usb"]:
+                        enabled += "usb,"
+                    else:
+                        disable += "usb,"
                 if "ieee802154" in features:
-                    enabled += "ieee802154,"
-                else:
-                    disable += "ieee802154,"
+                    if features["ieee802154"]:
+                        enabled += "ieee802154,"
+                    else:
+                        disable += "ieee802154,"
                 if "sysctl" in features:
-                    enabled += "sysctl,"
-                else:
-                    disable += "sysctl,"
+                    if features["sysctl"]:
+                        enabled += "sysctl,"
+                    else:
+                        disable += "sysctl,"
                 if "vhci" in features:
-                    enabled += "vhci,"
-                else:
-                    disable += "vhci,"
+                    if features["vhci"]:
+                        enabled += "vhci,"
+                    else:
+                        disable += "vhci,"
                 if "wifi" in features:
-                    enabled += "wifi,"
-                else:
-                    disable += "wifi,"
+                    if features["wifi"]:
+                        enabled += "wifi,"
+                    else:
+                        disable += "wifi,"
                 break
         if enabled[-1] == ',':
             enabled = enabled[:-1]
-            command += enabled[:-1] + " "
+            command += enabled + " "
         if disable[-1] == ',':
             disable = disable[:-1]
-            command += disable[:-1] + " "
+            command += disable + " "
         command += "testcase"
         return command
