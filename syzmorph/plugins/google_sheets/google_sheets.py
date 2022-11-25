@@ -17,6 +17,10 @@ class GoogleSheets(AnalysisModule):
     TYPE_UNFINISHED = (0.9,0.23,0.58,0.8)
     TYPE_SUCCEED = (0.63,0.76,0.78,1.0) # rgba(162, 196, 201, 1)
     TYPE_SUCCEED_NEED_ADAPTATION = (0.27,0.5,0.55,1.0) # rgba(69, 129, 142, 1)
+    DARK_ORANGE = (0.90, 0.56, 0.219, 1)
+    DARK_GREEN = (0.415, 0.658, 0.309, 1)
+    DARK_CYAN = (0.27, 0.505, 0.556, 1)
+    LIGHT_CYAN = (0.462, 0.641, 0.686, 1)
 
     NOT_TRIGGERED = 0
     TRIGGERED_BY_ROOT = 1
@@ -29,6 +33,8 @@ class GoogleSheets(AnalysisModule):
         self.case_type = self.TYPE_FAILED
         self.triggered_by = self.NOT_TRIGGERED
         self.private_sheet = None
+        self.n_distro = 0
+        self.distro2idx = []
         self.p_wks: pygsheets.Spreadsheet = None
         self.main_sheet = None
         self.m_wks: pygsheets.Spreadsheet = None
@@ -107,6 +113,10 @@ class GoogleSheets(AnalysisModule):
         self._write_url(wks)
         self._write_affect_distro(wks, append)
 
+        if self.plugin_finished("RawBugReproduce"):
+            self._write_raw_reproducable(wks, append)
+        else:
+            self.write_failed_str_to_cell('S'+str(self.idx), wks)
         if self.plugin_finished("BugReproduce"):
             self._write_reproducable(wks, append)
         else:
@@ -117,25 +127,13 @@ class GoogleSheets(AnalysisModule):
         if self.plugin_finished("ModulesAnalysis"):
             self._write_module_analysis(wks, append)
         else:
-            self.write_failed_str_to_cell('H'+str(self.idx), wks)
+            self.write_failed_str_to_cell('Q'+str(self.idx), wks)
 
         if self.plugin_finished("CapabilityCheck"):
             self._write_capability_check(wks)
         else:
-            self.write_failed_str_to_cell('I'+str(self.idx), wks)
+            self.write_failed_str_to_cell('R'+str(self.idx), wks)
 
-        if self.plugin_finished("SyzScope"):
-            self._write_syzscope(wks)
-        else:
-            self.write_failed_str_to_cell('J'+str(self.idx), wks)
-        if self.plugin_finished("Fuzzing"):
-            self._write_fuzzing(wks)
-        else:
-            self.write_failed_str_to_cell('K'+str(self.idx), wks)
-        if self.plugin_finished("RawBugReproduce"):
-            self._write_raw_reproducable(wks, append)
-        else:
-            self.write_failed_str_to_cell('L'+str(self.idx), wks)
         if self.plugin_finished("SyzFeatureMinimize"):
             self._write_syz_feature_minimize(wks)
         else:
@@ -161,12 +159,21 @@ class GoogleSheets(AnalysisModule):
             wks.update_value('E1', 'reproducable-normal')
             wks.update_value('F1', 'reproducable-root')
             wks.update_value('G1', 'failed')
-            wks.update_value('H1', 'module_analysis')
-            wks.update_value('I1', 'capability_check')
-            wks.update_value('J1', 'syzscope')
-            wks.update_value('K1', 'fuzzing')
-            wks.update_value('L1', 'raw_bug_reproduce')
-            wks.update_value('M1', 'syz_feature_minimize')
+            wks.update_value('H1', 'namespace')
+            wks.update_value('I1', 'module loading')
+            wks.update_value('J1', 'skip preparation')
+            wks.update_value('K1', 'repeat')
+            wks.update_value('L1', 'loop device')
+            wks.update_value('M1', 'module require')
+            wks.update_value('N1', 'Triggered')
+            wks.update_value('O1', 'Privilege Adaptation')
+            wks.update_value('P1', 'Env Adaptation')
+            wks.update_value('Q1', 'module_analysis')
+            wks.update_value('R1', 'capability_check')
+            wks.update_value('S1', 'raw_bug_reproduce')
+            wks.update_value('T1', 'syz_feature_minimize')
+            wks.update_value('U1', 'Raw trigger by normal')
+            self._render_adaptation_cells(wks)
     
     def generate_report(self):
         final_report = "\n".join(self.report)
@@ -182,50 +189,59 @@ class GoogleSheets(AnalysisModule):
     def case_in_sheets(self, wks: pygsheets.Worksheet):
         hash_value = self.case['hash']
         i = 2
+        self.n_distro = len(self.cfg.get_distros())
         while i >= 0:
             val = wks.get_value('A'+str(i))
+            title = wks.get_value('B'+str(i))
             if val == hash_value:
                 return i
             if val == "":
-                wks.insert_rows(1)
+                wks.insert_rows(1, number=self.n_distro)
                 return 2
-            i+= 1 
+            n_line = int(regx_get(r'(\d+):.*', title, 0))
+            i+= n_line
+    
+    def _merge_cell(self, column, wks):
+        if self.n_distro > 1:
+            wks.merge_cells(column+str(self.idx), column+str(self.idx+self.n_distro-1), merge_type='MERGE_COLUMNS')
     
     def _write_hash(self, wks: pygsheets.Worksheet):
         hash_value = self.case['hash']
         self.data['hash'] = hash_value
+        self._merge_cell('A', wks)
         wks.update_value('A'+str(self.idx), hash_value)
     
     def _write_title(self, wks: pygsheets.Worksheet):
-        title = self.case['title']
+        title = str(self.n_distro) + ":" + self.case['title']
         self.data['title'] = title
+        self._merge_cell('B', wks)
         wks.update_value('B'+str(self.idx), title)
     
     def _write_url(self, wks: pygsheets.Worksheet):
         url = "https://syzkaller.appspot.com/bug?id=" + self.data['hash']
         self.data['url'] = url
+        self._merge_cell('C', wks)
         wks.update_value('C'+str(self.idx), "=HYPERLINK(\"https://syzkaller.appspot.com/bug?id=\"&A{}, \"url\")".format(self.idx))
     
     def _write_affect_distro(self, wks: pygsheets.Worksheet, append):
-        l = []
         for distro in self.cfg.get_distros():
-            l.append(distro.distro_name)
-        if append:
-            old_val = wks.get_value('D'+str(self.idx)) + '\n'
-            wks.update_value('D'+str(self.idx), old_val+"\n".join(l))
-        else:
-            wks.update_value('D'+str(self.idx), "\n".join(l))
+            self.distro2idx.append(distro.distro_name)
+            wks.update_value('D'+self.distro_idx(distro.distro_name), distro.distro_name)
+            wks.update_value('H'+self.distro_idx(distro.distro_name), False)
+            wks.update_value('I'+self.distro_idx(distro.distro_name), False)
+            wks.update_value('J'+self.distro_idx(distro.distro_name), False)
+            wks.update_value('K'+self.distro_idx(distro.distro_name), False)
+            wks.update_value('L'+self.distro_idx(distro.distro_name), False)
+            wks.update_value('M'+self.distro_idx(distro.distro_name), False)
+            wks.update_value('N'+self.distro_idx(distro.distro_name), False)
     
     def _write_reproducable(self, wks: pygsheets.Worksheet, append):
-        self.data['reproduce-by-normal'] = ""
-        self.data['reproduce-by-root'] = ""
-        self.data['failed-on'] = ""
+        self.data['reproduce-by-normal'] = []
+        self.data['reproduce-by-root'] = []
+        self.data['failed-on'] = []
         reproducable_regx = r'(.*) triggers a (Kasan )?bug: ([A-Za-z0-9_: -/=]+) (by normal user|by root user)'
         failed_regx = r'(.+) fail to trigger the bug'
         path_report = os.path.join(self.path_case, "BugReproduce", "Report_BugReproduce")
-        normal_text = ''
-        root_text = ''
-        fail_text = ''
         path_result = os.path.join(self.path_case, "BugReproduce", "results.json")
         result_json = json.load(open(path_result, 'r'))
         if os.path.exists(path_report):
@@ -237,54 +253,58 @@ class GoogleSheets(AnalysisModule):
                         bug_title = regx_get(reproducable_regx, line, 2)
                         privilege = regx_get(reproducable_regx, line, 3)
                         if privilege == 'by normal user':
-                            normal_text += "{}-{} {}\n".format(distro, bug_title, json.dumps(result_json[distro]))
-                            self.data['reproduce-by-normal'] += "{} ".format(distro)
+                            wks.update_value('E'+self.distro_idx(distro), "{}-{} {}".format(distro, bug_title, json.dumps(result_json[distro])))
+                            self.data['reproduce-by-normal'].append(format(distro))
                             self.triggered_by = self.TRIGGERED_BY_NORMAL
+                            self.case_type = self.TYPE_SUCCEED
+                            if distro not in self.data['raw-reproduce-by-normal']:
+                                if result_json[distro]['namespace']:
+                                    self._set_cell_to_true('H'+self.distro_idx(distro), wks)
+                                if 'tun' in result_json[distro]['skip_funcs'] or 'devlink_pci' in result_json[distro]['skip_funcs']:
+                                    self._set_cell_to_true('J' + self.distro_idx(distro), wks)
+                            if 'unprivileged_module_loading' in  result_json[distro] and result_json[distro]['unprivileged_module_loading']:
+                                self._set_cell_to_true('I'+self.distro_idx(distro))
+                            self._check_env_adaptation(self.idx++self.distro2idx.index(distro), wks, result_json, distro)
+                            self._set_cell_to_true('N' + self.distro_idx(distro), wks)
                         if privilege == 'by root user':
-                            root_text += "{}-{} {}\n".format(distro, bug_title, json.dumps(result_json[distro]))
-                            self.data['reproduce-by-root'] += "{} ".format(distro)
+                            wks.update_value('F'+self.distro_idx(distro), "{}-{} {}".format(distro, bug_title, json.dumps(result_json[distro])))
+                            self.data['reproduce-by-root'].append(format(distro))
                             self.triggered_by = self.TRIGGERED_BY_ROOT
+                            self.case_type = self.TYPE_SUCCEED
+                            self._check_env_adaptation(self.distro_idx(distro), wks, result_json, distro)
+                            self._set_cell_to_true('N' + self.distro_idx(distro), wks)
                     if regx_match(failed_regx, line):
                         distros = regx_get(failed_regx, line, 0)
-                        fail_text += "{}\n".format(distros)
-                        self.data['failed-on'] += "{} ".format(distros)
-        if normal_text != '' or root_text != '':
-            self.case_type = self.TYPE_SUCCEED
-
-        if append:
-            old_val = wks.get_value('E'+str(self.idx)) + '\n'
-            wks.update_value('E'+str(self.idx), old_val + normal_text)
-            old_val = wks.get_value('F'+str(self.idx)) + '\n'
-            wks.update_value('F'+str(self.idx), old_val + root_text)
-            old_val = wks.get_value('G'+str(self.idx)) + '\n'
-            wks.update_value('G'+str(self.idx), old_val + fail_text)
-        else:
-            wks.update_value('E'+str(self.idx), normal_text)
-            wks.update_value('F'+str(self.idx), root_text)
-            wks.update_value('G'+str(self.idx), fail_text)
+                        for distro in distros.split(' '):
+                            if distro == '':
+                                continue
+                            wks.update_value('G'+str(self.distro_idx(distro)), distro)
+                            self.data['failed-on'].append(format(distro))
 
     def _write_module_analysis(self, wks: pygsheets.Worksheet, append):
         self.data['modules-analysis'] = ""
         path_result = os.path.join(self.path_case, "ModulesAnalysis", "results.json")
         result_json = json.load(open(path_result, 'r'))
+        self._merge_cell('Q', wks)
         v = json.dumps(result_json)
         if append:
-            old_val = wks.get_value('H'+str(self.idx)) + '\n'
+            old_val = wks.get_value('Q'+str(self.idx)) + '\n'
             new_data = old_val + v
             if len(new_data) > 50000:
                 new_data = new_data[:49999]
-            wks.update_value('H'+str(self.idx), new_data)
+            wks.update_value('Q'+str(self.idx), new_data)
         else:
             new_data = v
             if len(new_data) > 50000:
                 new_data = new_data[:49999]
-            wks.update_value('H'+str(self.idx), new_data)
+            wks.update_value('Q'+str(self.idx), new_data)
 
     def _write_capability_check(self, wks: pygsheets.Worksheet):
         res = {}
         regx1 = r'([A-Z_]+) seems to be bypassable'
         regx2 = r'([A-Z_]+) is checked by capable(), can not be ignored by user namespace'
         path_report = os.path.join(self.path_case, "CapabilityCheck", "Report_CapabilityCheck")
+        self._merge_cell('R', wks)
         if os.path.exists(path_report):
             with open(path_report, "r") as f:
                 report = f.readlines()
@@ -300,7 +320,7 @@ class GoogleSheets(AnalysisModule):
                         if cap_name not in res:
                             res[cap_name] = 'nope'
                             t += line
-                wks.update_value('I'+str(self.idx), t)
+                wks.update_value('R'+str(self.idx), t)
                 self.data['capability-check'] = t
     
     def _write_syzscope(self, wks: pygsheets.Worksheet):
@@ -324,15 +344,12 @@ class GoogleSheets(AnalysisModule):
                 self.data['fuzzing'] = t
     
     def _write_raw_reproducable(self, wks: pygsheets.Worksheet, append):
-        self.data['raw-reproduce-by-normal'] = ""
-        self.data['raw-reproduce-by-root'] = ""
-        self.data['raw-failed-on'] = ""
+        self.data['raw-reproduce-by-normal'] = []
+        self.data['raw-reproduce-by-root'] = []
+        self.data['raw-failed-on'] = []
         reproducable_regx = r'(.*) triggers a (Kasan )?bug: ([A-Za-z0-9_: -/]+) (by normal user|by root user)'
         failed_regx = r'(.+) fail to trigger the bug'
         path_report = os.path.join(self.path_case, "RawBugReproduce", "Report_RawBugReproduce")
-        normal_text = ''
-        root_text = ''
-        fail_text = ''
         triggered_by = self.NOT_TRIGGERED
         if os.path.exists(path_report):
             with open(path_report, "r") as f:
@@ -343,29 +360,22 @@ class GoogleSheets(AnalysisModule):
                         bug_title = regx_get(reproducable_regx, line, 2)
                         privilege = regx_get(reproducable_regx, line, 3)
                         if privilege == 'by normal user':
-                            normal_text += "{}-{} by normal user\n".format(distro, bug_title)
-                            self.data['raw-reproduce-by-normal'] += "{} ".format(distro)
+                            wks.update_value('S'+self.distro_idx(distro), "{}-{} by normal user\n".format(distro, bug_title))
+                            self.data['raw-reproduce-by-normal'].append(distro)
                             triggered_by = self.TRIGGERED_BY_NORMAL
+                            self._set_cell_to_true('N' + self.distro_idx(distro), wks)
+                            self._set_cell_to_true('U'+self.distro_idx(distro))
                         if privilege == 'by root user':
-                            root_text += "{}-{} by root user\n".format(distro, bug_title)
-                            self.data['raw-reproduce-by-root'] += "{} ".format(distro)
+                            wks.update_value('S'+self.distro_idx(distro), "{}-{} by root user\n".format(distro, bug_title))
+                            self.data['raw-reproduce-by-root'].append(distro)
                             triggered_by = self.TRIGGERED_BY_ROOT
+                            self._set_cell_to_true('N' + self.distro_idx(distro), wks)
                     if regx_match(failed_regx, line):
                         distros = regx_get(failed_regx, line, 0)
-                        fail_text += "{}\n".format(distros)
-                        self.data['raw-failed-on'] += "{} ".format(distros)
-        if root_text != '':
-            if append:
-                old_val = wks.get_value('L'+str(self.idx)) + '\n'
-                wks.update_value('L'+str(self.idx), old_val + root_text)
-            else:
-                wks.update_value('L'+str(self.idx), root_text)
-        if normal_text != '':
-            if append:
-                old_val = wks.get_value('L'+str(self.idx)) + '\n'
-                wks.update_value('L'+str(self.idx), old_val + normal_text)
-            else:
-                wks.update_value('L'+str(self.idx), normal_text)
+                        for distro in distros.split(' '):
+                            if distro == '':
+                                continue
+                            self.data['raw-failed-on'].append(distro)
         if self.triggered_by != self.NOT_TRIGGERED:
             if triggered_by == self.NOT_TRIGGERED or \
                     (triggered_by == self.TRIGGERED_BY_ROOT and self.triggered_by == self.TRIGGERED_BY_NORMAL):
@@ -376,10 +386,55 @@ class GoogleSheets(AnalysisModule):
         if os.path.exists(path_results):
             result_json = json.load(open(path_results, "r"))
             v = json.dumps(result_json)
-            wks.update_value('M'+str(self.idx), v)
+            wks.update_value('T'+str(self.idx), v)
+    
+    def _check_env_adaptation(self, idx, wks, result, distro):
+        if distro not in self.data['raw-failed-on']:
+            return
+        path_testcase = os.path.join(self.path_case, "SyzFeatureMinimize", "testcase")
+        if self._is_repeat(path_testcase, result[distro]):
+            self._set_cell_to_true('K' + str(idx), wks)
+        if self._skip_preparation(result[distro]):
+            self._set_cell_to_true('J' + str(idx), wks)
+        if self._check_loop_device(result[distro]):
+            self._set_cell_to_true('L' + str(idx), wks)
+        if self._module_missing(result[distro]):
+            self._set_cell_to_true('M' + str(idx), wks)
+    
+    def _is_repeat(self, path_testcase, result):
+        if not result['repeat']:
+            return False
+        with open(path_testcase, 'r') as f:
+            text = f.readlines()
+            for line in text:
+                if line.find('{') != -1 and line.find('}') != -1:
+                    pm = {}
+                    try:
+                        pm = json.loads(line[1:])
+                    except json.JSONDecodeError:
+                        pm = syzrepro_convert_format(line[1:])
+                    return 'repeat' not in pm or not pm['repeat']
+        return False
+
+    def _skip_preparation(self, result):
+        return 'setup_usb' in result['skip_funcs'] or 'setup_leak' in result['skip_funcs']
+    
+    def _check_loop_device(self, result):
+        return 'loop_dev' in  result['device_tuning']
+    
+    def _module_missing(self, result):
+        return len(result['missing_module']) > 0 or len(result['env_modules']) > 0
+    
+    def _gather_adaptation(self, idx, wks: pygsheets.Worksheet):
+        wks.update_value('O' + str(idx), "=OR(H2,I2)")
+        wks.update_value('P' + str(idx), "=OR(J2,K2,L2,M2)")
 
     def write_failed_str_to_cell(self, pos, wks):
-        self._write_to_cell(pos, "failed", wks)
+        old_val = wks.get_value(pos) + '\n' + "failed"
+        self._write_to_cell(pos, old_val, wks)
+
+    def _set_cell_to_true(self, pos, wks: pygsheets.Worksheet):
+        wks.update_value(pos, True)
 
     def _write_to_cell(self, pos, text, wks):
         wks.update_value(pos, text)
@@ -390,6 +445,18 @@ class GoogleSheets(AnalysisModule):
             cell = wks.cell(ch+str(self.idx))
             cell.color = self.case_type
     
+    def _render_adaptation_cells(self, wks):
+        self._render_cell_color('H1', self.DARK_ORANGE, wks)
+        self._render_cell_color('I1', self.DARK_ORANGE, wks)
+        self._render_cell_color('J1', self.DARK_GREEN, wks)
+        self._render_cell_color('K1', self.DARK_GREEN, wks)
+        self._render_cell_color('L1', self.DARK_GREEN, wks)
+        self._render_cell_color('M1', self.DARK_GREEN, wks)
+        self._render_cell_color('N1', self.DARK_CYAN, wks)
+        self._render_cell_color('O1', self.DARK_ORANGE, wks)
+        self._render_cell_color('P1', self.DARK_GREEN, wks)
+        self._render_cell_color('U1', self.LIGHT_CYAN, wks)
+
     def _render_cell_color(self, pos, color, wks: pygsheets.Worksheet):
         cell = wks.cell(pos)
         cell.color = color
@@ -401,3 +468,5 @@ class GoogleSheets(AnalysisModule):
     def cleanup(self):
         super().cleanup()
 
+    def distro_idx(self, distro):
+        return str(self.idx+self.distro2idx.index(distro))
