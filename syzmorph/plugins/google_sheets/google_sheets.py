@@ -1,5 +1,6 @@
 import pygsheets
 import time
+import traceback
 
 from infra.tool_box import *
 from plugins import AnalysisModule
@@ -79,8 +80,17 @@ class GoogleSheets(AnalysisModule):
                     return ret
                 except Exception as e:
                     self.err_msg("GoogleSheets error: {}".format(e))
+                    tb = traceback.format_exc()
+                    self.logger.error(tb)
                     # Sometimes the request is exceed the limits set by Google
                     time.sleep(60)
+        return inner
+
+    def sleeper(func):
+        def inner(self, *args):
+            ret = func(self, *args)
+            time.sleep(3)
+            return ret
         return inner
 
     @handle_error
@@ -150,6 +160,7 @@ class GoogleSheets(AnalysisModule):
         except Exception as e:
             self.err_msg("slackbot error: {}".format(e))
     
+    @sleeper
     def create_banner(self, wks: pygsheets.Worksheet):
         if wks.get_value('A1') != 'hash':
             wks.update_value('A1', 'hash')
@@ -205,24 +216,28 @@ class GoogleSheets(AnalysisModule):
         if self.n_distro > 1:
             wks.merge_cells(column+str(self.idx), column+str(self.idx+self.n_distro-1), merge_type='MERGE_COLUMNS')
     
+    @sleeper
     def _write_hash(self, wks: pygsheets.Worksheet):
         hash_value = self.case['hash']
         self.data['hash'] = hash_value
         self._merge_cell('A', wks)
         wks.update_value('A'+str(self.idx), hash_value)
     
+    @sleeper
     def _write_title(self, wks: pygsheets.Worksheet):
         title = str(self.n_distro) + ":" + self.case['title']
         self.data['title'] = title
         self._merge_cell('B', wks)
         wks.update_value('B'+str(self.idx), title)
     
+    @sleeper
     def _write_url(self, wks: pygsheets.Worksheet):
         url = "https://syzkaller.appspot.com/bug?id=" + self.data['hash']
         self.data['url'] = url
         self._merge_cell('C', wks)
         wks.update_value('C'+str(self.idx), "=HYPERLINK(\"https://syzkaller.appspot.com/bug?id=\"&A{}, \"url\")".format(self.idx))
     
+    @sleeper
     def _write_affect_distro(self, wks: pygsheets.Worksheet, append):
         for distro in self.cfg.get_distros():
             self.distro2idx.append(distro.distro_name)
@@ -235,6 +250,7 @@ class GoogleSheets(AnalysisModule):
             wks.update_value('M'+self.distro_idx(distro.distro_name), False)
             wks.update_value('N'+self.distro_idx(distro.distro_name), False)
     
+    @sleeper
     def _write_reproducable(self, wks: pygsheets.Worksheet, append):
         self.data['reproduce-by-normal'] = []
         self.data['reproduce-by-root'] = []
@@ -263,7 +279,7 @@ class GoogleSheets(AnalysisModule):
                                 if 'tun' in result_json[distro]['skip_funcs'] or 'devlink_pci' in result_json[distro]['skip_funcs']:
                                     self._set_cell_to_true('J' + self.distro_idx(distro), wks)
                             if 'unprivileged_module_loading' in  result_json[distro] and result_json[distro]['unprivileged_module_loading']:
-                                self._set_cell_to_true('I'+self.distro_idx(distro))
+                                self._set_cell_to_true('I'+self.distro_idx(distro), wks)
                             self._check_env_adaptation(self.idx++self.distro2idx.index(distro), wks, result_json, distro)
                             self._set_cell_to_true('N' + self.distro_idx(distro), wks)
                         if privilege == 'by root user':
@@ -281,6 +297,7 @@ class GoogleSheets(AnalysisModule):
                             wks.update_value('G'+str(self.distro_idx(distro)), distro)
                             self.data['failed-on'].append(format(distro))
 
+    @sleeper
     def _write_module_analysis(self, wks: pygsheets.Worksheet, append):
         self.data['modules-analysis'] = ""
         path_result = os.path.join(self.path_case, "ModulesAnalysis", "results.json")
@@ -298,7 +315,8 @@ class GoogleSheets(AnalysisModule):
             if len(new_data) > 50000:
                 new_data = new_data[:49999]
             wks.update_value('Q'+str(self.idx), new_data)
-
+            
+    @sleeper
     def _write_capability_check(self, wks: pygsheets.Worksheet):
         res = {}
         regx1 = r'([A-Z_]+) seems to be bypassable'
@@ -323,6 +341,7 @@ class GoogleSheets(AnalysisModule):
                 wks.update_value('R'+str(self.idx), t)
                 self.data['capability-check'] = t
     
+    @sleeper
     def _write_syzscope(self, wks: pygsheets.Worksheet):
         self.data['syzscope'] = ""
         path_report = os.path.join(self.path_case, "Syzscope", "Report_Syzscope")
@@ -333,6 +352,7 @@ class GoogleSheets(AnalysisModule):
                 wks.update_value('J'+str(self.idx), t)
                 self.data['syzscope'] = t
     
+    @sleeper
     def _write_fuzzing(self, wks: pygsheets.Worksheet):
         self.data['fuzzing'] = ""
         path_report = os.path.join(self.path_case, "Fuzzing", "Report_Fuzzing")
@@ -343,6 +363,7 @@ class GoogleSheets(AnalysisModule):
                 wks.update_value('K'+str(self.idx), t)
                 self.data['fuzzing'] = t
     
+    @sleeper
     def _write_raw_reproducable(self, wks: pygsheets.Worksheet, append):
         self.data['raw-reproduce-by-normal'] = []
         self.data['raw-reproduce-by-root'] = []
@@ -364,7 +385,7 @@ class GoogleSheets(AnalysisModule):
                             self.data['raw-reproduce-by-normal'].append(distro)
                             triggered_by = self.TRIGGERED_BY_NORMAL
                             self._set_cell_to_true('N' + self.distro_idx(distro), wks)
-                            self._set_cell_to_true('U'+self.distro_idx(distro))
+                            self._set_cell_to_true('U'+self.distro_idx(distro), wks)
                         if privilege == 'by root user':
                             wks.update_value('S'+self.distro_idx(distro), "{}-{} by root user\n".format(distro, bug_title))
                             self.data['raw-reproduce-by-root'].append(distro)
@@ -381,6 +402,7 @@ class GoogleSheets(AnalysisModule):
                     (triggered_by == self.TRIGGERED_BY_ROOT and self.triggered_by == self.TRIGGERED_BY_NORMAL):
                 self.case_type = self.TYPE_SUCCEED_NEED_ADAPTATION
     
+    @sleeper
     def _write_syz_feature_minimize(self, wks: pygsheets.Worksheet):
         path_results = os.path.join(self.path_case, "SyzFeatureMinimize", "results.json")
         if os.path.exists(path_results):

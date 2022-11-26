@@ -27,7 +27,8 @@ class BugReproduce(AnalysisModule):
 
     def __init__(self):
         super().__init__()
-        self.c_prog = False
+        self.c_prog = True
+        self.ori_c_prog = False
         self.syz_feature = {}
         self.syz_feature_mini = None
         self.bug_title = ''
@@ -104,15 +105,15 @@ class BugReproduce(AnalysisModule):
 
         if not self.plugin_finished("SyzFeatureMinimize"):
             self.info_msg("BugReproduce will use C Prog instead")
-            self.c_prog = True
+            self.ori_c_prog = True
         else:
             self.syz_feature_mini = self.cfg.get_plugin(SyzFeatureMinimize.NAME).instance
             self.syz_feature_mini.path_case_plugin = os.path.join(self.path_case, SyzFeatureMinimize.NAME)
             self.syz_feature = self.syz_feature_mini.results.copy()
             self.logger.info("Receive syz_feature: {} {}".format(self.syz_feature, self.syz_feature_mini))
-            if self.syz_feature['prog_status'] == SyzFeatureMinimize.C_PROG:
-                self.c_prog = True
-                self.syz_feature.pop('prog_status')
+            if self.syz_feature['prog_status'] == SyzFeatureMinimize.BOTH_FAIL:
+                self.ori_c_prog = True
+            self.syz_feature.pop('prog_status')
         for distro in self.cfg.get_distros():
             self.info_msg("Reproducing bugs on {}".format(distro.distro_name))
             if self.syz_feature_mini != None:
@@ -230,15 +231,12 @@ class BugReproduce(AnalysisModule):
             self.set_stage_text("\[root] Booting {}".format(distro.distro_name))
         else:
             self.set_stage_text("\[user] Booting {}".format(distro.distro_name))
-        self.distro_lock.acquire()
-        poc_feature = self.tune_poc(root, distro)
-        self.distro_lock.release()
         if root:
             log_name = "{}-{}-root".format(log_prefix, distro.distro_name)
         else:
             log_name = "{}-{}-normal".format(log_prefix, distro.distro_name)
         result_queue = multiprocessing.Queue()
-        func_args += (poc_feature, result_queue)
+        func_args += (distro.distro_name, result_queue)
         distro.repro.init_logger(self.logger)
         self.root_user = distro.repro.root_user
         self.normal_user = distro.repro.normal_user
@@ -265,7 +263,7 @@ class BugReproduce(AnalysisModule):
                     preload_modules.extend(missing_modules[:idx])
                     missing_modules = missing_modules[idx:]
                     func_args = (missing_modules, essential_modules, preload_modules)
-                    func_args += (poc_feature, result_queue)
+                    func_args += (distro.distro_name, result_queue)
                     continue
             break
         return False, t
@@ -305,23 +303,18 @@ class BugReproduce(AnalysisModule):
             raise Exception("[{}] failed to sort missing modules {}".format(self.case_hash, res))
         return res
 
-    def tune_poc(self, root: bool, distro):
+    def tune_poc(self, root: bool, distro_name: str, src, dst):
         feature = 0
         # why don't we just enable namespace all the time?
         need_namespace = False
 
         if self.check_poc_capability() and not root:
             need_namespace = True
-            self.results[distro.distro_name]['namespace'] = True
+            self.results[distro_name]['namespace'] = True
             feature |= self.FEATURE_NAMESPACE
 
         skip_funcs = ["setup_usb();", "setup_leak();"]
         data = []
-        src = os.path.join(self.path_case, "poc.c")
-        if not root:
-            dst = os.path.join(self.path_case_plugin, "poc_normal.c")
-        else:
-            dst = os.path.join(self.path_case_plugin, "poc_root.c")
 
         if os.path.exists(dst):
             os.remove(dst)
@@ -351,15 +344,15 @@ class BugReproduce(AnalysisModule):
                     data.insert(len(data)-1, "#include \"sandbox.h\"\n")
                     insert_line.append([i+2, "setup_sandbox();\n"])
             
-            if regx_match(loop_func, line):
+            """if regx_match(loop_func, line):
                 if code[i+1].strip() == "{":
                     insert_line.append([i+2, "printf(\"MAGIC!!?REACH POC CORE FUNCTION\\n\");\n"])
-
+            """
             for each in skip_funcs:
                 if regx_match(each, line):
                     data.pop()
-                    if each not in self.results[distro.distro_name]['skip_funcs']:
-                        self.results[distro.distro_name]['skip_funcs'].append(each)
+                    if each not in self.results[distro_name]['skip_funcs']:
+                        self.results[distro_name]['skip_funcs'].append(each)
 
             # We dont have too much devices to connect, limit the number to 1
             if '*hash = \'0\' + (char)(a1 % 10);' in line:
@@ -369,16 +362,16 @@ class BugReproduce(AnalysisModule):
             if 'setup_loop_device' in line:
                 if not (feature & self.FEATURE_LOOP_DEVICE):
                     feature |= self.FEATURE_LOOP_DEVICE
-                    if 'loop_dev' not in self.results[distro.distro_name]['device_tuning']:
-                        self.results[distro.distro_name]['device_tuning'].append('loop_dev')
+                    if 'loop_dev' not in self.results[distro_name]['device_tuning']:
+                        self.results[distro_name]['device_tuning'].append('loop_dev')
             
             if 'hwsim80211_create_device' in line:
                 if not (feature & self.FEATURE_MOD4ENV):
                     feature |= self.FEATURE_MOD4ENV
-                    self.results[distro.distro_name]['env_modules'].append('mac80211_hwsim')
+                    self.results[distro_name]['env_modules'].append('mac80211_hwsim')
                 if 'mac80211_hwsim' not in self._addition_modules:
                     self._addition_modules.append('mac80211_hwsim')
-                    self.results[distro.distro_name]['unprivileged_module_loading'] = True
+                    self.results[distro_name]['unprivileged_module_loading'] = True
 
         if data != []:
             fdst.writelines(data)
@@ -433,7 +426,7 @@ class BugReproduce(AnalysisModule):
             q.put([res, trigger_hunted_bug])
 
     @expt_handler
-    def tweak_modules(self, qemu: VMInstance, root, missing_modules: list, essential_modules: list, preload_modules: list, poc_feature: int, result_queue: queue.Queue):
+    def tweak_modules(self, qemu: VMInstance, root, missing_modules: list, essential_modules: list, preload_modules: list, distro_name: str, result_queue: queue.Queue):
         #threading.Thread(target=self._update_qemu_timer_status, args=(th_index, qemu), name="update_qemu_timer_status").start()
         
         tested_modules = []
@@ -445,12 +438,12 @@ class BugReproduce(AnalysisModule):
         qemu.logger.info("Loading essential modules {}".format(essential_modules))
         if essential_modules != []:
             self._enable_missing_modules(qemu, essential_modules)
-            trigger = self._execute(root, qemu, poc_feature)
+            trigger = self._execute(root, qemu, distro_name)
             if trigger:
                 self.results[vm_tag]["repeat"] = False
                 result_queue.put(self.results)
                 return tested_modules
-            trigger = self._execute(root, qemu, poc_feature, repeat=True)
+            trigger = self._execute(root, qemu, distro_name, repeat=True)
             if trigger:
                 self.results[vm_tag]["repeat"] = True
                 result_queue.put(self.results)
@@ -464,12 +457,12 @@ class BugReproduce(AnalysisModule):
             if not self._enable_missing_modules(qemu, [module]):
                 continue
             tested_modules.append(module)
-            trigger = self._execute(root, qemu, poc_feature)
+            trigger = self._execute(root, qemu, distro_name)
             if trigger:
                 self.results[vm_tag]["repeat"] = False
                 result_queue.put(self.results)
                 return tested_modules
-            trigger = self._execute(root, qemu, poc_feature, repeat=True)
+            trigger = self._execute(root, qemu, distro_name, repeat=True)
             if trigger:
                 self.results[vm_tag]["repeat"] = True
                 result_queue.put(self.results)
@@ -478,7 +471,7 @@ class BugReproduce(AnalysisModule):
         return []
     
     @expt_handler
-    def capture_kasan(self, qemu, root, poc_feature, result_queue: queue.Queue):
+    def capture_kasan(self, qemu, root, distro_name: str, result_queue: queue.Queue):
         #threading.Thread(target=self._update_qemu_timer_status, args=(th_index, qemu), name="update_qemu_timer_status").start()
         vm_tag = "-".join(qemu.tag.split('-')[:-1])
 
@@ -486,12 +479,12 @@ class BugReproduce(AnalysisModule):
             self.logger.info("Loading addition modules for environment setup: {}".format(self._addition_modules))
             self._enable_missing_modules(qemu, self._addition_modules)
 
-        trigger = self._execute(root, qemu, poc_feature)
+        trigger = self._execute(root, qemu, distro_name)
         if trigger:
             self.results[vm_tag]["repeat"] = False
             result_queue.put(self.results)
             return
-        trigger = self._execute(root, qemu, poc_feature, repeat=True)
+        trigger = self._execute(root, qemu, distro_name, repeat=True)
         if trigger:
             self.results[vm_tag]["repeat"] = True
             result_queue.put(self.results)
@@ -518,9 +511,35 @@ class BugReproduce(AnalysisModule):
                 return False
         return True
 
-    def _execute(self, root, qemu, poc_feature, repeat=False):
+    def _execute(self, root, qemu, distro_name, repeat=False):
+        self.distro_lock.acquire()
+        if self.ori_c_prog:
+            src = os.path.join(self.path_case, "poc.c")
+            if not root:
+                dst = os.path.join(self.path_case_plugin, "poc_normal.c")
+            else:
+                dst = os.path.join(self.path_case_plugin, "poc_root.c")
+        else:
+            if repeat:
+                src = os.path.join(self.path_case, "PoC_repeat.c")
+            else:
+                src = os.path.join(self.path_case, "PoC_no_repeat.c")
+            if not root:
+                if repeat:
+                    poc_name = "poc_normal_repeat.c"
+                else:
+                    poc_name = "poc_normal_no_repeat.c"
+            else:
+                if repeat:
+                    poc_name = "poc_root_repeat.c"
+                else:
+                    poc_name = "poc_root_no_repeat.c"
+            dst = os.path.join(self.path_case_plugin, poc_name)
+        poc_feature = self.tune_poc(root, distro_name, src, dst)
+        self.distro_lock.release()
+        
         if self.c_prog:
-            return self._execute_poc(root, qemu, poc_feature, repeat)
+            return self._execute_poc(root, qemu, poc_feature, poc_name, repeat)
         else:
             return self._execute_syz(root, qemu, poc_feature, repeat)
     
@@ -554,13 +573,11 @@ class BugReproduce(AnalysisModule):
         time.sleep(5)
         return qemu.trigger_crash
 
-    def _execute_poc(self, root, qemu: VMInstance, poc_feature, repeat=False):
+    def _execute_poc(self, root, qemu: VMInstance, poc_feature, poc_src, repeat=False):
         if root:
             user = self.root_user
-            poc_src = "poc_root.c"
         else:
             user = self.normal_user
-            poc_src = "poc_normal.c"
         poc_path = os.path.join(self.path_case_plugin, poc_src)
         qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
         if os.path.exists(os.path.join(self.path_case_plugin, "sandbox.h")):
@@ -574,7 +591,7 @@ class BugReproduce(AnalysisModule):
             self.logger.fatal("Fail to compile poc!")
             return [[], False]
 
-        if repeat:
+        if repeat and self.ori_c_prog:
             script = os.path.join(self.path_package, "scripts/run-script.sh")
             chmodX(script)
             p = Popen([script, str(qemu.port), self.path_case_plugin, qemu.key, user],
@@ -589,7 +606,7 @@ class BugReproduce(AnalysisModule):
         qemu.logger.info("running PoC")
         qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user=self.root_user, wait=True)
         self._check_poc_feature(poc_feature, qemu, user)
-        if repeat:
+        if repeat and self.ori_c_prog:
             qemu.command(cmds="chmod +x run.sh && ./run.sh", user=user, wait=True, timeout=self.repro_timeout)
         else:
             qemu.command(cmds="rm -rf ./tmp", user=user, wait=True)

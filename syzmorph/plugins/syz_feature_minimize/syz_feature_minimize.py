@@ -109,9 +109,11 @@ class SyzFeatureMinimize(AnalysisModule):
         features = self.get_features()
         prog_status = self.test_two_prog(features)
         features['prog_status'] = prog_status
+        self.results = features
         self.info_msg("self.results: {} {}".format(self.results, self))
         if prog_status == self.BOTH_FAIL:
-            prog_status = self.SYZ_PROG
+            self.generate_new_PoC(features)
+            return True
         if prog_status == self.C_PROG:
             self.generate_new_PoC(features)
             return True
@@ -397,66 +399,54 @@ class SyzFeatureMinimize(AnalysisModule):
                     command += "-repeat=" + "1 "
                 #It makes no sense that limiting the features of syz-execrpog, just enable them all
                 
-                if "tun" in features:
-                    if features["tun"]:
-                        enabled += "tun,"
-                    else:
-                        disable += "tun,"
-                if "binfmt_misc" in features:
-                    if features["binfmt_misc"]:
-                        enabled += "binfmt_misc,"
-                    else:
-                        disable += "binfmt_misc,"
-                if "cgroups" in features:
-                    if features["cgroups"]:
-                        enabled += "cgroups,"
-                    else:
-                        disable += "cgroups,"
-                if "close_fds" in features:
-                    if features["close_fds"]:
-                        enabled += "close_fds,"
-                    else:
-                        disable += "close_fds,"
-                if "devlinkpci" in features:
-                    if features["devlinkpci"]:
-                        enabled += "devlink_pci,"
-                    else:
-                        disable += "devlink_pci,"
-                if "netdev" in features:
-                    if features["netdev"]:
-                        enabled += "net_dev,"
-                    else:
-                        disable += "net_dev,"
-                if "resetnet" in features:
-                    if features["resetnet"]:
-                        enabled += "net_reset,"
-                    else:
-                        disable += "net_reset,"
-                if "usb" in features:
-                    if features["usb"]:
-                        enabled += "usb,"
-                    else:
-                        disable += "usb,"
-                if "ieee802154" in features:
-                    if features["ieee802154"]:
-                        enabled += "ieee802154,"
-                    else:
-                        disable += "ieee802154,"
-                if "sysctl" in features:
-                    if features["sysctl"]:
-                        enabled += "sysctl,"
-                    else:
-                        disable += "sysctl,"
-                if "vhci" in features:
-                    if features["vhci"]:
-                        enabled += "vhci,"
-                    else:
-                        disable += "vhci,"
-                if "wifi" in features:
-                    if features["wifi"]:
-                        enabled += "wifi,"
-                    else:
-                        disable += "wifi,"
+                if "tun" in features and features["tun"]:
+                    enabled += "tun,"
+                else:
+                    disable += "tun,"
+                if "binfmt_misc" in features and features["binfmt_misc"]:
+                    enabled += "binfmt_misc,"
+                else:
+                    disable += "binfmt_misc,"
+                if "cgroups" in features and features["cgroups"]:
+                    enabled += "cgroups,"
+                else:
+                    disable += "cgroups,"
+                if "close_fds" in features and features["close_fds"]:
+                    enabled += "close_fds,"
+                else:
+                    disable += "close_fds,"
+                if "devlinkpci" in features and features["devlinkpci"]:
+                    enabled += "devlink_pci,"
+                else:
+                    disable += "devlink_pci,"
+                if "netdev" in features and features["netdev"]:
+                    enabled += "net_dev,"
+                else:
+                    disable += "net_dev,"
+                if "resetnet" in features and features["resetnet"]:
+                    enabled += "net_reset,"
+                else:
+                    disable += "net_reset,"
+                if "usb" in features and features["usb"]:
+                    enabled += "usb,"
+                else:
+                    disable += "usb,"
+                if "ieee802154" in features and features["ieee802154"]:
+                    enabled += "ieee802154,"
+                else:
+                    disable += "ieee802154,"
+                if "sysctl" in features and features["sysctl"]:
+                    enabled += "sysctl,"
+                else:
+                    disable += "sysctl,"
+                if "vhci" in features and features["vhci"]:
+                    enabled += "vhci,"
+                else:
+                    disable += "vhci,"
+                if "wifi" in features and features["wifi"]:
+                    enabled += "wifi,"
+                else:
+                    disable += "wifi,"
                 break
         if enabled[-1] == ',':
             enabled = enabled[:-1]
