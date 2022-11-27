@@ -27,7 +27,7 @@ class BugReproduce(AnalysisModule):
 
     def __init__(self):
         super().__init__()
-        self.c_prog = True
+        self.c_prog = False
         self.ori_c_prog = False
         self.syz_feature = {}
         self.syz_feature_mini = None
@@ -106,13 +106,14 @@ class BugReproduce(AnalysisModule):
         if not self.plugin_finished("SyzFeatureMinimize"):
             self.info_msg("BugReproduce will use C Prog instead")
             self.ori_c_prog = True
+            self.c_prog = True
         else:
             self.syz_feature_mini = self.cfg.get_plugin(SyzFeatureMinimize.NAME).instance
             self.syz_feature_mini.path_case_plugin = os.path.join(self.path_case, SyzFeatureMinimize.NAME)
             self.syz_feature = self.syz_feature_mini.results.copy()
             self.logger.info("Receive syz_feature: {} {}".format(self.syz_feature, self.syz_feature_mini))
-            if self.syz_feature['prog_status'] == SyzFeatureMinimize.BOTH_FAIL:
-                self.ori_c_prog = True
+            if self.syz_feature['prog_status'] == SyzFeatureMinimize.C_PROG:
+                self.c_prog = False
             self.syz_feature.pop('prog_status')
         for distro in self.cfg.get_distros():
             self.info_msg("Reproducing bugs on {}".format(distro.distro_name))
@@ -184,7 +185,7 @@ class BugReproduce(AnalysisModule):
                 self.results[distro.distro_name]['root'] = res['root']
             else:
                 if self.check_module_priviledge(essential_modules):
-                    success, _ = self.reproduce(distro, func=self.tweak_modules, func_args=(essential_modules, [], [],), attempt=1, root=False, log_prefix='verify module loading', timeout=self.repro_timeout + 300)
+                    success, _ = self.reproduce(distro, func=self.tweak_modules, func_args=(essential_modules, [], [],), attempt=1, root=False, log_prefix='verify_module_loading', timeout=self.repro_timeout + 300)
                     if success:
                         res["root"] = False
                         self.results[distro.distro_name]['unprivileged_module_loading'] = True
