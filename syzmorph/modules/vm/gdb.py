@@ -1,5 +1,5 @@
 import logging
-import math
+import math, os
 import infra.tool_box as utilities
 
 from subprocess import Popen, PIPE, STDOUT, TimeoutExpired
@@ -22,6 +22,7 @@ class GDBHelper:
         #context.log_level = 'error'
         self.gdb_inst = process(["gdb", self._vmlinux])
         self.logger = self._init_logger(log_path)
+        self.sendline('set style enabled off')
     
     def _init_logger(self, log_path):
         logger = logging.getLogger(__name__+"-{}".format(self._vmlinux))
@@ -192,7 +193,7 @@ class GDBHelper:
         for line in raw.split('\n'):
             line = line.strip('\n')
             dbg_file = utilities.regx_get(dbg_info_regx, line, 0)
-            dbg_line = utilities.regx_get(dbg_info_regx, line, 2)
+            dbg_line = utilities.regx_get(dbg_info_regx, line, 3)
             if dbg_file != None and dbg_line != None:
                 ret.append(dbg_file)
                 ret.append(dbg_line)
