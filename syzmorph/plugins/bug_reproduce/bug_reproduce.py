@@ -565,9 +565,9 @@ class BugReproduce(AnalysisModule):
         testcase_text = open(testcase, "r").readlines()
 
         if poc_feature & self.FEATURE_NAMESPACE:
-            cmds = self.syz_feature_mini.make_syz_command(testcase_text, self.syz_feature, i386, repeat=repeat, sandbox="namespace")
+            cmds = self.syz_feature_mini.make_syz_command(testcase_text, self.syz_feature, i386, repeat=repeat, sandbox="namespace", root=root)
         else:
-            cmds = self.syz_feature_mini.make_syz_command(testcase_text, self.syz_feature, i386, repeat=repeat)
+            cmds = self.syz_feature_mini.make_syz_command(testcase_text, self.syz_feature, i386, repeat=repeat, root=root)
         qemu.command(cmds=cmds, user=user, wait=True, timeout=self.repro_timeout)
         qemu.command(cmds="killall syz-executor && killall syz-execprog", user="root", wait=True)
 

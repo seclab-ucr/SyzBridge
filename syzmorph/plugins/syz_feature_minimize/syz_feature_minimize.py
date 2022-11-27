@@ -346,7 +346,7 @@ class SyzFeatureMinimize(AnalysisModule):
         command += "testcase"
         return command
 
-    def make_syz_command(self, text, features: list, i386: bool, repeat=None, sandbox=""):
+    def make_syz_command(self, text, features: list, i386: bool, repeat=None, sandbox="", root=True):
         command = "/tmp/syz-execprog -executor=/tmp/syz-executor "
         options = self._extract_prog_options('./syz-execprog')
         if text[0][:len(command)] == command:
@@ -399,7 +399,7 @@ class SyzFeatureMinimize(AnalysisModule):
                     command += "-repeat=" + "1 "
                 #It makes no sense that limiting the features of syz-execrpog, just enable them all
                 
-                if "tun" in features and features["tun"]:
+                if "tun" in features and features["tun"] and root:
                     enabled += "tun,"
                 else:
                     disable += "tun,"
@@ -415,7 +415,7 @@ class SyzFeatureMinimize(AnalysisModule):
                     enabled += "close_fds,"
                 else:
                     disable += "close_fds,"
-                if "devlinkpci" in features and features["devlinkpci"]:
+                if "devlinkpci" in features and features["devlinkpci"] and root:
                     enabled += "devlink_pci,"
                 else:
                     disable += "devlink_pci,"
