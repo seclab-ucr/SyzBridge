@@ -344,8 +344,7 @@ exit $EXIT_CODE""".format(modprobe_cmd, cmd)
         syscall_prefix = '__x64_sys_'
         insert_exit_line = -1
         common_entries = ['process_one_work', '__do_softirq', 'do_kern_addr_fault', 
-                'exit_to_usermode_loop', #Ubuntu
-                'exit_to_user_mode_prepare'] #Fedora
+                'task_work_run']
         enabled_syscalls = []
         skip_funcs = []
         if qemu.tag != "upstream-trace":
