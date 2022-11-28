@@ -111,7 +111,7 @@ class GoogleSheets(AnalysisModule):
         except pygsheets.WorksheetNotFound:
             self.m_wks = sh.add_worksheet(self.main_sheet)
         
-        self.fill_sheet(self.p_wks)
+        #self.fill_sheet(self.p_wks)
         self.fill_sheet(self.m_wks, append=True)
         return
     
@@ -205,6 +205,7 @@ class GoogleSheets(AnalysisModule):
             val = wks.get_value('A'+str(i))
             title = wks.get_value('B'+str(i))
             if val == hash_value:
+                wks.insert_rows(i-1, number=self.n_distro)
                 return i
             if val == "":
                 wks.insert_rows(1, number=self.n_distro)
