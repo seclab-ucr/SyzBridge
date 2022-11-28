@@ -266,15 +266,13 @@ class BugReproduce(AnalysisModule):
                     preload_modules.extend(missing_modules[:idx])
                     missing_modules = missing_modules[idx:]
                     func_args = (missing_modules, essential_modules, preload_modules)
-                    func_args += (distro.distro_name, result_queue)
+                    func_args += (distro.distro_name, result_queue, c_prog)
                     continue
             if not c_prog:
                 c_prog = True
-                missing_modules = func_args[0]
-                essential_modules = func_args[1]
-                preload_modules = func_args[2]
-                func_args = (missing_modules, essential_modules, preload_modules)
-                func_args += (distro.distro_name, result_queue, c_prog)
+                l = list(func_args)
+                l[-1] = c_prog
+                func_args = tuple(l)
                 continue
             break
         return False, t
@@ -557,8 +555,10 @@ class BugReproduce(AnalysisModule):
             src = os.path.join(self.path_case, "poc.c")
             if not root:
                 dst = os.path.join(self.path_case_plugin, "poc_normal.c")
+                poc_name = "poc_normal.c"
             else:
                 dst = os.path.join(self.path_case_plugin, "poc_root.c")
+                poc_name = "poc_root.c"
         else:
             if repeat:
                 src = os.path.join(self.path_case, "PoC_repeat.c")

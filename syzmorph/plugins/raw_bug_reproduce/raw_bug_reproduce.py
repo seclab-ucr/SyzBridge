@@ -18,7 +18,7 @@ class RawBugReproduce(AnalysisModule):
     REPORT_START = "======================RawBugReproduce Report======================"
     REPORT_END =   "==================================================================="
     REPORT_NAME = "Report_RawBugReproduce"
-    DEPENDENCY_PLUGINS = ["SyzFeatureMinimize"]
+    DEPENDENCY_PLUGINS = []
 
     FEATURE_LOOP_DEVICE = 1 << 0
 
