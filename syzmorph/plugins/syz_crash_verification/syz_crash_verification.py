@@ -284,6 +284,7 @@ class SyzCrashVerification(AnalysisModule):
             prog2c_cmd = self._make_prog2c_command(syz_prog_path, features, self.i386, repeat=repeat)
             local_command(command='chmod +x syz-prog2c && {} > {}/poc.c'.format(prog2c_cmd, self.path_case_plugin), logger=self.logger,\
                 shell=True, cwd=self.path_case_plugin)
+            shutil.copyfile(os.path.join(self.path_case_plugin, 'poc.c'), os.path.join(self.crash_path, 'poc.c'))
             self.tune_poc(root)
             self.info_msg("Convert syz-prog to c prog: {}".format(prog2c_cmd))
             if root:
