@@ -77,7 +77,7 @@ class SyzCrashVerification(AnalysisModule):
             self.testcase_path = os.path.join(self.crash_path, 'repro.prog')
             if not os.path.exists(self.testcase_path):
                 #self.main_logger.info("No repro.prog in {}".format(crash))
-                #continue
+                continue
                 if not self.extract_testcase():
                     self.main_logger.error("{} fail to extract testcase".format(crash))
                     continue
@@ -264,9 +264,9 @@ class SyzCrashVerification(AnalysisModule):
         new_features = essential_features.copy()
         if rule_out_feature in new_features:
             new_features.remove(rule_out_feature)
-        ubuntu = self.cfg.get_kernel_by_name('ubuntu-fuzzing')
-        ubuntu.repro.init_logger(self.logger)
-        _, triggered, _ = ubuntu.repro.reproduce(func=self._capture_crash, func_args=(new_features, test_c_prog, repeat, sandbox), vm_tag='test feature {}'.format(rule_out_feature),\
+        fuzzing = self.cfg.get_kernel_by_name('fuzzing')
+        fuzzing.repro.init_logger(self.logger)
+        _, triggered, _ = fuzzing.repro.reproduce(func=self._capture_crash, func_args=(new_features, test_c_prog, repeat, sandbox), vm_tag='test feature {}'.format(rule_out_feature),\
             timeout=self.repro_timeout + 100, attempt=self.repro_attempt, root=root, work_dir=self.crash_path, c_hash=self.case_hash)
         self.info_msg("crash triggered: {}".format(triggered))
         return triggered
