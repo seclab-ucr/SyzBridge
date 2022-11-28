@@ -142,12 +142,12 @@ class BugReproduce(AnalysisModule):
         res["root"] = True
         
         if not self._skip_regular_reproduce:
-            success, _ = self.reproduce(distro, func=self.capture_kasan, timeout=self.repro_timeout+100, root=True)
+            success, _ = self.reproduce(distro, func=self.capture_kasan, timeout=self.repro_timeout * 2+100, root=True)
             if success:
                 res["triggered"] = True
                 res["bug_title"] = self.bug_title
                 res["root"] = True
-                success, _ = self.reproduce(distro, func=self.capture_kasan, timeout=self.repro_timeout+100, root=False)
+                success, _ = self.reproduce(distro, func=self.capture_kasan, timeout=self.repro_timeout * 2+100, root=False)
                 if success:
                     res["triggered"] = True
                     res["bug_title"] = self.bug_title
@@ -185,7 +185,7 @@ class BugReproduce(AnalysisModule):
                 self.results[distro.distro_name]['root'] = res['root']
             else:
                 if self.check_module_priviledge(essential_modules):
-                    success, _ = self.reproduce(distro, func=self.tweak_modules, func_args=(essential_modules, [], [],), attempt=1, root=False, log_prefix='verify_module_loading', timeout=self.repro_timeout + 300)
+                    success, _ = self.reproduce(distro, func=self.tweak_modules, func_args=(essential_modules, [], [],), attempt=1, root=False, log_prefix='verify_module_loading', timeout=2 * self.repro_timeout + 300)
                     if success:
                         res["root"] = False
                         self.results[distro.distro_name]['unprivileged_module_loading'] = True
@@ -217,7 +217,7 @@ class BugReproduce(AnalysisModule):
     def minimize_modules(self, distro, missing_modules: list, essential_modules: list, root=True):
         missing_modules = missing_modules[::-1][1:]
         self.info_msg("{} is minimizing modules list {}, current essential list {}".format(distro.distro_name, missing_modules, essential_modules))
-        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, essential_modules, []), root=True, attempt=1, log_prefix='minimize', timeout=len(missing_modules) * self.repro_timeout + 300)
+        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, essential_modules, []), root=True, attempt=1, log_prefix='minimize', timeout=len(missing_modules) * self.repro_timeout * 2 + 300)
         if success:
             missing_modules = t[0]
             if missing_modules != []:
@@ -304,15 +304,9 @@ class BugReproduce(AnalysisModule):
             raise Exception("[{}] failed to sort missing modules {}".format(self.case_hash, res))
         return res
 
-    def tune_poc(self, root: bool, distro_name: str, src, dst):
+    def tune_poc(self, root: bool, distro_name: str, src, dst, need_namespace=False):
         feature = 0
         # why don't we just enable namespace all the time?
-        need_namespace = False
-
-        if self.check_poc_capability() and not root:
-            need_namespace = True
-            self.results[distro_name]['namespace'] = True
-            feature |= self.FEATURE_NAMESPACE
 
         skip_funcs = ["setup_usb();", "setup_leak();"]
         data = []
@@ -444,9 +438,21 @@ class BugReproduce(AnalysisModule):
                 self.results[vm_tag]["repeat"] = False
                 result_queue.put(self.results)
                 return tested_modules
+            trigger = self._execute(root, qemu, distro_name, namespace=True)
+            if trigger:
+                self.results[vm_tag]["repeat"] = False
+                self.results[vm_tag]["namespace"] = True
+                result_queue.put(self.results)
+                return tested_modules
             trigger = self._execute(root, qemu, distro_name, repeat=True)
             if trigger:
                 self.results[vm_tag]["repeat"] = True
+                result_queue.put(self.results)
+                return tested_modules
+            trigger = self._execute(root, qemu, distro_name, repeat=True, namespace=True)
+            if trigger:
+                self.results[vm_tag]["repeat"] = True
+                self.results[vm_tag]["namespace"] = True
                 result_queue.put(self.results)
                 return tested_modules
         
@@ -485,9 +491,20 @@ class BugReproduce(AnalysisModule):
             self.results[vm_tag]["repeat"] = False
             result_queue.put(self.results)
             return
+        trigger = self._execute(root, qemu, distro_name, namespace=True)
+        if trigger:
+            self.results[vm_tag]["repeat"] = False
+            self.results[distro_name]['namespace'] = True
+            result_queue.put(self.results)
+            return
         trigger = self._execute(root, qemu, distro_name, repeat=True)
         if trigger:
             self.results[vm_tag]["repeat"] = True
+            result_queue.put(self.results)
+        trigger = self._execute(root, qemu, distro_name, repeat=True, namespace=True)
+        if trigger:
+            self.results[vm_tag]["repeat"] = True
+            self.results[distro_name]['namespace'] = True
             result_queue.put(self.results)
         return
 
@@ -512,7 +529,7 @@ class BugReproduce(AnalysisModule):
                 return False
         return True
 
-    def _execute(self, root, qemu, distro_name, repeat=False):
+    def _execute(self, root, qemu, distro_name, repeat=False, namespace=False):
         self.distro_lock.acquire()
         if self.ori_c_prog:
             src = os.path.join(self.path_case, "poc.c")
@@ -536,15 +553,15 @@ class BugReproduce(AnalysisModule):
                 else:
                     poc_name = "poc_root_no_repeat.c"
             dst = os.path.join(self.path_case_plugin, poc_name)
-        poc_feature = self.tune_poc(root, distro_name, src, dst)
+        poc_feature = self.tune_poc(root, distro_name, src, dst, namespace)
         self.distro_lock.release()
         
         if self.c_prog:
             return self._execute_poc(root, qemu, poc_feature, poc_name, repeat)
         else:
-            return self._execute_syz(root, qemu, poc_feature, repeat)
+            return self._execute_syz(root, qemu, poc_feature, repeat, namespace)
     
-    def _execute_syz(self, root, qemu: VMInstance, poc_feature, repeat=False):
+    def _execute_syz(self, root, qemu: VMInstance, poc_feature, repeat=False, namespace=False):
         if root:
             user = self.root_user
         else:
@@ -564,7 +581,7 @@ class BugReproduce(AnalysisModule):
         self._check_poc_feature(poc_feature, qemu, user)
         testcase_text = open(testcase, "r").readlines()
 
-        if poc_feature & self.FEATURE_NAMESPACE:
+        if namespace:
             cmds = self.syz_feature_mini.make_syz_command(testcase_text, self.syz_feature, i386, repeat=repeat, sandbox="namespace", root=root)
         else:
             cmds = self.syz_feature_mini.make_syz_command(testcase_text, self.syz_feature, i386, repeat=repeat, root=root)
