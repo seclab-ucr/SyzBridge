@@ -691,8 +691,8 @@ class Crawler:
                             tags = case.find_all('td', {"class": "tag"})
                             m = re.search(r'id=([0-9a-z]*)', tags[0].next.attrs['href'])
                             if m is None:
-                                m = re.search(r'commits\/([0-9a-z]*)', tags[0].next.attrs['href'])
-                            commit = m.groups()[0]
+                                m = re.search(r'(commits\/|\+log\/)([0-9a-z]*)', tags[0].next.attrs['href'])
+                            commit = m.groups()[1]
                         except Exception as e:
                             self.logger.exception("Failed to retrieve case \"commit\" {}{}{}: {}".format(syzbot_host_url, syzbot_bug_base_url, hash, e))
                             continue
