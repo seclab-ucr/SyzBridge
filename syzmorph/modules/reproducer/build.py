@@ -65,7 +65,7 @@ class Build():
             self.distro_name = self.kernel.distro_name
         if self.vmtype == VMInstance.UPSTREAM:
             self.image_path = "{}/img/{}-snapshot.img".format(self.path_case, self.kernel.distro_name)
-            self.vmlinux = "{}/linux-upstream/vmlinux".format(self.path_case)
+            self.vmlinux = "{}/linux-{}/vmlinux".format(self.path_case, self.kernel.distro_name)
             self.ssh_key = "{}/img/stretch.img.key".format(self.path_case)
             self.path_linux = "{}/linux-{}".format(self.path_case, self.kernel.distro_name)
             self.distro_name = self.kernel.distro_name

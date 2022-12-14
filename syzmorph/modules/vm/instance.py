@@ -320,7 +320,7 @@ class VMInstance(Network):
                         "kvm-intel.fasteoi=1", "kvm-intel.ept=1", "kvm-intel.flexpriority=1", \
                         "kvm-intel.vpid=1", "kvm-intel.emulate_invalid_guest_state=1", \
                         "kvm-intel.eptad=1", "kvm-intel.enable_shadow_vmcs=1", "kvm-intel.pml=1", \
-                        "kvm-intel.enable_apicv=1, panic_on_warn=0"]
+                        "kvm-intel.enable_apicv=1", "panic_on_warn=0", "kasan_multi_shot=1"]
         self.port = port
         self.image = image
         self.linux = linux

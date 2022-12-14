@@ -68,7 +68,7 @@ class BugReproduce(AnalysisModule):
             except KASANDoesNotEnabled as e:
                 raise e
             except ModprobePaniced as e:
-                return [[], False, False, e.mod, e]
+                return e
             except Exception as e:
                 raise e
             return ret
@@ -185,7 +185,7 @@ class BugReproduce(AnalysisModule):
                 self.results[distro.distro_name]['root'] = res['root']
             else:
                 if self.check_module_priviledge(essential_modules):
-                    success, _ = self.reproduce(distro, func=self.tweak_modules, func_args=(essential_modules, [], [],), attempt=1, root=False, log_prefix='verify_module_loading', timeout=2 * self.repro_timeout + 300)
+                    success, _ = self.reproduce(distro, func=self.tweak_modules, func_args=([], essential_modules, [],), attempt=1, root=False, log_prefix='verify_module_loading', timeout=2 * self.repro_timeout + 300)
                     if success:
                         res["root"] = False
                         self.results[distro.distro_name]['unprivileged_module_loading'] = True
@@ -253,10 +253,10 @@ class BugReproduce(AnalysisModule):
                 title = self._BugChecker(report)
                 self.bug_title = title
                 return triggered, t
-            if len(t) == 2: # only if expt is the type of ModeprobePaniced, we proceed
-                panic_mod = t[0]
-                expt = t[1]
+            if len(t) == 1: # only if expt is the type of ModeprobePaniced, we proceed
+                expt = t[0]
                 if isinstance(expt, ModprobePaniced):
+                    panic_mod = expt.mod
                     missing_modules = func_args[0]
                     essential_modules = func_args[1]
                     preload_modules = func_args[2]
@@ -494,6 +494,8 @@ class BugReproduce(AnalysisModule):
                 self.results[vm_tag]["namespace"] = True
                 result_queue.put(self.results)
                 return tested_modules
+            if self._modprobe_hang(qemu):
+                raise ModprobePaniced(module)
         result_queue.put(self.results)
         return []
     
@@ -576,7 +578,6 @@ class BugReproduce(AnalysisModule):
                     poc_name = "poc_root_no_repeat.c"
             dst = os.path.join(self.path_case_plugin, poc_name)
         poc_feature = self.tune_poc(root, distro_name, src, dst, namespace)
-        self.distro_lock.release()
         
         if c_prog:
             return self._execute_poc(root, qemu, poc_feature, poc_name, repeat)
@@ -584,6 +585,7 @@ class BugReproduce(AnalysisModule):
             return self._execute_syz(root, qemu, poc_feature, repeat, namespace)
     
     def _execute_syz(self, root, qemu: VMInstance, poc_feature, repeat=False, namespace=False):
+        self.distro_lock.release()
         if root:
             user = self.root_user
         else:
@@ -620,6 +622,7 @@ class BugReproduce(AnalysisModule):
             user = self.normal_user
         poc_path = os.path.join(self.path_case_plugin, poc_src)
         qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
+        self.distro_lock.release()
         if os.path.exists(os.path.join(self.path_case_plugin, "sandbox.h")):
             sandbox_src = os.path.join(self.path_case_plugin, "sandbox.h")
             qemu.upload(user=user, src=[sandbox_src], dst="~/", wait=True)
@@ -669,6 +672,7 @@ class BugReproduce(AnalysisModule):
             out = qemu.command(cmds="lsmod | grep {}".format(each), user=self.root_user, wait=True)
             if len(out) == 1:
                 raise ModprobePaniced(each)
+            time.sleep(5)
         return True
     
     def _module_args(self, module):
@@ -678,6 +682,12 @@ class BugReproduce(AnalysisModule):
         if module == "nf_conntrack":
             return " enable_hooks=1"
         return ""
+    
+    def _modprobe_hang(self, qemu):
+        for i in range(len(qemu.output)-1, 0, -1):
+            if regx_match(r'INFO: task modprobe(:\d+)? blocked', qemu.output[i]):
+                return True
+        return False
 
     def _check_poc_feature(self, poc_feature, qemu, user):
         script_name = "check-poc-feature.sh"

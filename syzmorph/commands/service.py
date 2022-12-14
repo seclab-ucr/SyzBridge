@@ -77,6 +77,17 @@ class ServiceCommand(Command):
                             e.g., --filter-by-kernel=upstream --filter-by-kernel=linux-next')
         parser.add_argument('--filter-by-c-prog', action='store_true',
                             help='[bool] filter bugs do not have a c reproducer\n')
+        parser.add_argument('--filter-by-distro-effective-cycle', action='store_true',
+                            help='[bool] filter bugs by distro effective cycle\n'
+                            'Use \'effective_cycle_start\' and \'effective_cycle_end\' in config file')
+        parser.add_argument('--filter-by-hash', nargs='?',
+                            help='[file|string] Rule out specific hash or a file that contains a list of hashs\n')
+        parser.add_argument('--filter-by-fixes-tag', action='store_true',
+                            help='[bool] Check if patch fixes tag exist in target kernel, this option only applies on fixed section\n')
+        parser.add_argument('--filter-by-patch', action='store_true',
+                            help='[bool] Check if patch exist  in target kernel, this option only applies on fixed section\n')
+        parser.add_argument('--console', action='store_true',
+                            help='Enable console mode')
     def add_arguments_for_plugins(self, parser):
         proj_dir = os.path.join(os.getcwd(), "syzmorph")
         modules_dir = os.path.join(proj_dir, "plugins")
@@ -156,20 +167,27 @@ class ServiceCommand(Command):
             f.close()
         print("Created a new project {}".format(name))
     
-    def get_daily_cases(self):
+    def get_daily_cases(self, filter_by_hash=[]):
         self.cases = self.read_cases(self.args.proj)
-        bk_cases = self.cases.copy()
+        if self.cases != None:
+            bk_cases = self.cases.copy()
+        else:
+            bk_cases = {}
         if not self.args.skip_today or self.skiped:
             crawler = Crawler(url=self.args.url, keyword=self.args.key, max_retrieve=int(self.args.max_retrieval), 
                 filter_by_reported=self.args.filter_by_reported, filter_by_closed=self.args.filter_by_closed, 
                 filter_by_c_prog=int(self.args.filter_by_c_prog), filter_by_kernel=self.args.filter_by_kernel,
+                filter_by_distro_effective_cycle=self.args.filter_by_distro_effective_cycle,
+                filter_by_fixes_tag=self.args.filter_by_fixes_tag, filter_by_patch=self.args.filter_by_patch,
+                filter_by_hashs=filter_by_hash,
                 debug=self.args.debug, log_path = self.proj_dir)
 
             crawler.run()
             tmp_cases = crawler.cases.copy()
-            for hash_val in tmp_cases:
-                if hash_val in self.cases and self.finished_case(hash_val):
-                    del crawler.cases[hash_val]
+            if self.cases != None:
+                for hash_val in tmp_cases:
+                    if hash_val in self.cases and self.finished_case(hash_val):
+                        del crawler.cases[hash_val]
             self.cases = crawler.cases
         if self.args.skip_today:
             self.skiped = True
@@ -230,14 +248,23 @@ class ServiceCommand(Command):
             logger.error(e)
             return
         
+        filter_by_hash = []
+        if self.args.filter_by_hash != None:
+            if os.path.exists(self.args.filter_by_hash):
+                with open(self.args.filter_by_hash, 'r') as f:
+                    filter_by_hash = f.read().splitlines()
+            else:
+                filter_by_hash = [self.args.filter_by_hash]
+                
         self.proj_dir = os.path.join(os.getcwd(), "projects/{}".format(args.proj))
+        os.makedirs(self.proj_dir, exist_ok=True)
         self.print_args_info()
         self.build_work_dir()
         
         while True:
             x = []
             self.queue = multiprocessing.Queue()
-            cases = self.get_daily_cases()
+            cases = self.get_daily_cases(filter_by_hash)
             start_time = self.get_cur_time()
             for key in cases:
                 self.queue.put(key)

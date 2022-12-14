@@ -382,14 +382,21 @@ class SyzFeatureMinimize(AnalysisModule):
                                     continue
                 if "procs" in pm and str(pm["procs"]) != "1":
                     num = int(pm["procs"])
-                    command += "-procs=" + str(num*2) + " "
+                    if num < 6:
+                        num = 3
+                    else:
+                        command += "-procs=" + str(num*2) + " "
                 else:
-                    command += "-procs=1" + " "
+                    if repeat:
+                        command += "-procs=6" + " "
+                    else:
+                        command += "-procs=1" + " "
 
                 if repeat == None:
                     if "repeat" in pm and pm["repeat"] != "":
                         if pm["repeat"] == "0" or pm["repeat"] == True:
                             command += "-repeat=" + "0 "
+                            repeat = True
                         if pm["repeat"] == "1" or pm["repeat"] == False:
                             command += "-repeat=" + "1 "
                 elif repeat:
@@ -398,8 +405,11 @@ class SyzFeatureMinimize(AnalysisModule):
                     command += "-repeat=" + "1 "
                 #It makes no sense that limiting the features of syz-execrpog, just enable them all
                 
-                if "tun" in features and features["tun"] and root:
+                if "tun" in features and features["tun"]:
                     enabled += "tun,"
+                    i = command.index('sandbox=')
+                    if i != -1:
+                        command[:i] + '-sandbox=namespace' + command[i+command[i:].index(' '):]
                 if "binfmt_misc" in features and features["binfmt_misc"]:
                     enabled += "binfmt_misc,"
                 if "cgroups" in features and features["cgroups"]:

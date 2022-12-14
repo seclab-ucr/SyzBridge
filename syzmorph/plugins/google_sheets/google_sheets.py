@@ -111,7 +111,17 @@ class GoogleSheets(AnalysisModule):
         except pygsheets.WorksheetNotFound:
             self.m_wks = sh.add_worksheet(self.main_sheet)
         
-        #self.fill_sheet(self.p_wks)
+        self.fill_sheet(self.p_wks)
+        try:
+            if self.manager.module_capable("SlackBot") and \
+                    (self.data['reproduce-by-normal'] != "" or self.data['reproduce-by-root'] != ""):
+                bot = self._init_module(SlackBot())
+                bot.prepare()
+                blocks = bot.compose_blocks(self.data)
+                bot.post_message(blocks)
+        except Exception as e:
+            self.err_msg("slackbot error: {}".format(e))
+            
         self.fill_sheet(self.m_wks, append=True)
         return
     
@@ -143,6 +153,12 @@ class GoogleSheets(AnalysisModule):
             self._write_capability_check(wks)
         else:
             self.write_failed_str_to_cell('R'+str(self.idx), wks)
+        
+        if self.plugin_finished("Fuzzing"):
+            self._write_fuzzing(wks)
+        
+        if self.plugin_finished("Syzscope"):
+            self._write_syzscope(wks)
 
         if self.plugin_finished("SyzFeatureMinimize"):
             self._write_syz_feature_minimize(wks)
@@ -150,15 +166,6 @@ class GoogleSheets(AnalysisModule):
             self.write_failed_str_to_cell('M'+str(self.idx), wks)
         self._render_cell_color('A'+str(self.idx), self.case_type, wks)
         #self._render_row_coloer(wks) # Too many requests
-        try:
-            if self.manager.module_capable("SlackBot") and \
-                    (self.data['reproduce-by-normal'] != "" or self.data['reproduce-by-root'] != ""):
-                bot = self._init_module(SlackBot())
-                bot.prepare()
-                blocks = bot.compose_blocks(self.data)
-                bot.post_message(blocks)
-        except Exception as e:
-            self.err_msg("slackbot error: {}".format(e))
     
     @sleeper
     def create_banner(self, wks: pygsheets.Worksheet):
@@ -274,7 +281,7 @@ class GoogleSheets(AnalysisModule):
                             self.data['reproduce-by-normal'].append(format(distro))
                             self.triggered_by = self.TRIGGERED_BY_NORMAL
                             self.case_type = self.TYPE_SUCCEED
-                            if distro not in self.data['raw-reproduce-by-normal']:
+                            if 'raw-reproduce-by-normal' not in self.data or distro not in self.data['raw-reproduce-by-normal']:
                                 if result_json[distro]['namespace']:
                                     self._set_cell_to_true('H'+self.distro_idx(distro), wks)
                                 if 'tun' in result_json[distro]['skip_funcs'] or 'devlink_pci' in result_json[distro]['skip_funcs']:
