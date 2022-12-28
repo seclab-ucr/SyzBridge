@@ -433,7 +433,7 @@ class SyzFeatureMinimize(AnalysisModule):
                 if "wifi" in features and features["wifi"]:
                     enabled += "wifi,"
                 break
-        if not root and enabled == "-enable=":
+        if not root and enabled == "-enable=" and '-sandbox=namespace' not in command:
             command += "-disable=tun,devlink_pci "
         if enabled[-1] == ',':
             enabled = enabled[:-1]
