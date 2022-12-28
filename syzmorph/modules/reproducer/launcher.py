@@ -262,8 +262,12 @@ class Launcher(Build):
             log_name = "qemu-{0}-{1}.log".format(c_hash, self.distro_name)
         if ssh_port != None:
             self.ssh_port = ssh_port
+        if gdb_port != None:
+            self.gdb_port = gdb_port
+        if mon_port != None:
+            self.mon_port = mon_port
         qemu = VM(linux=self.path_linux, kernel=self.kernel, hash_tag=c_hash, vmlinux=self.vmlinux, port=self.ssh_port, 
-            image=self.image_path, log_name=log_name, log_suffix=log_suffix,
+            gdb_port=self.gdb_port, mon_port=self.mon_port, image=self.image_path, log_name=log_name, log_suffix=log_suffix,
             key=self.ssh_key, timeout=timeout, debug=self.debug, **kwargs)
         qemu.logger.info("QEMU-{} launched.\n".format(log_suffix))
         return qemu

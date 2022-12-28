@@ -59,14 +59,13 @@ class SymExec(MemInstrument):
         if timeout != None:
             self._timeout = timeout
         self.vm = distro.repro.launch_qemu(c_hash = self.syzscope.case_hash, log_name=log_name, log_suffix=log_suffix, \
-            timeout=timeout, ssh_port=ssh_port, gdb_port=gdb_port, mon_port=mon_port, **kwargs)
+            timeout=timeout, gdb_port=distro.repro.gdb_port, mon_port=distro.repro.mon_port, **kwargs)
         self.ssh_port = distro.repro.ssh_port
         self.gdb_port = distro.repro.gdb_port
         self.mon_port = distro.repro.mon_port
         return self.vm
     
     def cleanup(self):
-        super().cleanup()
         if self.vm != None:
             self.vm.destroy()
 
@@ -76,22 +75,12 @@ class SymExec(MemInstrument):
     def prepare_angr(self):
         self.logger.info("Loading kernel into angr")
         self.vm.gdb_attach_vmlinux()
-        self.vm.load_angr_proj()
+        self.vm.gdb_kernel.load_angr_proj()
 
     def setup_gdb_and_monitor(self, qemu: VMInstance):
         if self.vm == None:
             self.logger.error("Call setup_vm() to initialize the vm first")
             return True
-        
-        kaslr = True
-        out = qemu.command(cmds="dmesg | grep nokaslr", timeout=5, wait=True, user='root')
-        for line in out:
-            if "nokaslr" in line:
-                kaslr = False
-                break
-        if kaslr:
-            self.logger.error("KASLR enabled, cannot proceed symbolic execution")
-            return False
 
         self.vm.timeout = 5*60
         if not self.vm.gdb_connect(self.gdb_port):
@@ -102,7 +91,7 @@ class SymExec(MemInstrument):
             self.logger.error("No kasan_report() found")
             qemu.destroy()
             return False
-        self.proj = self.vm.kernel.proj
+        self.proj = self.vm.gdb_kernel.proj
         self.vm.mon_connect(self.mon_port)
         return True
 
@@ -691,6 +680,7 @@ class SymExec(MemInstrument):
         return rdi_val
     
     def _find_vul_mem_bound(self, vul_mem):
+        time.sleep(5)
         self.vul_mem_offset, self.vul_mem_size, self.rel_type = utilities.extract_vul_obj_offset_and_size(self.vm.output)
         if self.vul_mem_offset == None or self.vul_mem_size == None:
             self.logger.error("vulnerable oject offset or size is incorrect: {} {}".format(self.vul_mem_offset, self.vul_mem_size))

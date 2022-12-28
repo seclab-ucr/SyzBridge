@@ -32,7 +32,7 @@ class SlackBot(AnalysisModule):
     def prepare_on_demand(self, slack_token, channel):
         try:
             self.client = WebClient(token=slack_token)
-            res = self.client.conversations_list()
+            res = self.client.conversations_list(types="public_channel,private_channel")
             for each in res['channels']:
                 if each['name'] == channel:
                     self.conversation_id = each['id']
@@ -83,25 +83,17 @@ class SlackBot(AnalysisModule):
         block.append(failed_on_section)
         block.append({'type': 'divider'})
 
-        modules_analysis_section = {}
-        modules_analysis_section['type'] = 'section'
-        modules_analysis_section['text'] = {'type': 'mrkdwn', 'text': '*Moudles Analysis:*\n{}'.format(data['modules-analysis'])}
-        block.append(modules_analysis_section)
+        if 'syzscope' in data:
+            syzscope_section = {}
+            syzscope_section['type'] = 'section'
+            syzscope_section['text'] = {'type': 'mrkdwn', 'text': '*SyzScope:*\n{}'.format(data['syzscope'])}
+            block.append(syzscope_section)
 
-        capability_check_section = {}
-        capability_check_section['type'] = 'section'
-        capability_check_section['text'] = {'type': 'mrkdwn', 'text': '*Capability Check:*\n{}'.format(data['capability-check'])}
-        block.append(capability_check_section)
-
-        syzscope_section = {}
-        syzscope_section['type'] = 'section'
-        syzscope_section['text'] = {'type': 'mrkdwn', 'text': '*SyzScope:*\n{}'.format(data['syzscope'])}
-        block.append(syzscope_section)
-
-        fuzzing_section = {}
-        fuzzing_section['type'] = 'section'
-        fuzzing_section['text'] = {'type': 'mrkdwn', 'text': '*Fuzzing:*\n{}'.format(data['fuzzing'])}
-        block.append(fuzzing_section)
+        if 'fuzzing' in data:
+            fuzzing_section = {}
+            fuzzing_section['type'] = 'section'
+            fuzzing_section['text'] = {'type': 'mrkdwn', 'text': '*Fuzzing:*\n{}'.format(data['fuzzing'])}
+            block.append(fuzzing_section)
         
         return block
     
