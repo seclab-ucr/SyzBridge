@@ -662,6 +662,7 @@ class BugReproduce(AnalysisModule):
 
     def _enable_missing_modules(self, qemu, manual_enable_modules):
         for each in manual_enable_modules:
+            err_modprobe = False
             args = self._module_args(each)
             out = qemu.command(cmds="modprobe {}{}".format(each, args), user=self.root_user, wait=True, timeout=60)
             if len(out) > 1:
@@ -669,9 +670,14 @@ class BugReproduce(AnalysisModule):
                     raise ModprobePaniced(each)
                 if 'Exec format error' in out[1]:
                     raise ModprobePaniced(each)
+                err_modprobe = True
             out = qemu.command(cmds="lsmod | grep {}".format(each), user=self.root_user, wait=True)
             if len(out) == 1:
-                raise ModprobePaniced(each)
+                if err_modprobe:
+                    raise ModprobePaniced(each)
+                else:
+                    self.logger.error("{} Cannot be loaded".format(each))
+                    return False
             time.sleep(5)
         return True
     
