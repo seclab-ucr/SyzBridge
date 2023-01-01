@@ -112,14 +112,11 @@ class SyzFeatureMinimize(AnalysisModule):
         self.results = features
         self.info_msg("self.results: {} {}".format(self.results, self))
         if prog_status == self.BOTH_FAIL:
-            self.generate_new_PoC(features)
-            return True
+            return self.generate_new_PoC(features)
         if prog_status == self.C_PROG:
-            self.generate_new_PoC(features)
-            return True
+            return self.generate_new_PoC(features)
         features = self.minimize_syz_feature(features)
-        self.generate_new_PoC(features)
-        return True
+        return self.generate_new_PoC(features)
 
     def test_PoC(self, features: list, repeat=False):
         if not self._test_feature(None, features, test_c_prog=True, repeat=repeat):
@@ -133,15 +130,18 @@ class SyzFeatureMinimize(AnalysisModule):
         self.logger.info("syz-prog2c for PoC_repeat: {}".format(prog2c_cmd))
         local_command(command='chmod +x syz-prog2c && {} > {}/PoC_repeat.c'.format(prog2c_cmd, self.path_case_plugin), logger=self.logger,\
                 shell=True, cwd=self.syz.path_case_plugin)
-        if not self._file_is_empty(os.path.join(self.path_case_plugin, "PoC_repeat.c")):
-            shutil.copyfile(os.path.join(self.path_case_plugin, "PoC_repeat.c"), os.path.join(self.path_case, "PoC_repeat.c"))
+        if self._file_is_empty(os.path.join(self.path_case_plugin, "PoC_repeat.c")):
+            return False
+        shutil.copyfile(os.path.join(self.path_case_plugin, "PoC_repeat.c"), os.path.join(self.path_case, "PoC_repeat.c"))
         
         prog2c_cmd = self._make_prog2c_command(syz_prog_path, features, self.i386, repeat=False)
         self.logger.info("syz-prog2c for PoC_no_repeat: {}".format(prog2c_cmd))
         local_command(command='chmod +x syz-prog2c && {} > {}/PoC_no_repeat.c'.format(prog2c_cmd, self.path_case_plugin), logger=self.logger,\
                 shell=True, cwd=self.syz.path_case_plugin)
-        if not self._file_is_empty(os.path.join(self.path_case_plugin, "PoC_no_repeat.c")):
-            shutil.copyfile(os.path.join(self.path_case_plugin, "PoC_no_repeat.c"), os.path.join(self.path_case, "PoC_no_repeat.c"))
+        if self._file_is_empty(os.path.join(self.path_case_plugin, "PoC_no_repeat.c")):
+            return False
+        shutil.copyfile(os.path.join(self.path_case_plugin, "PoC_no_repeat.c"), os.path.join(self.path_case, "PoC_no_repeat.c"))
+        return True
 
     def generate_report(self):
         final_report = "\n".join(self.report)
