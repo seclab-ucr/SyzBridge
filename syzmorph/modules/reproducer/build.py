@@ -65,7 +65,7 @@ class Build():
             self.distro_name = self.kernel.distro_name
         if self.vmtype == VMInstance.UPSTREAM:
             self.image_path = "{}/img/{}-snapshot.img".format(self.path_case, self.kernel.distro_name)
-            self.vmlinux = "{}/linux-{}/vmlinux".format(self.path_case, self.kernel.distro_name)
+            self.vmlinux = "{}/linux-upstream/vmlinux".format(self.path_case)
             self.ssh_key = "{}/img/stretch.img.key".format(self.path_case)
             self.path_linux = "{}/linux-{}".format(self.path_case, self.kernel.distro_name)
             self.distro_name = self.kernel.distro_name
@@ -87,26 +87,30 @@ class Build():
     
     @property
     def ssh_port(self):
+        if self._ssh_port == None:
+            return self._get_unused_port()
         return self._ssh_port
     
     @ssh_port.setter
     def ssh_port(self, port):
-        if port == None:
-            port = self._get_unused_port()
-        self._ssh_port = port + self.index
+        self._ssh_port = port
     
     @property
     def mon_port(self):
+        if self._mon_port == None:
+            return self._get_unused_port()
         return self._mon_port
     
     @mon_port.setter
     def mon_port(self, port):
-        self._mon_port = port + self.index
+        self._mon_port = port
     
     @property
     def gdb_port(self):
+        if self._gdb_port == None:
+            return self._get_unused_port()
         return self._gdb_port
     
     @gdb_port.setter
     def gdb_port(self, port):
-        self._gdb_port = port + self.index
+        self._gdb_port = port

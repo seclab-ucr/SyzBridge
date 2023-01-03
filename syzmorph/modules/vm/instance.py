@@ -300,9 +300,9 @@ class VMInstance(Network):
         self.key = key
         self.timeout = timeout
         self.cmd_launch = ["qemu-system-x86_64", "-m", mem, "-smp", cpu]
-        if gdb_port != None:
+        if gdb_port != -1:
             self.cmd_launch.extend(["-gdb", "tcp::{}".format(gdb_port)])
-        if mon_port != None:
+        if mon_port != -1:
             self.cmd_launch.extend(["-monitor", "tcp::{},server,nowait,nodelay".format(mon_port)])
         if self.port != None:
             self.cmd_launch.extend(["-net", "nic,model=e1000", "-net", "user,host=10.0.2.10,hostfwd=tcp::{}-:22".format(self.port)])
@@ -327,9 +327,9 @@ class VMInstance(Network):
         self.key = key
         self.timeout = timeout
         self.cmd_launch = ["qemu-system-x86_64", "-m", mem, "-smp", cpu]
-        if gdb_port != None:
+        if gdb_port != -1:
             self.cmd_launch.extend(["-gdb", "tcp::{}".format(gdb_port)])
-        if mon_port != None:
+        if mon_port != -1:
             self.cmd_launch.extend(["-monitor", "tcp::{},server,nowait,nodelay".format(mon_port)])
         if self.port != None:
             self.cmd_launch.extend(["-net", "nic,model=e1000", "-net", "user,host=10.0.2.10,hostfwd=tcp::{}-:22".format(self.port)])

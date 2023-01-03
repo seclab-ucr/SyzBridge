@@ -257,14 +257,18 @@ class Launcher(Build):
         self.logger.info("Reproduce finished, didn't trigger bug")
         return [[], False, qemu.qemu_fail, main_ret]
     
-    def launch_qemu(self, c_hash=0, log_suffix="", log_name=None, timeout=None, gdb_port=None, mon_port=None, ssh_port=None, **kwargs):
+    def launch_qemu(self, c_hash=0, log_suffix="", log_name=None, timeout=None, enable_gdb=False, enable_qemu_mon=False, gdb_port=None, mon_port=None, ssh_port=None, **kwargs):
         if log_name is None:
             log_name = "qemu-{0}-{1}.log".format(c_hash, self.distro_name)
         if ssh_port != None:
             self.ssh_port = ssh_port
-        if gdb_port != None:
+        if not enable_gdb:
+            self.gdb_port = -1
+        elif gdb_port != None:
             self.gdb_port = gdb_port
-        if mon_port != None:
+        if not enable_qemu_mon:
+            self.mon_port = -1
+        elif mon_port != None:
             self.mon_port = mon_port
         qemu = VM(linux=self.path_linux, kernel=self.kernel, hash_tag=c_hash, vmlinux=self.vmlinux, port=self.ssh_port, 
             gdb_port=self.gdb_port, mon_port=self.mon_port, image=self.image_path, log_name=log_name, log_suffix=log_suffix,

@@ -262,8 +262,8 @@ class AnalysisModule:
             if plugin != None:
                 if not plugin.instance.finish:
                     if plugin.dependency == "strong":
+                        self.analyzor.logger.error("{} has a dependency {} not finished".format(self.analyzor.NAME, plugin_name))
                         return False
-                    self.analyzor.logger.error("{} has a dependency {} not finished".format(self.analyzor.NAME, plugin_name))
         return True
     
     def _build_plugin_folder(self):
