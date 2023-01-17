@@ -21,6 +21,6 @@ if [ ! -d ".stamp" ]; then
 fi
 
 curl $C_PROG > poc.c || true
-curl $SYZ_PROG > testcase
+curl $SYZ_PROG > testcase || true
 
 exit 0

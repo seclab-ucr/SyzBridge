@@ -242,9 +242,11 @@ class BugReproduce(AnalysisModule):
         self.root_user = distro.repro.root_user
         self.normal_user = distro.repro.normal_user
         
+        panic_mod = None
         c_prog = self.c_prog
         func_args += (c_prog, )
         while True:
+            skip_cur_mod = False
             report, triggered, t = distro.repro.reproduce(func=func, func_args=func_args, root=root, work_dir=self.path_case_plugin, vm_tag=distro.distro_name, attempt=attempt, c_hash=self.case_hash, log_name=log_name, **kwargs)
             if not result_queue.empty():
                 new_results = result_queue.get()
@@ -256,6 +258,8 @@ class BugReproduce(AnalysisModule):
             if len(t) == 1: # only if expt is the type of ModeprobePaniced, we proceed
                 expt = t[0]
                 if isinstance(expt, ModprobePaniced):
+                    if panic_mod == expt.mod:
+                        skip_cur_mod = True
                     panic_mod = expt.mod
                     missing_modules = func_args[0]
                     essential_modules = func_args[1]
@@ -265,6 +269,8 @@ class BugReproduce(AnalysisModule):
                         break
                     preload_modules.extend(missing_modules[:idx])
                     missing_modules = missing_modules[idx:]
+                    if skip_cur_mod:
+                        missing_modules.remove(panic_mod)
                     func_args = (missing_modules, essential_modules, preload_modules)
                     func_args += (distro.distro_name, result_queue, c_prog)
                     continue

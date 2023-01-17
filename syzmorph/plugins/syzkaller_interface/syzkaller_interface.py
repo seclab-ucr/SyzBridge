@@ -96,6 +96,23 @@ class SyzkallerInterface(AnalysisModule):
         return exitcode
     
     @check_syzkaller
+    def update_description(self):
+        my_env = os.environ.copy()
+        path_project = os.getcwd()
+        my_env["PATH"] = os.path.join(path_project, "tools/goroot/bin") + ':' + my_env["PATH"]
+        my_env["GOROOT"] = os.path.join(path_project, "tools/goroot/")
+        my_env["GOPATH"] = os.path.join(self.path_case_plugin, "gopath")
+        my_env["GO111MODULE"] = "auto"
+        self.logger.info("make generate")
+        p = Popen(["make", "generate"], cwd=self.syzkaller_path, env=my_env, stdout=PIPE, stderr=STDOUT)
+        with p.stdout:
+            log_anything(p.stdout, self.logger, self.debug)
+        exitcode = p.wait()
+        if not os.path.exists(os.path.join(self.syzkaller_path, "workdir")):
+            os.makedirs(os.path.join(self.syzkaller_path, "workdir"))
+        return exitcode
+        
+    @check_syzkaller
     def build_syzkaller(self, arch, component=None):
         #self.add_dependencies()
         my_env = os.environ.copy()

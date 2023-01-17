@@ -62,6 +62,8 @@ if [ ! -d "$GOPATH/src/github.com/google/syzkaller" ]; then
     git stash --all || set_git_config
     if [ "$SYZ_COMMIT" != "" ]; then
         git checkout -f $SYZ_COMMIT || (git pull origin master > /dev/null 2>&1 && git checkout -f $SYZ_COMMIT)
+    else
+        git pull origin master > /dev/null 2>&1
     fi
 fi
 
