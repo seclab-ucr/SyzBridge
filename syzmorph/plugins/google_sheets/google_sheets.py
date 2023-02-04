@@ -31,6 +31,7 @@ class GoogleSheets(AnalysisModule):
         super().__init__()
         self.sh = None
         self.idx = 0
+        self.skip_priv_page = False
         self.case_type = self.TYPE_FAILED
         self.triggered_by = self.NOT_TRIGGERED
         self.private_sheet = None
@@ -111,17 +112,19 @@ class GoogleSheets(AnalysisModule):
         except pygsheets.WorksheetNotFound:
             self.m_wks = sh.add_worksheet(self.main_sheet)
         
-        self.fill_sheet(self.p_wks)
-        try:
-            if self.manager.module_capable("SlackBot") and \
-                    (self.data['reproduce-by-normal'] != [] or self.data['reproduce-by-root'] != []):
-                bot = self._init_module(SlackBot())
-                bot.prepare()
-                blocks = bot.compose_blocks(self.data)
-                bot.post_message(blocks)
-        except Exception as e:
-            self.err_msg("slackbot error: {}".format(e))
-            
+        if not self.skip_priv_page:
+            self.fill_sheet(self.p_wks)
+            try:
+                if self.manager.module_capable("SlackBot") and \
+                        (self.data['reproduce-by-normal'] != [] or self.data['reproduce-by-root'] != []):
+                    bot = self._init_module(SlackBot())
+                    bot.prepare()
+                    blocks = bot.compose_blocks(self.data)
+                    bot.post_message(blocks)
+            except Exception as e:
+                self.err_msg("slackbot error: {}".format(e))
+        
+        self.skip_priv_page = True
         self.fill_sheet(self.m_wks, append=True)
         return
     
