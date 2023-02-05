@@ -220,7 +220,10 @@ class GoogleSheets(AnalysisModule):
             if val == "":
                 wks.insert_rows(1, number=self.n_distro)
                 return 2
-            n_line = int(regx_get(r'(\d+):.*', title, 0))
+            try:
+                n_line = int(regx_get(r'(\d+):.*', title, 0))
+            except:
+                return 2
             i+= n_line
     
     def _merge_cell(self, column, wks):
