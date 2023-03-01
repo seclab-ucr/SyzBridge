@@ -96,7 +96,6 @@ intel_qat
 algif-skcipher
 algif-rng
 algif-aead
-cryptomgr
 
 # fs-%s
 nfsd
@@ -250,7 +249,7 @@ gtp
 nlmon
 vrf
 vsockmon
-can_dev
+can-dev
 vcan
 vxcan
 ppp_generic
@@ -266,11 +265,11 @@ ip6_gre
 8021q
 bridge
 ieee802154_6lowpan
-batman_adv
-can_raw
-can_bcm
-can_j1939
-can_isotp
+batman-adv
+can-raw
+can-bcm
+can-j1939
+can-isotp
 ipt_ah
 cls_rsvp6
 cls_rsvp
@@ -280,6 +279,11 @@ xt_IDLETIMER
 ip_tables
 ip_vs_lblc
 mpls_iptunnel
+cls_fw
+cls_route
+cls_u32
+cls_flow
+nf_flow_table_inet
 
 # "tty-ldisc-%d"
 n_hdlc
@@ -291,7 +295,7 @@ ppp_async
 ppp_synctty
 slip
 serport
-pps_ldisc
+pps-ldisc
 hci_uart
 
 # other
@@ -300,3 +304,5 @@ snd_seq_dummy
 snd_seq
 dlci
 ib_umad
+ib_uverbs
+rdma_ucm
