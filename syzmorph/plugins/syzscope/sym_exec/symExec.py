@@ -54,7 +54,7 @@ class SymExec(MemInstrument):
         self._branches = {}
         self.target_site = {}
 
-    def setup_vm(self, distro, timeout, ssh_port=None, gdb_port=None, mon_port=None, log_name="vm.log", log_suffix="", **kwargs):
+    def setup_vm(self, distro, timeout, ssh_port=-1, gdb_port=-1, mon_port=-1, log_name="vm.log", log_suffix="", **kwargs):
         self.proj_path = self.syzscope.path_case_plugin
         if timeout != None:
             self._timeout = timeout
