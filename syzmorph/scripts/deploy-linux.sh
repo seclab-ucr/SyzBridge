@@ -134,33 +134,44 @@ if [ "$OLD_INDEX" != "$INDEX" ] || [ ! -e ./linux-$KERNEL ]; then
   if [[ $KERNEL =~ linux-[0-9]+\.[0-9]+\.y$ ]]; then
     KERNEL="stable"
   fi
-  LINUX0=$PROJECT_PATH/tools/linux-$KERNEL-0
-  ls $LINUX0 || LINUX0="LINUX0"
-  ls $PROJECT_PATH/tools/linux-$KERNEL-$INDEX || build_linux_folder $PROJECT_PATH/tools/linux-$KERNEL-$INDEX $LINUX0 $KERNEL
-  ln -s $PROJECT_PATH/tools/linux-$KERNEL-$INDEX ./linux-$KERNEL
-  if [ -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
-      rm $CASE_PATH/.stamp/BUILD_KERNEL
+  if [ "$KERNEL" == "stable" ] || [ "$KERNEL" == "upstream" ]; then
+    LINUX0=$PROJECT_PATH/tools/linux-$KERNEL-0
+    ls $LINUX0 || LINUX0="LINUX0"
+    ls $PROJECT_PATH/tools/linux-$KERNEL-$INDEX || build_linux_folder $PROJECT_PATH/tools/linux-$KERNEL-$INDEX $LINUX0 $KERNEL
+    ln -s $PROJECT_PATH/tools/linux-$KERNEL-$INDEX ./linux-$KERNEL
+    if [ -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
+        rm $CASE_PATH/.stamp/BUILD_KERNEL
+    fi
   fi
 fi
 
 if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
+    if [ "$KERNEL" != "stable" ] && [ "$KERNEL" != "upstream" ]; then
+      wget https://git.kernel.org/pub/scm/linux/kernel/git/next/$KERNEL.git/snapshot/$KERNEL-$COMMIT.tar.gz > /dev/null
+      tar xf $KERNEL-$COMMIT.tar.gz > /dev/null
+      rm $KERNEL-$COMMIT.tar.gz
+      rm -rf linux-$KERNEL || true
+      mv $KERNEL-$COMMIT linux-$KERNEL
+    fi
     if [ -z $LINUX_REPO ]; then
       cd linux-$KERNEL
     else
       cd $LINUX_REPO
     fi
-    if [ $COMMIT == "0" ]; then
-      cd linux-$LINUX_VERSION || get_linux $LINUX_REPO $LINUX_VERSION
-    else
-      # If terminate syzmorph with ctrl+c, some git repo may still be protected
-      rm .git/index.lock || true 
-      git stash || echo "it's ok"
-      make clean > /dev/null || echo "it's ok"
-      git clean -fdx > /dev/null || echo "it's ok"
-      if [ ! -z $BRANCH ]; then
-        git checkout -f $BRANCH || (git fetch --all --tags > /dev/null && git pull --tags origin master > /dev/null && git reset --hard origin/master > /dev/null && git checkout -f $BRANCH)
+    if [ "$KERNEL" == "stable" ] || [ "$KERNEL" == "upstream" ]; then
+      if [ $COMMIT == "0" ]; then
+        cd linux-$LINUX_VERSION || get_linux $LINUX_REPO $LINUX_VERSION
+      else
+        # If terminate syzmorph with ctrl+c, some git repo may still be protected
+        rm .git/index.lock || true 
+        git stash || echo "it's ok"
+        make clean > /dev/null || echo "it's ok"
+        git clean -fdx > /dev/null || echo "it's ok"
+        if [ ! -z $BRANCH ]; then
+          git checkout -f $BRANCH || (git reset --hard HEAD && git fetch --all --tags > /dev/null && git checkout remotes/origin/master && git pull --tags origin master > /dev/null && git reset --hard origin/master > /dev/null && git checkout -f $BRANCH)
+        fi
+        git checkout -f $COMMIT || (git reset --hard HEAD && git fetch --all --tags > /dev/null && git pull --tags origin master > /dev/null && git reset --hard origin/master > /dev/null && git checkout -f $COMMIT)
       fi
-      git checkout -f $COMMIT || (git fetch --all --tags > /dev/null && git pull --tags origin master > /dev/null && git reset --hard origin/master > /dev/null && git checkout -f $COMMIT)
     fi
     curl $CONFIG > .config
     # Panic on data corruption may stop the fuzzing session

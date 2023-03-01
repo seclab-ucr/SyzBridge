@@ -93,30 +93,6 @@ class Case:
         for kernel in self.cfg.get_all_kernels():
             if self.need_repro(kernel.distro_name) or kernel.type == 1: # If need reproduce or type is upstream kernel
                 kernel.repro = Reproducer(kernel_cfg=kernel, manager=self)
-    """
-    def _determine_lts(self):
-        distro_name = self.cfg.distro_name.lower()
-        code_name = self.cfg.distro_code_name.lower()
-        codename2LTS_path = os.path.join(self.path_package, "resources/codename2LTS.json")
-        data = self._read_json(codename2LTS_path)
-        if distro_name not in data:
-            self.case_logger.error("Cannot find vendor {}, try add it manually in resources/codename2LTS.json".format(distro_name))
-            return None
-        if code_name not in data[distro_name]:
-            self.case_logger.error("Cannot find code name {}, try add it manually in resources/codename2LTS.json".format(code_name))
-            return None
-
-        if self.cfg.distro_version == None and len(data[distro_name][code_name]) > 1:
-            self.case_logger.error("Multiple vendor version found in resources/codename2LTS.json, specify a version in config using \"distro_version\"")
-            return None
-
-        for each in data[distro_name][code_name]:
-            if self.cfg.distro_version != None:
-                if each['version'] == self.cfg.distro_version:
-                    return each
-            else:
-                return each
-    """
 
     # Check whether current bug affects a particular distro 
     def need_repro(self, distro_name):

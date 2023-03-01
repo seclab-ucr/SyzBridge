@@ -55,11 +55,11 @@ class ServiceCommand(Command):
         parser.add_argument('--ssh-port', nargs='?', action='store',
                             help='The default port of ssh using by QEMU\n'
                             '(default port is 36777)')
-        parser.add_argument('--ssh-key', nargs=1, action='store',
+        parser.add_argument('--ssh-key', nargs='?', action='store',
                             help='The private key for ssh connection')
         parser.add_argument('--skip-today', action='store_true',
                             help='Skip crawling cases today\n')
-        parser.add_argument('--linux', nargs=1, action='store',
+        parser.add_argument('--linux', nargs='?', action='store',
                             help='Linux repo index specified')
 
         parser.add_argument('--max-retrieval', nargs='?', action='store',

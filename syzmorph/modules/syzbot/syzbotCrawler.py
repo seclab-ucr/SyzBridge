@@ -644,9 +644,15 @@ class Crawler:
         except:
             # patch only works on fixed cases
             pass
-        href = title.next.attrs['href']
-        hash = href[8:]
-        crash['Hash'] = hash
+        for _ in range(0, 3):
+            try:
+                ele = title.next
+                href = ele.attrs['href']
+                break
+            except AttributeError:
+                title = title.next
+        hash_val = href[8:]
+        crash['Hash'] = hash_val
         return crash
 
     def request_detail(self, hash, index=1):

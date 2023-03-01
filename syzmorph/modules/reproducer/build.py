@@ -37,10 +37,8 @@ class Build():
         os.makedirs(path_image, exist_ok=True)
         if self.kernel.type == VMInstance.DISTROS:
             self.create_snapshot(self.kernel.distro_image, path_image, self.kernel.distro_name)
-            self._symlink(self.kernel.ssh_key, os.path.join(path_image, "id_rsa_{}".format(self.kernel.distro_name)))
         if self.kernel.type == VMInstance.UPSTREAM:
             self.create_snapshot(self.kernel.distro_image, path_image, self.kernel.distro_name)
-            self._symlink(self.kernel.ssh_key, os.path.join(path_image, "stretch.img.key"))
     
     def _get_unused_port(self):
         so = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -61,12 +59,12 @@ class Build():
         if self.vmtype == VMInstance.DISTROS:
             self.image_path = "{}/img/{}-snapshot.img".format(self.path_case, self.kernel.distro_name)
             self.vmlinux = "{}/vmlinux".format(self.kernel.distro_src)
-            self.ssh_key = "{}/img/id_rsa_{}".format(self.path_case, self.kernel.distro_name)
+            self.ssh_key = self.kernel.ssh_key
             self.distro_name = self.kernel.distro_name
         if self.vmtype == VMInstance.UPSTREAM:
             self.image_path = "{}/img/{}-snapshot.img".format(self.path_case, self.kernel.distro_name)
             self.vmlinux = "{}/linux-upstream/vmlinux".format(self.path_case)
-            self.ssh_key = "{}/img/stretch.img.key".format(self.path_case)
+            self.ssh_key = self.kernel.ssh_key
             self.path_linux = "{}/linux-{}".format(self.path_case, self.kernel.distro_name)
             self.distro_name = self.kernel.distro_name
 
