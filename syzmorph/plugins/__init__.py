@@ -33,6 +33,7 @@ class AnalysisModule:
     def init(self, manager):
         self.manager = manager
         self.case = manager.case
+        self.kernel = manager.case['kernel']
         self.args = manager.args
         self.case_hash = manager.case_hash
         self.case_logger = manager.case_logger
@@ -43,6 +44,7 @@ class AnalysisModule:
         self.path_package = manager.path_package
         self.index = manager.index
         self.debug = manager.debug
+        self.has_c_repro = manager.has_c_repro
         self.console_mode = manager.console_mode
         self.console_msg: ConsoleMessage = manager.console_msg
 

@@ -59,7 +59,7 @@ class SymExec(MemInstrument):
         if timeout != None:
             self._timeout = timeout
         self.vm = distro.repro.launch_qemu(c_hash = self.syzscope.case_hash, log_name=log_name, log_suffix=log_suffix, \
-            timeout=timeout, gdb_port=distro.repro.gdb_port, mon_port=distro.repro.mon_port, **kwargs)
+            timeout=timeout, enable_gdb=True, gdb_port=distro.repro.gdb_port, enable_qemu_mon=True, mon_port=distro.repro.mon_port, **kwargs)
         self.ssh_port = distro.repro.ssh_port
         self.gdb_port = distro.repro.gdb_port
         self.mon_port = distro.repro.mon_port

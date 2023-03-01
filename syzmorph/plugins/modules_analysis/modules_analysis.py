@@ -108,9 +108,9 @@ class ModulesAnalysis(AnalysisModule):
     def check_ftrace(self):
         trace = self._open_trace()
         if trace == None:
-            raise TraceAnalysisError("Failed to open upstream trace file")
-        upstream = self.cfg.get_kernel_by_name('upstream')
-        self.vm["upstream"] = self._prepare_gdb(upstream)
+            raise TraceAnalysisError("Failed to open {} trace file".format(self.kernel))
+        upstream = self.cfg.get_kernel_by_name(self.kernel)
+        self.vm[self.kernel] = self._prepare_gdb(upstream)
         check_map = {}
         all_distros = self.cfg.get_distros()
         for distro in all_distros:
@@ -217,12 +217,12 @@ class ModulesAnalysis(AnalysisModule):
             return self._ftrace_functions[distro.distro_name][begin_node.function_name], False
         module_path = self.find_module_by_func_name(begin_node.function_name, distro)
         if len(module_path) == 0:
-            addr = self.vm["upstream"].get_func_addr(begin_node.function_name)
+            addr = self.vm[self.kernel].get_func_addr(begin_node.function_name)
             if addr == 0:
                 self.debug_msg("Function {} doesn't have symbol file".format(begin_node.function_name))
                 self._ftrace_functions[distro.distro_name][begin_node.function_name] = [None]
                 return [None], False
-            file, _ = self.vm["upstream"].get_dbg_info(addr)
+            file, _ = self.vm[self.kernel].get_dbg_info(addr)
             self._ftrace_functions[distro.distro_name][begin_node.function_name] = [file]
             return [file], False
         file = [x[:-2]+'c' for x in module_path if x.endswith('.ko')]
@@ -456,12 +456,12 @@ class ModulesAnalysis(AnalysisModule):
                 self._loadable_modules[line.strip()] = 'root'
         
     def _open_trace(self):
-        trace_file = os.path.join(self.path_case, TraceAnalysis.NAME, "trace-upstream.report")
+        trace_file = os.path.join(self.path_case, TraceAnalysis.NAME, "trace-{}.report".format(self.kernel))
         if not os.path.exists(trace_file):
             return None
         self.info_msg("Open trace file: {}".format(trace_file))
 
-        self.set_stage_text("Loading trace-upstream.report")
+        self.set_stage_text("Loading trace-{}.report".format(self.kernel))
         trace = Trace(logger=self.logger, debug=self.debug, as_servicve=True)
         trace.load_tracefile(trace_file)
         try:

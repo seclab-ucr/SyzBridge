@@ -50,20 +50,20 @@ class TraceAnalysis(AnalysisModule):
             return False
 
         for i in range(0,3):
-            self.err_msg("Starting retrieving trace from upstream")
-            cfg = self.cfg.get_kernel_by_name('upstream')
+            self.err_msg("Starting retrieving trace from {}".format(self.kernel))
+            cfg = self.cfg.get_kernel_by_name(self.kernel)
             if cfg == None:
                 break
             trace_upstream = self._get_trace(i, cfg)
             if trace_upstream == None:
-                self.err_msg("Failed to get upstream trace, try again")
+                self.err_msg("Failed to get {} trace, try again".format(self.kernel))
                 continue
             if self._is_trace_empty(trace_upstream):
                 continue
             break
 
         if self._is_trace_empty(trace_upstream):
-            self.err_msg("Failed to get upstream trace")
+            self.err_msg("Failed to get {} trace".format(self.kernel))
             return False
         
         affect_distros = self.cfg.get_distros()
@@ -98,7 +98,7 @@ class TraceAnalysis(AnalysisModule):
             each.dump_to_file(self.path_case_plugin + "/better_trace-{}-{}-ubuntu.text".format(each.task, each.pid))
         begin_nodes = self.serialize_trace(trace2)
         for each in begin_nodes:
-            each.dump_to_file(self.path_case_plugin + "/better_trace-{}-{}-upstream.text".format(each.task, each.pid))
+            each.dump_to_file(self.path_case_plugin + "/better_trace-{}-{}-{}.text".format(each.task, each.pid, self.kernel))
         req = request_get(url=self.case["report"])
         """use_trace, alloc_trace, free_trace = self._get_trace_from_kasan(req.text.split('\n'))
 
@@ -324,7 +324,7 @@ exit $EXIT_CODE""".format(modprobe_cmd, cmd)
             return trace_path
         if distro.type == VMInstance.UPSTREAM:
             if self.build_env_upstream() != 0:
-                self.err_msg("Failed to build upstream environment")
+                self.err_msg("Failed to build {} environment".format(self.kernel))
                 return None
 
         qemu = distro.repro.launch_qemu(self.case_hash, tag="{}-trace".format(distro.distro_name), work_path=self.path_case_plugin, 

@@ -40,6 +40,8 @@ class RawBugReproduce(AnalysisModule):
         except AttributeError:
             self.err_msg("Failed to get timeout")
             return False
+        if not self.has_c_repro:
+            return False
         return self.prepare_on_demand()
     
     def prepare_on_demand(self):

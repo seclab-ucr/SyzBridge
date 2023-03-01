@@ -69,7 +69,7 @@ class Syzscope(AnalysisModule):
         self.syz_feature.pop('prog_status')
         
         self.build_kernel()
-        upstream = self.cfg.get_kernel_by_name('upstream')
+        upstream = self.cfg.get_kernel_by_name(self.kernel)
         self._cur_distro = upstream
         self.run_symbolic_execution(upstream)
         return True
@@ -218,7 +218,7 @@ class Syzscope(AnalysisModule):
         qemu.logger.info("running PoC")
         testcase_text = open(testcase, "r").readlines()
         
-        cmds = self.syz_feature_mini.make_syz_command(testcase_text, self.syz_feature, i386, repeat=0, root=True)
+        cmds = self.syz_feature_mini.make_syz_command(testcase_text, self.syz_feature, i386, repeat=True, root=True)
         qemu.command(cmds=cmds, user=user, wait=False, timeout=self.repro_timeout)
         return
     

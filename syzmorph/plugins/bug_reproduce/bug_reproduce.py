@@ -66,8 +66,10 @@ class BugReproduce(AnalysisModule):
             try:
                 ret = func(self, *args)
             except KASANDoesNotEnabled as e:
+                self.logger.exception("KASANDoesNotEnabled paniced")
                 raise e
             except ModprobePaniced as e:
+                self.logger.exception("Modprobe paniced: {}".format(e.mod))
                 return e
             except Exception as e:
                 raise e

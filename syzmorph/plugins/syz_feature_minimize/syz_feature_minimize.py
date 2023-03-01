@@ -196,7 +196,7 @@ class SyzFeatureMinimize(AnalysisModule):
         new_features = essential_features.copy()
         if rule_out_feature in new_features:
             new_features[rule_out_feature] = False
-        upstream = self.cfg.get_kernel_by_name('upstream')
+        upstream = self.cfg.get_kernel_by_name(self.kernel)
         upstream.repro.init_logger(self.logger)
         _, triggered, _ = upstream.repro.reproduce(func=self._capture_crash, func_args=(new_features, test_c_prog, repeat, sandbox), vm_tag='test feature {}'.format(rule_out_feature),\
             timeout=self.repro_timeout + 100, attempt=self.repro_attempt, root=True, work_dir=self.path_case_plugin, c_hash=self.case_hash)
@@ -407,9 +407,12 @@ class SyzFeatureMinimize(AnalysisModule):
                 
                 if "tun" in features and features["tun"]:
                     enabled += "tun,"
-                    i = command.index('sandbox=')
-                    if i != -1:
-                        command[:i] + '-sandbox=namespace' + command[i+command[i:].index(' '):]
+                    try:
+                        i = command.index('-sandbox=')
+                        if i != -1:
+                            command[:i] + '-sandbox=namespace' + command[i+command[i:].index(' '):]
+                    except ValueError:
+                        command += "-sandbox=namespace "
                 if "binfmt_misc" in features and features["binfmt_misc"]:
                     enabled += "binfmt_misc,"
                 if "cgroups" in features and features["cgroups"]:

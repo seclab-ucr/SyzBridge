@@ -114,7 +114,7 @@ class GoogleSheets(AnalysisModule):
         self.fill_sheet(self.p_wks)
         try:
             if self.manager.module_capable("SlackBot") and \
-                    (self.data['reproduce-by-normal'] != [] or self.data['reproduce-by-root'] != []):
+                    (self.data['reproduce-by-normal'] != []):
                 bot = self._init_module(SlackBot())
                 bot.prepare()
                 blocks = bot.compose_blocks(self.data)
