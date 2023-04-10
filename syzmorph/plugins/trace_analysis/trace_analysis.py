@@ -53,6 +53,9 @@ class TraceAnalysis(AnalysisModule):
             self.err_msg("Starting retrieving trace from {}".format(self.kernel))
             cfg = self.cfg.get_kernel_by_name(self.kernel)
             if cfg == None:
+                self.logger.exception("Fail to get {} kernel".format(self.kernel))
+                return False
+            if cfg == None:
                 break
             trace_upstream = self._get_trace(i, cfg)
             if trace_upstream == None:
