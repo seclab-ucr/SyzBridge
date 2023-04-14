@@ -665,7 +665,7 @@ class Crawler:
             return []
         count = 0
         for table in tables:
-            if table.caption.text.find('Crash') != -1:
+            if table.text.find('Crash') != -1:
                 for case in table.tbody.contents:
                     if type(case) == element.Tag:
                         targeting_kernel = False
