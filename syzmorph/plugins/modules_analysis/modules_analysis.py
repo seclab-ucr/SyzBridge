@@ -110,6 +110,9 @@ class ModulesAnalysis(AnalysisModule):
         if trace == None:
             raise TraceAnalysisError("Failed to open {} trace file".format(self.kernel))
         upstream = self.cfg.get_kernel_by_name(self.kernel)
+        if upstream == None:
+            self.logger.exception("Fail to get {} kernel".format(self.kernel))
+            return False
         self.vm[self.kernel] = self._prepare_gdb(upstream)
         check_map = {}
         all_distros = self.cfg.get_distros()

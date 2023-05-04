@@ -70,6 +70,9 @@ class Syzscope(AnalysisModule):
         
         self.build_kernel()
         upstream = self.cfg.get_kernel_by_name(self.kernel)
+        if upstream == None:
+            self.logger.exception("Fail to get {} kernel".format(self.kernel))
+            return False
         self._cur_distro = upstream
         self.run_symbolic_execution(upstream)
         return True

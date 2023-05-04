@@ -77,6 +77,9 @@ class SyzDescription(AnalysisModule):
 
     def run(self):
         upstream = self.cfg.get_kernel_by_name(self.kernel)
+        if upstream == None:
+            self.logger.exception("Fail to get {} kernel".format(self.kernel))
+            return False
         self.path_image = upstream.distro_image
         self.port = upstream.repro.ssh_port
         self.path_kernel = upstream.distro_src

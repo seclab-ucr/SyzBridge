@@ -78,7 +78,7 @@ class SyzFeatureMinimize(AnalysisModule):
     def test_two_prog(self, features):
         if self._test_feature(None, features, repeat=True):
             return self.SYZ_PROG
-        if self.test_PoC(features, repeat=True):
+        if self.has_c_repro and self.test_PoC(features, repeat=True):
             return self.C_PROG
         return self.BOTH_FAIL
     
@@ -197,6 +197,9 @@ class SyzFeatureMinimize(AnalysisModule):
         if rule_out_feature in new_features:
             new_features[rule_out_feature] = False
         upstream = self.cfg.get_kernel_by_name(self.kernel)
+        if upstream == None:
+            self.logger.exception("Fail to get {} kernel".format(self.kernel))
+            return False
         upstream.repro.init_logger(self.logger)
         _, triggered, _ = upstream.repro.reproduce(func=self._capture_crash, func_args=(new_features, test_c_prog, repeat, sandbox), vm_tag='test feature {}'.format(rule_out_feature),\
             timeout=self.repro_timeout + 100, attempt=self.repro_attempt, root=True, work_dir=self.path_case_plugin, c_hash=self.case_hash)
@@ -246,6 +249,7 @@ class SyzFeatureMinimize(AnalysisModule):
         command = "./syz-prog2c -prog {} ".format(testcase_path)
         text = open(testcase_path, 'r').readlines()
         options = self._extract_prog_options('./syz-prog2c')
+        opt = {}
 
         enabled = "-enable="
         disable = "-disable="
@@ -261,22 +265,23 @@ class SyzFeatureMinimize(AnalysisModule):
                     if each in pm and pm[each] != "" and each in options:
                         if each == "sandbox" and 'no_sandbox' in features and features['no_sandbox']:
                             continue
-                        command += "-" + each + "=" +str(pm[each]).lower() + " "
+                        opt[each] = str(pm[each]).lower()
+                        
                         if each == "sandbox" and str(pm[each]).lower() != "none":
-                            command += "-tmpdir "
+                            opt['tmpdir'] = "true"
                     else:
                         if each=='arch' and i386:
-                            command += "-" + each + "=386" + " "
+                            opt[each] = "386"
                 if repeat:
-                    command += "-repeat=" + "0 "
+                    opt['repeat'] = "0"
                     if "procs" in pm and str(pm["procs"]) != "1":
                         num = int(pm["procs"])
-                        command += "-procs=" + str(num) + " "
+                        opt['procs'] = str(num)
                     else:
-                        command += "-procs=1" + " "
+                        opt['procs'] = "1"
                 else:
-                    command += "-repeat=" + "1 "
-                    command += "-procs=1" + " "
+                    opt['repeat'] = "1"
+                    opt['procs'] = "1"
                 #command += "-trace "
                 #It makes no sense that limiting the features of syz-execrpog, just enable them all
                 
@@ -284,23 +289,23 @@ class SyzFeatureMinimize(AnalysisModule):
                     if features['tun']:
                         enabled += "tun,"
                         if '-sandbox' not in command:
-                            command += "-sandbox=none "
+                            opt['sandbox'] = "none"
                         if '-tmpdir' not in command:
-                            command += "-tmpdir "
+                            opt['tmpdir'] = "true"
                 if "binfmt_misc" in features:
                     if features["binfmt_misc"]:
                         enabled += "binfmt_misc,"
                         if '-sandbox' not in command:
-                            command += "-sandbox=none "
+                            opt['sandbox'] = "none"
                         if '-tmpdir' not in command:
-                            command += "-tmpdir "
+                            opt['tmpdir'] = "true"
                 if "cgroups" in features:
                     if features["cgroups"]:
                         enabled += "cgroups,"
                         if '-sandbox' not in command:
-                            command += "-sandbox=none "
+                            opt['sandbox'] = "none"
                         if '-tmpdir' not in command:
-                            command += "-tmpdir "
+                            opt['tmpdir'] = "true"
                 if "close_fds" in features:
                     if features["close_fds"]:
                         enabled += "close_fds,"
@@ -310,9 +315,11 @@ class SyzFeatureMinimize(AnalysisModule):
                 if "netdev" in features:
                     if features["netdev"]:
                         enabled += "net_dev,"
+                        opt['sandbox'] = "namespace"
                 if "resetnet" in features:
                     if features["resetnet"]:
                         enabled += "net_reset,"
+                        opt['repeat'] = "0"
                 if "usb" in features:
                     if features["usb"]:
                         enabled += "usb,"
@@ -326,17 +333,19 @@ class SyzFeatureMinimize(AnalysisModule):
                     if features["vhci"]:
                         enabled += "vhci,"
                         if '-sandbox' not in command:
-                            command += "-sandbox=none "
+                            opt['sandbox'] = "none"
                         if '-tmpdir' not in command:
-                            command += "-tmpdir "
+                            opt['tmpdir'] = "true"
                 if "wifi" in features:
                     if features["wifi"]:
                         enabled += "wifi," 
                         if '-sandbox' not in command:
-                            command += "-sandbox=none "
+                            opt['sandbox'] = "none"
                         if '-tmpdir' not in command:
-                            command += "-tmpdir "
+                            opt['tmpdir'] = "true"
                 break
+        for key in opt:
+            command += "-" + key + "=" + opt[key] + " "
         if enabled[-1] == ',':
             enabled = enabled[:-1]
             command += enabled + " "
@@ -348,6 +357,7 @@ class SyzFeatureMinimize(AnalysisModule):
 
     def make_syz_command(self, text, features: list, i386: bool, repeat=None, sandbox="", root=True):
         command = "/tmp/syz-execprog -executor=/tmp/syz-executor "
+        opt = {}
         options = self._extract_prog_options('./syz-execprog')
         if text[0][:len(command)] == command:
             # If read from repro.command, text[0] was already the command
@@ -365,18 +375,18 @@ class SyzFeatureMinimize(AnalysisModule):
                     if each in pm and pm[each] != "" and each in options:
                         if each == "sandbox":
                             if sandbox != "":
-                                command += "-" + each + "=" + sandbox + " "
+                                opt[each] = sandbox
                                 continue
                             if 'no_sandbox' in features and features['no_sandbox']:
                                 continue
-                        command += "-" + each + "=" +str(pm[each]).lower() + " "
+                        opt[each] = str(pm[each]).lower()
                     else:
                         if each=='arch' and i386:
-                            command += "-" + each + "=386" + " "
+                            opt[each] = "386"
                         else:
                             if each == "sandbox":
                                 if sandbox != "":
-                                    command += "-" + each + "=" + sandbox + " "
+                                    opt[each] = sandbox
                                     continue
                                 if 'no_sandbox' in features and features['no_sandbox']:
                                     continue
@@ -385,34 +395,29 @@ class SyzFeatureMinimize(AnalysisModule):
                     if num < 6:
                         num = 3
                     else:
-                        command += "-procs=" + str(num*2) + " "
+                        opt['procs'] = str(num*2)
                 else:
                     if repeat:
-                        command += "-procs=6" + " "
+                        opt['procs'] = "6"
                     else:
-                        command += "-procs=1" + " "
+                        opt['procs'] = "1"
 
                 if repeat == None:
                     if "repeat" in pm and pm["repeat"] != "":
                         if pm["repeat"] == "0" or pm["repeat"] == True:
-                            command += "-repeat=" + "0 "
+                            opt['repeat'] = "0"
                             repeat = True
                         if pm["repeat"] == "1" or pm["repeat"] == False:
-                            command += "-repeat=" + "1 "
+                            opt['repeat'] = "1"
                 elif repeat:
-                    command += "-repeat=" + "0 "
+                    opt['repeat'] = "0"
                 else:
-                    command += "-repeat=" + "1 "
+                    opt['repeat'] = "1"
                 #It makes no sense that limiting the features of syz-execrpog, just enable them all
                 
                 if "tun" in features and features["tun"]:
                     enabled += "tun,"
-                    try:
-                        i = command.index('-sandbox=')
-                        if i != -1:
-                            command[:i] + '-sandbox=namespace' + command[i+command[i:].index(' '):]
-                    except ValueError:
-                        command += "-sandbox=namespace "
+                    opt['sandbox'] = "namespace"
                 if "binfmt_misc" in features and features["binfmt_misc"]:
                     enabled += "binfmt_misc,"
                 if "cgroups" in features and features["cgroups"]:
@@ -423,8 +428,10 @@ class SyzFeatureMinimize(AnalysisModule):
                     enabled += "devlink_pci,"
                 if "netdev" in features and features["netdev"]:
                     enabled += "net_dev,"
+                    opt['sandbox'] = "namespace"
                 if "resetnet" in features and features["resetnet"]:
                     enabled += "net_reset,"
+                    opt['repeat'] = "0"
                 if "usb" in features and features["usb"]:
                     enabled += "usb,"
                 if "ieee802154" in features and features["ieee802154"]:
@@ -437,7 +444,9 @@ class SyzFeatureMinimize(AnalysisModule):
                     enabled += "wifi,"
                 break
         if not root and enabled == "-enable=" and '-sandbox=namespace' not in command:
-            command += "-disable=tun,devlink_pci "
+            opt['disable'] =  "tun,devlink_pci"
+        for key in opt:
+            command += "-" + key + "=" + opt[key] + " "
         if enabled[-1] == ',':
             enabled = enabled[:-1]
             command += enabled + " "
