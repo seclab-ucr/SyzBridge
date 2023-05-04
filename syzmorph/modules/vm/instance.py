@@ -197,15 +197,18 @@ class VMInstance(Network):
 
     @log_thread
     def monitor_execution(self):
+        booting_timer = 0
         self.timer = 0
         run_alternative_func = False
         error_count = 0
-        while not self.func_finished() and (self.timeout == None or self.timer <self.timeout):
+        while not self.func_finished() and (self.timeout == None or self.timer <self.timeout) and booting_timer < 180:
             if self.kill_qemu:
                 self.case_logger.info('Signal kill qemu received.')
                 self.kill_vm()
                 return
             self.timer += 1
+            if not self.qemu_ready:
+                booting_timer += 1
             time.sleep(1)
             poll = self.instance.poll()
             if poll != None:
