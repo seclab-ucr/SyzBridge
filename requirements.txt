@@ -16,3 +16,4 @@ googleapis-common-protos==1.55.0
 protobuf==3.19.4
 pygsheets==2.0.5
 rich==12.5.1
+filelock==3.12.0
