@@ -222,7 +222,11 @@ class GoogleSheets(AnalysisModule):
                 return 2
             try:
                 n_line = int(regx_get(r'(\d+):.*', title, 0))
+                if n_line == 0:
+                    wks.insert_rows(1, number=self.n_distro)
+                    return 2
             except:
+                wks.insert_rows(1, number=self.n_distro)
                 return 2
             i+= n_line
     
