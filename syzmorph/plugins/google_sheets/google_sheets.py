@@ -6,6 +6,7 @@ from infra.tool_box import *
 from plugins import AnalysisModule
 from plugins.slack_bot import SlackBot
 from .error import CriticalModuleNotFinish
+from filelock import Timeout, FileLock
 
 class GoogleSheets(AnalysisModule):
     NAME = "GoogleSheets"
@@ -40,6 +41,7 @@ class GoogleSheets(AnalysisModule):
         self.p_wks: pygsheets.Spreadsheet = None
         self.main_sheet = None
         self.m_wks: pygsheets.Spreadsheet = None
+        self._lock = None
         
     def prepare(self):
         plugin = self.cfg.get_plugin(self.NAME)
@@ -67,6 +69,7 @@ class GoogleSheets(AnalysisModule):
             self.sh = gc.open(proj)
         except pygsheets.SpreadsheetNotFound:
             self.sh = gc.create(proj)
+        self._prepare_lock()
         self._prepared = True
         return True
     
@@ -78,6 +81,8 @@ class GoogleSheets(AnalysisModule):
             for _ in range(0, 3):
                 try:
                     ret = func(self)
+                    if self._lock.is_locked():
+                        self._lock.release(force=True)
                     return ret
                 except Exception as e:
                     self.err_msg("GoogleSheets error: {}".format(e))
@@ -85,6 +90,8 @@ class GoogleSheets(AnalysisModule):
                     self.logger.error(tb)
                     # Sometimes the request is exceed the limits set by Google
                     time.sleep(60)
+            if self._lock.is_locked():
+                self._lock.release(force=True)
         return inner
 
     def sleeper(func):
@@ -504,6 +511,14 @@ class GoogleSheets(AnalysisModule):
     def _write_to(self, content, name):
         file_path = "{}/{}".format(self.path_case_plugin, name)
         super()._write_to(content, file_path)
+    
+    def _prepare_lock(self):
+        path_tools = os.path.join(self.path_project, "tools")
+        plugin_lock = ".google_sheets.lock"
+        path_lock = os.path.join(path_tools, plugin_lock)
+        self._lock = FileLock(path_lock)
+        self.logger.info("acquire plugin lock")
+        self._lock.acquire(timeout=-1)
     
     def cleanup(self):
         super().cleanup()
