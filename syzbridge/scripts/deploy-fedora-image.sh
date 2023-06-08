@@ -146,17 +146,9 @@ function compile_fedora() {
             echo "CONFIG_DEBUG_CREDENTIALS=y" >> kernel-local
         fi
         enable_feature=$((enable_feature>>1))
+	    sed -i '/process_configs.sh $OPTS/d' kernel.spec
         patch -p1 -f -i ~/kernel_spec.patch || sed -i 's/%define listnewconfig_fail 1/%define listnewconfig_fail 0/' kernel.spec
-        if [ ${code_name} == "31" ]; then
-            sed -i 's/.\/process_configs.sh -i kernel %{rpmversion}/.\/process_configs.sh $OPTS kernel %{rpmversion}/' kernel.spec
-        else
-            if [ -f "./process_configs.sh" ] && [ -z "$(grep CONTINUEONERROR ./process_configs.sh)" ]; then
-                mv process_configs.sh process_configs.sh.bk
-                mv ~/process_configs.sh ./
-                chmod +x ./process_configs.sh
-            fi
-        fi
-        dnf -y builddep kernel.spec
+	dnf -y builddep kernel.spec
 
         # https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/patch/?id=854e55ad289ef8888e7991f0ada85d5846f5afb9
         # f28 suffers from this bug, patch it in the fly.
