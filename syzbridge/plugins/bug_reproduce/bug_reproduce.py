@@ -107,12 +107,12 @@ class BugReproduce(AnalysisModule):
 
         self.syz_feature_mini = self.cfg.get_plugin(SyzFeatureMinimize.NAME).instance
         self.syz_feature_mini.path_case_plugin = os.path.join(self.path_case, SyzFeatureMinimize.NAME)
-        self.syz_feature = self.syz_feature_mini.results.copy()
         if not self.plugin_finished("SyzFeatureMinimize"):
             self.info_msg("BugReproduce will use C Prog instead")
             self.ori_c_prog = True
             self.c_prog = True
         else:
+            self.syz_feature = self.syz_feature_mini.results.copy()
             self.logger.info("Receive syz_feature: {} {}".format(self.syz_feature, self.syz_feature_mini))
             if self.syz_feature['prog_status'] == SyzFeatureMinimize.C_PROG:
                 self.c_prog = False
