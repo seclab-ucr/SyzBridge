@@ -12,6 +12,12 @@ function clean_and_jump() {
   git checkout -f $COMMIT
 }
 
+function compile_with_patches() {
+  grep -E "New address family defined, please update secclass_map" make.log || false
+  patch -p1 -i $PROJECT_PATH/syzbridge/resources/PF_MAX.patch
+  make -j$N_CORES CC=$COMPILER > make.log 2>&1
+}
+
 function copy_log_then_exit() {
   LOG=$1
   cp $LOG $CASE_PATH/$LOG-deploy_linux
@@ -300,7 +306,7 @@ if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
       done
 
       make olddefconfig CC=$COMPILER
-      make -j$N_CORES CC=$COMPILER > make.log 2>&1 || copy_log_then_exit make.log
+      make -j$N_CORES CC=$COMPILER > make.log 2>&1 || compile_with_patches || copy_log_then_exit make.log
     fi
     rm $CASE_PATH/config || echo "It's ok"
     cp .config $CASE_PATH/config
