@@ -25,7 +25,8 @@ class Crawler:
                  keyword=[], max_retrieve=99999, filter_by_reported="", log_path = ".", cfg=None,
                  filter_by_closed="", filter_by_c_prog=False, filter_by_kernel=[], 
                  filter_by_fixes_tag=False, filter_by_patch=False, filter_by_hashs=[],
-                 filter_by_distro_effective_cycle=False, match_single_distro=False,
+                 filter_by_distro_cycle_start=False, filter_by_distro_cycle_end=False,
+                 match_single_distro=False,
                  include_high_risk=True, debug=False):
         self.url = url
         if type(keyword) == list:
@@ -42,7 +43,9 @@ class Crawler:
         self.logger = init_logger(log_path + "/syzbot.log", debug = debug, propagate=True)
         self.filter_by_reported = [-1, -1]
         self.filter_by_closed = [-1, -1]
-        self.filter_by_distro_effective_cycle = filter_by_distro_effective_cycle
+        self.filter_by_distro_cycle_start = filter_by_distro_cycle_start
+        self.filter_by_distro_cycle_end = filter_by_distro_cycle_end or match_single_distro
+        self.filter_by_distro_effective_cycle = filter_by_distro_cycle_start or filter_by_distro_cycle_end
         self.distro_vm = {}
         self.match_single_distro = match_single_distro
         if filter_by_reported != "":
@@ -103,7 +106,10 @@ class Crawler:
             self._patch_info['url'] = patch_url
             if self.filter_by_fixes_tag or self.filter_by_patch:
                 if patch_url == None or not self.check_excluded_distro(each['Hash'], patch_url):
-                    self.logger.debug("{} does not have a fixes tag or a patch url".format(each['Hash']))
+                    if patch_url == None:
+                        self.logger.debug("{} does not have a patch url".format(each['Hash']))
+                    else:
+                        self.logger.debug("{} does not have a fixes tag".format(each['Hash']))
                     if each['Hash'] in self.cases:
                         self.cases.pop(each['Hash'])
                     continue
@@ -331,15 +337,13 @@ class Crawler:
         self.logger.debug("bug was reported {} days ago ({})".format(date_diff, report_date))
         closest_date = None
         for distro in self.cfg.get_all_distros():
-            # As long as distro is still in support, we should pick them.
-            if distro.effective_cycle_end != "":
-                effective_end_date_diff = today - pd.to_datetime(distro.effective_cycle_end).date()
-                if date_diff <= effective_end_date_diff.days:
-                    continue
+            if self.filter_by_distro_cycle_end:
+                if distro.effective_cycle_end != "":
+                    effective_end_date_diff = today - pd.to_datetime(distro.effective_cycle_end).date()
+                    if date_diff <= effective_end_date_diff.days:
+                        continue
 
-            # Distro release date is not important to bug dataset as long as 
-            # the patch hasn't been applied to that distro
-            if self.match_single_distro:
+            if self.filter_by_distro_cycle_start:
                 if distro.effective_cycle_start != "":
                     effective_start_date_diff = today - pd.to_datetime(distro.effective_cycle_start).date()
                     if date_diff > effective_start_date_diff.days:
@@ -521,7 +525,10 @@ class Crawler:
         self._patch_info = {'url': patch_url, 'fixes':[]}
         if self.filter_by_fixes_tag or self.filter_by_patch:
             if patch_url == None or not self.check_excluded_distro(hash_val, patch_url):
-                self.logger.error("{} does not have a fixes tag or a patch url".format(hash_val))
+                if patch_url == None:
+                    self.logger.debug("{} does not have a patch url".format(each['Hash']))
+                else:
+                    self.logger.debug("{} does not have a fixes tag".format(each['Hash']))
                 self.cases.pop(hash_val)
                 return
         if self.filter_by_distro_effective_cycle:
