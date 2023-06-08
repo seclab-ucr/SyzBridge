@@ -156,6 +156,7 @@ class VMInstance(Network):
                 while n > 0:
                     if self.instance.poll() == None:
                         time.sleep(1)
+                        n -= 1
                     else:
                         break
             self.instance.kill()

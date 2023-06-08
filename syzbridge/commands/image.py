@@ -580,110 +580,13 @@ class ImageCommand(Command):
                     return False
 
         if self.distro == 'ubuntu':
-            dkms_path_path = os.path.join(proj_path, "resources/dkms.patch")
-
-            ret = qemu.upload(user=self.ssh_user, src=[image_building_script_path, dkms_path_path], dst='~', wait=True)
-            if ret == None or ret != 0:
-                qemu.logger.error("Failed to upload {}".format(image_building_script_path))
-                return False
-
-            if self.get == '':
-                qemu.command(user=self.ssh_user, cmds="chmod +x {0} && ./{0} '{1}' '{2}' {3}".format(image_building_script, 
-                    self.version_since, self.version_until, self.enable_feature), wait=True)
-            else:
-                qemu.command(user=self.ssh_user, cmds="chmod +x {0} && ./{0} {1} {2}".format(image_building_script, self.get, self.enable_feature), wait=True)
-        
-            out = qemu.command(user=self.ssh_user, cmds="cd ubuntu-{} && ls -l *.ddeb".format(self.code_name), wait=True)
-            had_ddeb = False
-            ddeb_regx = r'(linux-image-(unsigned-)?(.+)-dbgsym_(.+)_amd64\.ddeb)'
-            for line in out:
-                if regx_match(ddeb_regx, line):
-                    had_ddeb = True
-                    ddeb_pacage = regx_get(ddeb_regx, line, 1)
-                    self.kernel_version = regx_get(ddeb_regx, line, 2)
-                    self.kernel_package_version = regx_get(ddeb_regx, line, 3)
-
-            qemu.download(user=self.ssh_user, src=["/tmp/ubuntu.tar.gz"], dst=self.build_dir, wait=True)
-
-            if not had_ddeb:
-                qemu.logger.error("Failed to build image, check the log")
-                return False
-            
-            qemu.download(user=self.ssh_user, src=["/boot/grub/grub.cfg"], dst=self.build_dir, wait=True)
-            if os.path.exists(os.path.join(self.build_dir, "grub.cfg")):
-                grub_str = self.grub_order(os.path.join(self.build_dir, "grub.cfg"))
-                self.logger.info("grub command: {}".format(grub_str))
-                if grub_str != None:
-                    qemu.command(user=self.ssh_user, cmds="sed -i 's/GRUB_DEFAULT=.*/GRUB_DEFAULT=\"{}\"/' /etc/default/grub && update-grub".format(grub_str), wait=True)
-                    qemu.shutdown()
+            self._deploy_ubuntu(qemu, proj_path, image_building_script_path, image_building_script)
             
         if self.distro == "debian":
-            ret = qemu.upload(user=self.ssh_user, src=[image_building_script_path], dst='~', wait=True)
-            if ret == None or ret != 0:
-                qemu.logger.error("Failed to upload {}".format(image_building_script_path))
-                return False
-
-            # The dsc url should be like http://snapshot.debian.org/archive/debian/20190822T152536Z/pool/main/l/linux/linux_4.19.67-1.dsc
-            try:
-                linux_folder = self.get[::-1].split('/')[0][::-1].split('-')[0]
-                self.kernel_version = linux_folder.split('_')[1]
-            except:
-                self.logger.error("Cannot parse this url {}, pick a .dsc file from http://snapshot.debian.org/package/linux/".format(self.get))
-                return False
-            qemu.command(user=self.ssh_user, cmds="chmod +x {0} && ./{0} {1} {2} {3}".format(image_building_script, self.get, self.kernel_version, self.enable_feature), wait=True)
-            if not os.path.exists(os.path.join(self.build_dir, "debian.tar.gz")) and not os.path.exists(os.path.join(self.build_dir, "debian-{}".format(self.code_name))):
-                if qemu.download(user=self.ssh_user, src=["/tmp/debian.tar.gz"], dst=self.build_dir, wait=True) != 0:
-                    return False
-                    
-            qemu.download(user=self.ssh_user, src=["/boot/grub/grub.cfg"], dst=self.build_dir, wait=True)
-            if os.path.exists(os.path.join(self.build_dir, "grub.cfg")):
-                grub_str = self.grub_order(os.path.join(self.build_dir, "grub.cfg"))
-                self.logger.info("grub command: {}".format(grub_str))
-                if grub_str != None:
-                    qemu.command(user=self.ssh_user, cmds="sed -i 's/GRUB_DEFAULT=.*/GRUB_DEFAULT=\"{}\"/' /etc/default/grub && update-grub".format(grub_str), wait=True)
-                    qemu.shutdown()
+            self._deploy_debian(qemu, proj_path, image_building_script_path, image_building_script)
         
         if self.distro == "fedora":
-            out = qemu.command(user=self.ssh_user, cmds="uname -r", wait=True);
-            self.code_name = ""
-            for line in out:
-                if regx_match(r"\.fc(\d+)\.x86_64", line):
-                    self.code_name = regx_get(r"\.fc(\d+)\.x86_64", line, 0)
-            
-            if self.code_name == "":
-                qemu.logger.error("Failed to get code name")
-                return False
-
-            kernel_spec_patch_path = os.path.join(proj_path, "resources/kernel_spec.patch")
-            process_configs_path = os.path.join(proj_path, "resources/process_configs.sh")
-
-            ret = qemu.upload(user=self.ssh_user, src=[image_building_script_path, kernel_spec_patch_path, process_configs_path], dst='~', wait=True)
-            if ret == None or ret != 0:
-                qemu.logger.error("Failed to upload {}".format(image_building_script_path))
-                return False
-
-            if self.get == '':
-                out = qemu.command(user=self.ssh_user, cmds="chmod +x {0} && ./{0} '{1}' '{2}' {3} {4}".format(image_building_script, 
-                    self.version_since, self.version_until, self.enable_feature, self.code_name), wait=True)
-            else:
-                out = qemu.command(user=self.ssh_user, cmds="chmod +x {0} && ./{0} {1} {2} {3}".format(image_building_script, self.get, self.enable_feature, self.code_name), wait=True)
-
-            for line in out:
-                if line.startswith("MAGIC!!?"):
-                    self.kernel_version = line.split("MAGIC!!?")[1][1:]
-            
-            if not os.path.exists(os.path.join(self.build_dir, "fedora.tar.gz")) and not os.path.exists(os.path.join(self.build_dir, "fedora-{}".format(self.code_name))):
-                if qemu.download(user=self.ssh_user, src=["/tmp/fedora.tar.gz"], dst=self.build_dir, wait=True) != 0:
-                    return False
-
-            out = qemu.command(user=self.ssh_user, cmds="ls -l /boot/vmlinuz-*".format(self.kernel_version), wait=True)
-            for line in out:
-                if regx_match(r'vmlinuz-(.*)\+debug', line):
-                    self.kernel_version = regx_get(r'vmlinuz-(.*\+debug)', line, 0)
-                    qemu.command(user=self.ssh_user, cmds="grubby --set-default /boot/vmlinuz-{}".format(self.kernel_version), wait=True);
-                    qemu.command(user=self.ssh_user, cmds="grub2-mkconfig -o /boot/grub2/grub.cfg", wait=True);
-                    break
-            qemu.shutdown()
+            self._deploy_fedora(qemu, proj_path, image_building_script_path, image_building_script)
 
         return True
     
@@ -698,6 +601,113 @@ class ImageCommand(Command):
             return None
         return grub_str[1:]
 
+    def _deploy_ubuntu(self, qemu: VM, proj_path, image_building_script_path, image_building_script):
+        dkms_path_path = os.path.join(proj_path, "resources/dkms.patch")
+        mpi_oob_path = os.path.join(proj_path, "resources/mpi_oob_fix.patch")
+
+        ret = qemu.upload(user=self.ssh_user, src=[image_building_script_path, dkms_path_path, mpi_oob_path], dst='~', wait=True)
+        if ret == None or ret != 0:
+            qemu.logger.error("Failed to upload {}".format(image_building_script_path))
+            return False
+
+        if self.get == '':
+            qemu.command(user=self.ssh_user, cmds="chmod +x {0} && ./{0} '{1}' '{2}' {3}".format(image_building_script, 
+                self.version_since, self.version_until, self.enable_feature), wait=True)
+        else:
+            qemu.command(user=self.ssh_user, cmds="chmod +x {0} && ./{0} {1} {2}".format(image_building_script, self.get, self.enable_feature), wait=True)
+    
+        out = qemu.command(user=self.ssh_user, cmds="cd ubuntu-{} && ls -l *.ddeb".format(self.code_name), wait=True)
+        had_ddeb = False
+        ddeb_regx = r'(linux-image-(unsigned-)?(.+)-dbgsym_(.+)_amd64\.ddeb)'
+        for line in out:
+            if regx_match(ddeb_regx, line):
+                had_ddeb = True
+                ddeb_pacage = regx_get(ddeb_regx, line, 1)
+                self.kernel_version = regx_get(ddeb_regx, line, 2)
+                self.kernel_package_version = regx_get(ddeb_regx, line, 3)
+
+        qemu.download(user=self.ssh_user, src=["/tmp/ubuntu.tar.gz"], dst=self.build_dir, wait=True)
+
+        if not had_ddeb:
+            qemu.logger.error("Failed to build image, check the log")
+            return False
+        
+        qemu.download(user=self.ssh_user, src=["/boot/grub/grub.cfg"], dst=self.build_dir, wait=True)
+        if os.path.exists(os.path.join(self.build_dir, "grub.cfg")):
+            grub_str = self.grub_order(os.path.join(self.build_dir, "grub.cfg"))
+            self.logger.info("grub command: {}".format(grub_str))
+            if grub_str != None:
+                qemu.command(user=self.ssh_user, cmds="sed -i 's/GRUB_DEFAULT=.*/GRUB_DEFAULT=\"{}\"/' /etc/default/grub && update-grub".format(grub_str), wait=True)
+                qemu.shutdown()
+        
+    def _deploy_debian(self, qemu: VM, proj_path, image_building_script_path, image_building_script):
+        ret = qemu.upload(user=self.ssh_user, src=[image_building_script_path], dst='~', wait=True)
+        if ret == None or ret != 0:
+            qemu.logger.error("Failed to upload {}".format(image_building_script_path))
+            return False
+
+        # The dsc url should be like http://snapshot.debian.org/archive/debian/20190822T152536Z/pool/main/l/linux/linux_4.19.67-1.dsc
+        try:
+            linux_folder = self.get[::-1].split('/')[0][::-1].split('-')[0]
+            self.kernel_version = linux_folder.split('_')[1]
+        except:
+            self.logger.error("Cannot parse this url {}, pick a .dsc file from http://snapshot.debian.org/package/linux/".format(self.get))
+            return False
+        qemu.command(user=self.ssh_user, cmds="chmod +x {0} && ./{0} {1} {2} {3}".format(image_building_script, self.get, self.kernel_version, self.enable_feature), wait=True)
+        if not os.path.exists(os.path.join(self.build_dir, "debian.tar.gz")) and not os.path.exists(os.path.join(self.build_dir, "debian-{}".format(self.code_name))):
+            if qemu.download(user=self.ssh_user, src=["/tmp/debian.tar.gz"], dst=self.build_dir, wait=True) != 0:
+                return False
+                
+        qemu.download(user=self.ssh_user, src=["/boot/grub/grub.cfg"], dst=self.build_dir, wait=True)
+        if os.path.exists(os.path.join(self.build_dir, "grub.cfg")):
+            grub_str = self.grub_order(os.path.join(self.build_dir, "grub.cfg"))
+            self.logger.info("grub command: {}".format(grub_str))
+            if grub_str != None:
+                qemu.command(user=self.ssh_user, cmds="sed -i 's/GRUB_DEFAULT=.*/GRUB_DEFAULT=\"{}\"/' /etc/default/grub && update-grub".format(grub_str), wait=True)
+                qemu.shutdown()
+    
+    def _deploy_fedora(self, qemu: VM, proj_path, image_building_script_path, image_building_script):
+        out = qemu.command(user=self.ssh_user, cmds="uname -r", wait=True);
+        self.code_name = ""
+        for line in out:
+            if regx_match(r"\.fc(\d+)\.x86_64", line):
+                self.code_name = regx_get(r"\.fc(\d+)\.x86_64", line, 0)
+        
+        if self.code_name == "":
+            qemu.logger.error("Failed to get code name")
+            return False
+
+        kernel_spec_patch_path = os.path.join(proj_path, "resources/kernel_spec.patch")
+        process_configs_path = os.path.join(proj_path, "resources/process_configs.sh")
+
+        ret = qemu.upload(user=self.ssh_user, src=[image_building_script_path, kernel_spec_patch_path, process_configs_path], dst='~', wait=True)
+        if ret == None or ret != 0:
+            qemu.logger.error("Failed to upload {}".format(image_building_script_path))
+            return False
+
+        if self.get == '':
+            out = qemu.command(user=self.ssh_user, cmds="chmod +x {0} && ./{0} '{1}' '{2}' {3} {4}".format(image_building_script, 
+                self.version_since, self.version_until, self.enable_feature, self.code_name), wait=True)
+        else:
+            out = qemu.command(user=self.ssh_user, cmds="chmod +x {0} && ./{0} {1} {2} {3}".format(image_building_script, self.get, self.enable_feature, self.code_name), wait=True)
+
+        for line in out:
+            if line.startswith("MAGIC!!?"):
+                self.kernel_version = line.split("MAGIC!!?")[1][1:]
+        
+        if not os.path.exists(os.path.join(self.build_dir, "fedora.tar.gz")) and not os.path.exists(os.path.join(self.build_dir, "fedora-{}".format(self.code_name))):
+            if qemu.download(user=self.ssh_user, src=["/tmp/fedora.tar.gz"], dst=self.build_dir, wait=True) != 0:
+                return False
+
+        out = qemu.command(user=self.ssh_user, cmds="ls -l /boot/vmlinuz-*".format(self.kernel_version), wait=True)
+        for line in out:
+            if regx_match(r'vmlinuz-(.*)\+debug', line):
+                self.kernel_version = regx_get(r'vmlinuz-(.*\+debug)', line, 0)
+                qemu.command(user=self.ssh_user, cmds="grubby --set-default /boot/vmlinuz-{}".format(self.kernel_version), wait=True);
+                qemu.command(user=self.ssh_user, cmds="grub2-mkconfig -o /boot/grub2/grub.cfg", wait=True);
+                break
+        qemu.shutdown()
+            
     def _decompress_ko(self, module_path):
         local_command(command="xz --decompress `find ./ -name \"*.ko.xz\"`", shell=True, cwd=module_path)
         return

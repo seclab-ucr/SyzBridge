@@ -257,10 +257,13 @@ class GoogleSheets(AnalysisModule):
     
     @sleeper
     def _write_url(self, wks: pygsheets.Worksheet):
-        url = "https://syzkaller.appspot.com/bug?id=" + self.data['hash']
+        url_id_ext = 'bug?id='
+        if len(self.data['hash']) != 40:
+            url_id_ext = 'bug?extid='
+        url = "https://syzkaller.appspot.com/" + url_id_ext + self.data['hash']
         self.data['url'] = url
         self._merge_cell('C', wks)
-        wks.update_value('C'+str(self.idx), "=HYPERLINK(\"https://syzkaller.appspot.com/bug?id=\"&A{}, \"url\")".format(self.idx))
+        wks.update_value('C'+str(self.idx), "=HYPERLINK(\"https://syzkaller.appspot.com/{}\"&A{}, \"url\")".format(url_id_ext, self.idx))
     
     @sleeper
     def _write_affect_distro(self, wks: pygsheets.Worksheet, append):

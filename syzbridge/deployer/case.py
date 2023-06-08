@@ -70,8 +70,10 @@ class Case:
         self.case_logger = init_logger(self.path_case+"/log", 
             cus_format='%(asctime)s %(message)s',
             debug=self.debug, propagate=self.debug)
-        
-        self.case_logger.info("https://syzkaller.appspot.com/bug?id={}".format(case_hash))
+        if len(case_hash) != 40:
+            self.case_logger.info("https://syzkaller.appspot.com/bug?extid={}".format(case_hash))
+        else:
+            self.case_logger.info("https://syzkaller.appspot.com/bug?id={}".format(case_hash))
         
         syz_prog = self.case['syz_repro']
         c_prog = self.case["c_repro"]

@@ -100,6 +100,7 @@ class Crawler:
                     (patch_url in high_risk_impacts and not self.include_high_risk):
                     continue
                 self._patches[patch_url] = True
+            self._patch_info['url'] = patch_url
             if self.filter_by_fixes_tag or self.filter_by_patch:
                 if patch_url == None or not self.check_excluded_distro(each['Hash'], patch_url):
                     self.logger.debug("{} does not have a fixes tag or a patch url".format(each['Hash']))
@@ -517,7 +518,7 @@ class Crawler:
         patch_url = self.get_patch_url(hash_val)
         if self.retreive_case(hash_val) == -1:
             return
-        self._patch_info = {'url': None, 'fixes':[]}
+        self._patch_info = {'url': patch_url, 'fixes':[]}
         if self.filter_by_fixes_tag or self.filter_by_patch:
             if patch_url == None or not self.check_excluded_distro(hash_val, patch_url):
                 self.logger.error("{} does not have a fixes tag or a patch url".format(hash_val))
