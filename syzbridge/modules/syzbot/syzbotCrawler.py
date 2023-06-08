@@ -526,9 +526,9 @@ class Crawler:
         if self.filter_by_fixes_tag or self.filter_by_patch:
             if patch_url == None or not self.check_excluded_distro(hash_val, patch_url):
                 if patch_url == None:
-                    self.logger.debug("{} does not have a patch url".format(each['Hash']))
+                    self.logger.debug("{} does not have a patch url".format(hash_val))
                 else:
-                    self.logger.debug("{} does not have a fixes tag".format(each['Hash']))
+                    self.logger.debug("{} does not have a fixes tag".format(hash_val))
                 self.cases.pop(hash_val)
                 return
         if self.filter_by_distro_effective_cycle:
