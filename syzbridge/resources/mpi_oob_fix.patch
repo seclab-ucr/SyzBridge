@@ -1,0 +1,14 @@
+diff --git a/lib/mpi/mpicoder.c b/lib/mpi/mpicoder.c
+index e37dbf5..44d8c92 100644
+--- a/lib/mpi/mpicoder.c
++++ b/lib/mpi/mpicoder.c
+@@ -500,9 +500,6 @@ MPI mpi_read_raw_from_sgl(struct scatterlist *sgl, unsigned int len)
+ 		int len = sg->length - lzeros;
+ 		int buf_shift = x;
+ 
+-		if  (sg_is_last(sg) && (len % BYTES_PER_MPI_LIMB))
+-			len += BYTES_PER_MPI_LIMB - (len % BYTES_PER_MPI_LIMB);
+-
+ 		for (; x < len + buf_shift; x++) {
+ 			a <<= 8;
+ 			a |= *buffer++;
