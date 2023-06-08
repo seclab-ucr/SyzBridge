@@ -20,6 +20,8 @@ class SyzFeatureMinimize(AnalysisModule):
     SYZ_PROG = 0
     C_PROG = 1
     BOTH_FAIL = 2
+    ARG_APPEND = 1
+    ARG_ALONE = 0
 
     def __init__(self):
         super().__init__()
@@ -236,13 +238,16 @@ class SyzFeatureMinimize(AnalysisModule):
         return
     
     def _extract_prog_options(self, prog):
-        options = []
+        options = {}
         out = local_command(command="chmod +x {0} && {0} -h".format(prog), shell=True, cwd=self.path_case_plugin)
         for line in out:
             if regx_match(r'^( )+-([a-z0-9A-Z_]+)', line):
                 op = regx_get(r'^( )+-([a-z0-9A-Z_]+)', line, 1)
                 if op != None:
-                    options.append(op)
+                    if regx_match(r'^( )+-([a-z0-9A-Z_]+ [a-z0-9A-Z_]+)', line):
+                        options[op] = self.ARG_APPEND
+                    else:
+                        options[op] = self.ARG_ALONE
         return options
 
     def _make_prog2c_command(self, testcase_path, features: dict, i386: bool, repeat=True):
@@ -345,7 +350,10 @@ class SyzFeatureMinimize(AnalysisModule):
                                 opt['tmpdir'] = "true"
                 break
         for key in opt:
-            command += "-" + key + "=" + opt[key] + " "
+            if key == "repeat" and opt[key] == "0" and options[key] == self.ARG_ALONE:
+                command += "-" + key + " "
+            else:
+                command += "-" + key + "=" + opt[key] + " "
         if self.syz.support_enable_feature():
             if enabled[-1] == ',':
                 enabled = enabled[:-1]
@@ -448,7 +456,10 @@ class SyzFeatureMinimize(AnalysisModule):
             if not root and enabled == "-enable=" and '-sandbox=namespace' not in command:
                 opt['disable'] =  "tun,devlink_pci"
         for key in opt:
-            command += "-" + key + "=" + opt[key] + " "
+            if key == "repeat" and opt[key] == "0" and options[key] == self.ARG_ALONE:
+                command += "-" + key + " "
+            else:
+                command += "-" + key + "=" + opt[key] + " "
         if self.syz.support_enable_feature():
             if enabled[-1] == ',':
                 enabled = enabled[:-1]
