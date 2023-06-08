@@ -60,7 +60,7 @@ class SyzFeatureMinimize(AnalysisModule):
     
     def build_syzkaller(self):
         syz_commit = self.case['syzkaller']
-        self.syz = self._init_module(SyzkallerInterface())
+        self._prepare_syz()
         self.syz.prepare_on_demand(self.path_case_plugin)
         if self.syz.pull_syzkaller(commit=syz_commit) != 0:
             self.err_msg("Failed to pull syzkaller")
@@ -289,7 +289,7 @@ class SyzFeatureMinimize(AnalysisModule):
                     opt['procs'] = "1"
                 #command += "-trace "
                 #It makes no sense that limiting the features of syz-execrpog, just enable them all
-                if self.syz.support_enable_feature():
+                if self._support_enable_feature():
                     if "tun" in features:
                         if features['tun']:
                             enabled += "tun,"
@@ -354,7 +354,7 @@ class SyzFeatureMinimize(AnalysisModule):
                 command += "-" + key + " "
             else:
                 command += "-" + key + "=" + opt[key] + " "
-        if self.syz.support_enable_feature():
+        if self._support_enable_feature():
             if enabled[-1] == ',':
                 enabled = enabled[:-1]
                 command += enabled + " "
@@ -423,7 +423,7 @@ class SyzFeatureMinimize(AnalysisModule):
                 else:
                     opt['repeat'] = "1"
                 #It makes no sense that limiting the features of syz-execrpog, just enable them all
-                if self.syz.support_enable_feature():
+                if self._support_enable_feature():
                     if "tun" in features and features["tun"]:
                         enabled += "tun,"
                         opt['sandbox'] = "namespace"
@@ -452,7 +452,7 @@ class SyzFeatureMinimize(AnalysisModule):
                     if "wifi" in features and features["wifi"]:
                         enabled += "wifi,"
                 break
-        if self.syz.support_enable_feature():
+        if self._support_enable_feature():
             if not root and enabled == "-enable=" and '-sandbox=namespace' not in command:
                 opt['disable'] =  "tun,devlink_pci"
         for key in opt:
@@ -460,9 +460,19 @@ class SyzFeatureMinimize(AnalysisModule):
                 command += "-" + key + " "
             else:
                 command += "-" + key + "=" + opt[key] + " "
-        if self.syz.support_enable_feature():
+        if self._support_enable_feature():
             if enabled[-1] == ',':
                 enabled = enabled[:-1]
                 command += enabled + " "
         command += "testcase"
         return command
+    
+    def _prepare_syz(self):
+        self.syz = self._init_module(SyzkallerInterface())
+    
+    def _support_enable_feature(self):
+        if self.syz == None:
+            if self.build_syzkaller() < 0:
+                self.err_msg('Failed to build syzkaller')
+                return False
+        return self.syz.support_enable_feature()
