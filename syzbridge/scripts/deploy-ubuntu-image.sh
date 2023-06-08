@@ -284,7 +284,7 @@ function compile_ubuntu() {
 function archive_kernel() {
     if [ ! -f ~/.stamp/ARCHIVE_KERNEL ]; then
         cd ~/ubuntu-${code_name}/
-        ddeb_pkg=`ls linux*.ddeb`
+        ddeb_pkg=`ls linux-image*.ddeb`
         dpkg -x ${ddeb_pkg} ./
         cp usr/lib/debug/boot/vmlinux* kernel/vmlinux
 

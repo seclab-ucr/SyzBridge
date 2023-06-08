@@ -59,6 +59,12 @@ function change_grub() {
 
 function install_necessary_packages() {
     if [ ! -f ~/.stamp/INSTALL_PACKAGES ]; then
+        if [ "${code_name}" == "stretch" ]; then
+            sed -i -e 's/deb.debian.org/archive.debian.org/g' \
+                -e 's/ftp.us.debian.org/archive.debian.org/g' \
+                -e 's|security.debian.org|archive.debian.org/|g' \
+                -e '/stretch-updates/d' /etc/apt/sources.list
+        fi
         apt-get update
         apt-get install -y git trace-cmd psmisc build-essential devscripts fakeroot libncurses-dev gawk flex bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev libiberty-dev autoconf gcc-multilib libc6-dev-i386
         apt-get build-dep -y linux
