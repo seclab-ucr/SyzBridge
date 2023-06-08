@@ -284,74 +284,75 @@ class SyzFeatureMinimize(AnalysisModule):
                     opt['procs'] = "1"
                 #command += "-trace "
                 #It makes no sense that limiting the features of syz-execrpog, just enable them all
-                
-                if "tun" in features:
-                    if features['tun']:
-                        enabled += "tun,"
-                        if '-sandbox' not in command:
-                            opt['sandbox'] = "none"
-                        if '-tmpdir' not in command:
-                            opt['tmpdir'] = "true"
-                if "binfmt_misc" in features:
-                    if features["binfmt_misc"]:
-                        enabled += "binfmt_misc,"
-                        if '-sandbox' not in command:
-                            opt['sandbox'] = "none"
-                        if '-tmpdir' not in command:
-                            opt['tmpdir'] = "true"
-                if "cgroups" in features:
-                    if features["cgroups"]:
-                        enabled += "cgroups,"
-                        if '-sandbox' not in command:
-                            opt['sandbox'] = "none"
-                        if '-tmpdir' not in command:
-                            opt['tmpdir'] = "true"
-                if "close_fds" in features:
-                    if features["close_fds"]:
-                        enabled += "close_fds,"
-                if "devlinkpci" in features:
-                    if features["devlinkpci"]:
-                        enabled += "devlink_pci,"
-                if "netdev" in features:
-                    if features["netdev"]:
-                        enabled += "net_dev,"
-                        opt['sandbox'] = "namespace"
-                if "resetnet" in features:
-                    if features["resetnet"]:
-                        enabled += "net_reset,"
-                        opt['repeat'] = "0"
-                if "usb" in features:
-                    if features["usb"]:
-                        enabled += "usb,"
-                if "ieee802154" in features:
-                    if features["ieee802154"]:
-                        enabled += "ieee802154,"
-                if "sysctl" in features:
-                    if features["sysctl"]:
-                        enabled += "sysctl,"
-                if "vhci" in features:
-                    if features["vhci"]:
-                        enabled += "vhci,"
-                        if '-sandbox' not in command:
-                            opt['sandbox'] = "none"
-                        if '-tmpdir' not in command:
-                            opt['tmpdir'] = "true"
-                if "wifi" in features:
-                    if features["wifi"]:
-                        enabled += "wifi," 
-                        if '-sandbox' not in command:
-                            opt['sandbox'] = "none"
-                        if '-tmpdir' not in command:
-                            opt['tmpdir'] = "true"
+                if self.syz.support_enable_feature():
+                    if "tun" in features:
+                        if features['tun']:
+                            enabled += "tun,"
+                            if '-sandbox' not in command:
+                                opt['sandbox'] = "none"
+                            if '-tmpdir' not in command:
+                                opt['tmpdir'] = "true"
+                    if "binfmt_misc" in features:
+                        if features["binfmt_misc"]:
+                            enabled += "binfmt_misc,"
+                            if '-sandbox' not in command:
+                                opt['sandbox'] = "none"
+                            if '-tmpdir' not in command:
+                                opt['tmpdir'] = "true"
+                    if "cgroups" in features:
+                        if features["cgroups"]:
+                            enabled += "cgroups,"
+                            if '-sandbox' not in command:
+                                opt['sandbox'] = "none"
+                            if '-tmpdir' not in command:
+                                opt['tmpdir'] = "true"
+                    if "close_fds" in features:
+                        if features["close_fds"]:
+                            enabled += "close_fds,"
+                    if "devlinkpci" in features:
+                        if features["devlinkpci"]:
+                            enabled += "devlink_pci,"
+                    if "netdev" in features:
+                        if features["netdev"]:
+                            enabled += "net_dev,"
+                            opt['sandbox'] = "namespace"
+                    if "resetnet" in features:
+                        if features["resetnet"]:
+                            enabled += "net_reset,"
+                            opt['repeat'] = "0"
+                    if "usb" in features:
+                        if features["usb"]:
+                            enabled += "usb,"
+                    if "ieee802154" in features:
+                        if features["ieee802154"]:
+                            enabled += "ieee802154,"
+                    if "sysctl" in features:
+                        if features["sysctl"]:
+                            enabled += "sysctl,"
+                    if "vhci" in features:
+                        if features["vhci"]:
+                            enabled += "vhci,"
+                            if '-sandbox' not in command:
+                                opt['sandbox'] = "none"
+                            if '-tmpdir' not in command:
+                                opt['tmpdir'] = "true"
+                    if "wifi" in features:
+                        if features["wifi"]:
+                            enabled += "wifi," 
+                            if '-sandbox' not in command:
+                                opt['sandbox'] = "none"
+                            if '-tmpdir' not in command:
+                                opt['tmpdir'] = "true"
                 break
         for key in opt:
             command += "-" + key + "=" + opt[key] + " "
-        if enabled[-1] == ',':
-            enabled = enabled[:-1]
-            command += enabled + " "
-        if disable[-1] == ',':
-            disable = disable[:-1]
-            command += disable + " "
+        if self.syz.support_enable_feature():
+            if enabled[-1] == ',':
+                enabled = enabled[:-1]
+                command += enabled + " "
+            if disable[-1] == ',':
+                disable = disable[:-1]
+                command += disable + " "
         command += "testcase"
         return command
 
@@ -414,41 +415,43 @@ class SyzFeatureMinimize(AnalysisModule):
                 else:
                     opt['repeat'] = "1"
                 #It makes no sense that limiting the features of syz-execrpog, just enable them all
-                
-                if "tun" in features and features["tun"]:
-                    enabled += "tun,"
-                    opt['sandbox'] = "namespace"
-                if "binfmt_misc" in features and features["binfmt_misc"]:
-                    enabled += "binfmt_misc,"
-                if "cgroups" in features and features["cgroups"]:
-                    enabled += "cgroups,"
-                if "close_fds" in features and features["close_fds"]:
-                    enabled += "close_fds,"
-                if "devlinkpci" in features and features["devlinkpci"] and root:
-                    enabled += "devlink_pci,"
-                if "netdev" in features and features["netdev"]:
-                    enabled += "net_dev,"
-                    opt['sandbox'] = "namespace"
-                if "resetnet" in features and features["resetnet"]:
-                    enabled += "net_reset,"
-                    opt['repeat'] = "0"
-                if "usb" in features and features["usb"]:
-                    enabled += "usb,"
-                if "ieee802154" in features and features["ieee802154"]:
-                    enabled += "ieee802154,"
-                if "sysctl" in features and features["sysctl"]:
-                    enabled += "sysctl,"
-                if "vhci" in features and features["vhci"]:
-                    enabled += "vhci,"
-                if "wifi" in features and features["wifi"]:
-                    enabled += "wifi,"
+                if self.syz.support_enable_feature():
+                    if "tun" in features and features["tun"]:
+                        enabled += "tun,"
+                        opt['sandbox'] = "namespace"
+                    if "binfmt_misc" in features and features["binfmt_misc"]:
+                        enabled += "binfmt_misc,"
+                    if "cgroups" in features and features["cgroups"]:
+                        enabled += "cgroups,"
+                    if "close_fds" in features and features["close_fds"]:
+                        enabled += "close_fds,"
+                    if "devlinkpci" in features and features["devlinkpci"] and root:
+                        enabled += "devlink_pci,"
+                    if "netdev" in features and features["netdev"]:
+                        enabled += "net_dev,"
+                        opt['sandbox'] = "namespace"
+                    if "resetnet" in features and features["resetnet"]:
+                        enabled += "net_reset,"
+                        opt['repeat'] = "0"
+                    if "usb" in features and features["usb"]:
+                        enabled += "usb,"
+                    if "ieee802154" in features and features["ieee802154"]:
+                        enabled += "ieee802154,"
+                    if "sysctl" in features and features["sysctl"]:
+                        enabled += "sysctl,"
+                    if "vhci" in features and features["vhci"]:
+                        enabled += "vhci,"
+                    if "wifi" in features and features["wifi"]:
+                        enabled += "wifi,"
                 break
-        if not root and enabled == "-enable=" and '-sandbox=namespace' not in command:
-            opt['disable'] =  "tun,devlink_pci"
+        if self.syz.support_enable_feature():
+            if not root and enabled == "-enable=" and '-sandbox=namespace' not in command:
+                opt['disable'] =  "tun,devlink_pci"
         for key in opt:
             command += "-" + key + "=" + opt[key] + " "
-        if enabled[-1] == ',':
-            enabled = enabled[:-1]
-            command += enabled + " "
+        if self.syz.support_enable_feature():
+            if enabled[-1] == ',':
+                enabled = enabled[:-1]
+                command += enabled + " "
         command += "testcase"
         return command

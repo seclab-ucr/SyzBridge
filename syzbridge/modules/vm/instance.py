@@ -297,7 +297,7 @@ class VMInstance(Network):
             return False
         return False
 
-    def setup_distros(self, port, image, linux, key, mem="2G", cpu="2", gdb_port=-1, mon_port=-1, timeout=None, kasan_multi_shot=0, snapshot=True):
+    def setup_distros(self, port, image, linux, key, mem="4G", cpu="2", gdb_port=-1, mon_port=-1, timeout=None, kasan_multi_shot=0, snapshot=True):
         #self.qemu_ready_bar = r'(\w+ login:)|(Ubuntu \d+\.\d+\.\d+ LTS ubuntu20 ttyS0)'
         self.port = port
         self.image = image
@@ -314,7 +314,7 @@ class VMInstance(Network):
                     "-drive", "file={},format=qcow2,cache=writeback,l2-cache-size=6553600,cache-clean-interval=900".format(self.image)])
         self.write_cmd_to_script(self.cmd_launch, "launch_{}.sh".format(self.kernel.distro_name))
     
-    def setup_upstream(self, port, image, linux, mem="2G", cpu="2", key=None, gdb_port=-1, mon_port=-1, opts=None, timeout=None, kasan_multi_shot=0, snapshot=True):
+    def setup_upstream(self, port, image, linux, mem="4G", cpu="2", key=None, gdb_port=-1, mon_port=-1, opts=None, timeout=None, kasan_multi_shot=0, snapshot=True):
         #self.qemu_ready_bar = r'Debian GNU\/Linux \d+ syzkaller ttyS\d+'
         cur_opts = ["root=/dev/sda", "console=ttyS0"]
         def_opts = ["earlyprintk=serial", \

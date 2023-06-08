@@ -127,7 +127,7 @@ class Crawler:
             new_image = self.create_snapshot(distro.distro_image, self._log_path, distro.distro_name)
             vm = VM(linux=None, kernel=distro, hash_tag="syzbot {}".format(distro.distro_name), work_path=self._log_path, 
                 log_name='syzbot-{}.log'.format(distro.distro_name), logger=None,
-                port=distro.ssh_port, key=distro.ssh_key, image=new_image, mem='2G', cpu='2')
+                port=distro.ssh_port, key=distro.ssh_key, image=new_image, mem="4G", cpu='2')
             vm.run()
             self.distro_vm[distro.distro_name] = vm
         

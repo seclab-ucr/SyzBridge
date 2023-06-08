@@ -1,6 +1,6 @@
 import os, logging, shutil
 
-from infra.tool_box import chmodX, init_logger, log_anything
+from infra.tool_box import chmodX, local_command, log_anything
 from plugins import AnalysisModule
 from subprocess import Popen, PIPE, STDOUT, call
 
@@ -35,6 +35,7 @@ class SyzkallerInterface(AnalysisModule):
 
     def __init__(self):
         super().__init__()
+        self._support_enable = None
         self.syzkaller_path = ''
         
     def prepare(self):
@@ -195,17 +196,19 @@ class SyzkallerInterface(AnalysisModule):
         return 
     
     def support_enable_feature(self):
-        p = Popen(["git rev-list HEAD | grep $(git rev-parse dfd609eca1871f01757d6b04b19fc273c87c14e5)"], 
-            shell=True, stdout=PIPE, stderr=PIPE, cwd=self.syzkaller_path)
-        with p.stdout:
-            for line in iter(p.stdout.readline, b''):
-                try:
-                    line = line.decode("utf-8").strip('\n').strip('\r')
-                except:
-                    self.info_msg('bytes array \'{}\' cannot be converted to utf-8'.format(line))
-                    continue
-                if line == "dfd609eca1871f01757d6b04b19fc273c87c14e5":
-                    return True
+        if self._support_enable == None:
+            self._support_enable = False
+            p = Popen(["git rev-list HEAD | grep $(git rev-parse dfd609eca1871f01757d6b04b19fc273c87c14e5)"], 
+                shell=True, stdout=PIPE, stderr=PIPE, cwd=self.syzkaller_path)
+            with p.stdout:
+                for line in iter(p.stdout.readline, b''):
+                    try:
+                        line = line.decode("utf-8").strip('\n').strip('\r')
+                    except:
+                        self.info_msg('bytes array \'{}\' cannot be converted to utf-8'.format(line))
+                        continue
+                    if line == "dfd609eca1871f01757d6b04b19fc273c87c14e5":
+                        self._support_enable = True
         return False
     
     def success(self):

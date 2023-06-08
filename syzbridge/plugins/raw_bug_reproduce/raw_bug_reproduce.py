@@ -80,7 +80,8 @@ class RawBugReproduce(AnalysisModule):
         output = queue.Queue()
         if not self.plugin_finished("SyzFeatureMinimize"):
             self.info_msg("RawBugReproduce will use C Prog instead")
-            self.c_prog = True
+            if self.has_c_repro:
+                self.c_prog = True
         else:
             self.syz_feature_mini = self.cfg.get_plugin(SyzFeatureMinimize.NAME).instance
             self.syz_feature_mini.path_case_plugin = os.path.join(self.path_case, SyzFeatureMinimize.NAME)
