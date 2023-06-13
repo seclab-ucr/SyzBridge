@@ -42,6 +42,8 @@ class SyzbotCommand(Command):
                             e.g., --filter-by-kernel=upstream --filter-by-kernel=linux-next')
         parser.add_argument('--filter-by-c-prog', action='store_true',
                             help='[bool] filter bugs that do not have a c reproducer\n')
+        parser.add_argument('--filter-by-syz-prog', action='store_true',
+                            help='[bool] filter bugs that do not have a syz reproducer\n')
         parser.add_argument('--filter-by-distro-cycle-start', action='store_true',
                             help='[bool] filter bugs by the start date of distro effective cycle\n'
                             'Use \'effective_cycle_start\' in config file')
@@ -114,6 +116,7 @@ class SyzbotCommand(Command):
             filter_by_c_prog=self.args.filter_by_c_prog, filter_by_kernel=self.args.filter_by_kernel,
             filter_by_distro_cycle_start=self.args.filter_by_distro_cycle_start,
             filter_by_distro_cycle_end=self.args.filter_by_distro_cycle_end,
+            filter_by_syz_prog=self.args.filter_by_syz_prog,
             filter_by_fixes_tag=self.args.filter_by_fixes_tag, filter_by_patch=self.args.filter_by_patch,
             filter_by_hashs=filter_by_hash, match_single_distro=self.args.match_single_distro,
             cfg=self.cfg, debug=self.args.debug, log_path = self.proj_dir)

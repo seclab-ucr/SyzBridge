@@ -26,7 +26,7 @@ class Crawler:
                  filter_by_closed="", filter_by_c_prog=False, filter_by_kernel=[], 
                  filter_by_fixes_tag=False, filter_by_patch=False, filter_by_hashs=[],
                  filter_by_distro_cycle_start=False, filter_by_distro_cycle_end=False,
-                 match_single_distro=False,
+                 match_single_distro=False, filter_by_syz_prog=False,
                  include_high_risk=True, debug=False):
         self.url = url
         if type(keyword) == list:
@@ -68,6 +68,7 @@ class Crawler:
             else:
                 self.filter_by_closed[0] = n[0]
                 self.filter_by_closed[1] = n[1]
+        self.filter_by_syz_prog= filter_by_syz_prog
         self.filter_by_c_prog = filter_by_c_prog
         self.filter_by_fixes_tag = filter_by_fixes_tag
         self.filter_by_patch = filter_by_patch
@@ -313,10 +314,7 @@ class Crawler:
         return m
 
     def get_patch_url(self, hash_val):
-        if len(hash_val) != 40:
-            url = syzbot_host_url + syzbot_bug_extid_url + hash_val
-        else:
-            url = syzbot_host_url + syzbot_bug_base_url + hash_val
+        url = self._get_case_url(hash_val)
         req = request_get(url)
         soup = BeautifulSoup(req.text, "html.parser")
         try:
@@ -545,10 +543,7 @@ class Crawler:
         return self.cases[hash_val]
     
     def case_first_crash(self, hash_val):
-        if len(hash_val) != 40:
-            url = syzbot_host_url + syzbot_bug_extid_url + hash_val
-        else:
-            url = syzbot_host_url + syzbot_bug_base_url + hash_val
+        url = self._get_case_url(hash_val)
         req = request_get(url)
         soup = BeautifulSoup(req.text, "html.parser")
         date_diff = regx_get(r'First crash: (\d+)d', soup.text, 0)
@@ -561,10 +556,7 @@ class Crawler:
             self.logger.info("No case given")
             return None
         if hash_val!=None:
-            if len(hash_val) != 40:
-                url = syzbot_host_url + syzbot_bug_extid_url + hash_val
-            else:
-                url = syzbot_host_url + syzbot_bug_base_url + hash_val
+            url = self._get_case_url(hash_val)
             req = requests.request(method='GET', url=url)
             soup = BeautifulSoup(req.text, "html.parser")
         else:
@@ -575,10 +567,7 @@ class Crawler:
     def retreive_case(self, hash_val):
         self.cases[hash_val] = {}
         detail = self.request_detail(hash_val)
-        if len(hash_val) != 40:
-            url = syzbot_host_url + syzbot_bug_extid_url + hash_val
-        else:
-            url = syzbot_host_url + syzbot_bug_base_url + hash_val
+        url = self._get_case_url(hash_val)
         if len(detail) < num_of_elements:
             self.logger.error("Failed to get detail of a case {}".format(url))
             self.cases.pop(hash_val)
@@ -681,10 +670,7 @@ class Crawler:
         return crash
 
     def request_detail(self, hash_val, index=1):
-        if len(hash_val) != 40:
-            url = syzbot_host_url + syzbot_bug_extid_url + hash_val
-        else:
-            url = syzbot_host_url + syzbot_bug_base_url + hash_val
+        url = self._get_case_url(hash_val)
         self.logger.debug("\nDetail: {}".format(url))
         tables = self.__get_table(url)
         if tables == []:
@@ -768,7 +754,8 @@ class Crawler:
                             self.logger.debug("Testcase URL: {}".format(syz_repro))
                         except:
                             self.logger.debug("[Failed] {} Repro is missing".format(url))
-                            break
+                            if self.filter_by_syz_prog:
+                                continue
                         try:
                             c_repro = syzbot_host_url + repros[3].next.attrs['href']
                             self.logger.debug("C prog URL: {}".format(c_repro))
@@ -814,6 +801,19 @@ class Crawler:
             print("Fail to retrieve bug cases from list_table")
             return []
         return tables
-
+    
+    def _get_case_url(self, hash_val):
+        if len(hash_val) != 40:
+            url = syzbot_host_url + syzbot_bug_extid_url + hash_val
+            r = request_get(url)
+            if r.status_code == 404:
+                url = syzbot_host_url + syzbot_bug_base_url + hash_val
+        else:
+            url = syzbot_host_url + syzbot_bug_base_url + hash_val
+            r = request_get(url)
+            if r.status_code == 404:
+                url = syzbot_host_url + syzbot_bug_extid_url + hash_val
+        return url
+    
 if __name__ == '__main__':
     pass
