@@ -350,8 +350,14 @@ class SyzFeatureMinimize(AnalysisModule):
                                 opt['tmpdir'] = "true"
                 break
         for key in opt:
-            if key == "repeat" and opt[key] == "0" and options[key] == self.ARG_ALONE:
-                command += "-" + key + " "
+            if key == "repeat":
+                # specially handle repeat cuz the weird argument setup in historic syz-execprog and syz-prog2c
+                if opt[key] == "1":
+                    continue
+                if opt[key] == "0" and options[key] == self.ARG_ALONE:
+                    command += "-" + key + " "
+                else:
+                    command += "-" + key + "=" + opt[key] + " "
             else:
                 command += "-" + key + "=" + opt[key] + " "
         if self._support_enable_feature():
@@ -456,8 +462,14 @@ class SyzFeatureMinimize(AnalysisModule):
             if not root and enabled == "-enable=" and '-sandbox=namespace' not in command:
                 opt['disable'] =  "tun,devlink_pci"
         for key in opt:
-            if key == "repeat" and opt[key] == "0" and options[key] == self.ARG_ALONE:
-                command += "-" + key + " "
+            if key == "repeat":
+                # specially handle repeat cuz the weird argument setup in historic syz-execprog and syz-prog2c
+                if opt[key] == "1":
+                    continue
+                if opt[key] == "0" and options[key] == self.ARG_ALONE:
+                    command += "-" + key + " "
+                else:
+                    command += "-" + key + "=" + opt[key] + " "
             else:
                 command += "-" + key + "=" + opt[key] + " "
         if self._support_enable_feature():
