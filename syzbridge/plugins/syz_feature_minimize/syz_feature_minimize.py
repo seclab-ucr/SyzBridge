@@ -419,10 +419,10 @@ class SyzFeatureMinimize(AnalysisModule):
 
                 if repeat == None:
                     if "repeat" in pm and pm["repeat"] != "":
-                        if pm["repeat"] == "0" or pm["repeat"] == True:
+                        if pm["repeat"] == "0" or pm["repeat"] == True or pm["repeat"] == "true":
                             opt['repeat'] = "0"
                             repeat = True
-                        if pm["repeat"] == "1" or pm["repeat"] == False:
+                        if pm["repeat"] == "1" or pm["repeat"] == False or pm["repeat"] == "false":
                             opt['repeat'] = "1"
                 elif repeat:
                     opt['repeat'] = "0"
