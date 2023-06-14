@@ -31,7 +31,7 @@ class RawBugReproduce(AnalysisModule):
         self.repro_timeout = BUG_REPRODUCE_TIMEOUT
         self.syz_feature = {}
         self.syz_feature_mini = None
-        self.c_prog = False
+        self.c_prog = True
         
     def prepare(self):
         self._init_results()
@@ -80,15 +80,15 @@ class RawBugReproduce(AnalysisModule):
         output = queue.Queue()
         self.syz_feature_mini = self.cfg.get_plugin(SyzFeatureMinimize.NAME).instance
         self.syz_feature_mini.path_case_plugin = os.path.join(self.path_case, SyzFeatureMinimize.NAME)
+        if not self.has_c_repro:
+            self.c_prog = False
         if not self.plugin_finished("SyzFeatureMinimize"):
             self.info_msg("RawBugReproduce will use C Prog instead")
-            if self.has_c_repro:
-                self.c_prog = True
-        else:
+            if not self.has_c_repro:
+                return False
+        if not self.c_prog:
             self.syz_feature = self.syz_feature_mini.results.copy()
             self.logger.info("Receive syz_feature: {} {}".format(self.syz_feature, self.syz_feature_mini))
-            if self.syz_feature['prog_status'] == SyzFeatureMinimize.C_PROG:
-                self.c_prog = False
             self.syz_feature.pop('prog_status')
         for distro in self.cfg.get_distros():
             self.info_msg("start reproducing bugs on {}".format(distro.distro_name))

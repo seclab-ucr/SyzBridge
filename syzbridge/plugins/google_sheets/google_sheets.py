@@ -304,7 +304,7 @@ class GoogleSheets(AnalysisModule):
                             if 'raw-reproduce-by-normal' not in self.data or distro not in self.data['raw-reproduce-by-normal']:
                                 if result_json[distro]['namespace']:
                                     self._set_cell_to_true('H'+self.distro_idx(distro), wks)
-                                if 'tun' in result_json[distro]['skip_funcs'] or 'devlink_pci' in result_json[distro]['skip_funcs']:
+                                if 'tun' in result_json[distro]['skip_funcs'] or 'devlink_pci' in result_json[distro]['skip_funcs'] or 'usb' in result_json[distro]['skip_funcs']:
                                     self._set_cell_to_true('J' + self.distro_idx(distro), wks)
                             if 'unprivileged_module_loading' in  result_json[distro] and result_json[distro]['unprivileged_module_loading']:
                                 self._set_cell_to_true('I'+self.distro_idx(distro), wks)
@@ -467,7 +467,7 @@ class GoogleSheets(AnalysisModule):
         return False
 
     def _skip_preparation(self, result):
-        return 'setup_usb' in result['skip_funcs'] or 'setup_leak' in result['skip_funcs']
+        return 'usb' in result['skip_funcs'] or 'leak' in result['skip_funcs']
     
     def _check_loop_device(self, result):
         return 'loop_dev' in  result['device_tuning']

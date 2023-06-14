@@ -11,6 +11,7 @@ from infra.config.vendor import Vendor
 from subprocess import Popen, STDOUT, PIPE, call
 from plugins.modules_analysis import ModulesAnalysis
 from syzbridge.plugins.syz_feature_minimize.syz_feature_minimize import SyzFeatureMinimize
+from syzbridge.plugins.raw_bug_reproduce.raw_bug_reproduce import RawBugReproduce
 from .error import *
 
 qemu_output_window = 15
@@ -117,9 +118,11 @@ class BugReproduce(AnalysisModule):
             if self.syz_feature['prog_status'] == SyzFeatureMinimize.C_PROG:
                 self.c_prog = False
             self.syz_feature.pop('prog_status')
+        
+        raw_bug_reproduce = self.cfg.get_plugin(RawBugReproduce.NAME).instance
         for distro in self.cfg.get_distros():
             self.info_msg("Reproducing bugs on {}".format(distro.distro_name))
-            if self.syz_feature_mini != None:
+            if self.syz_feature_mini != None and not raw_bug_reproduce.results[distro.distro_name]['trigger']:
                 for each in self.syz_feature:
                     if not self.syz_feature[each]:
                         self.results[distro.distro_name]['skip_funcs'].append(each)
@@ -324,7 +327,7 @@ class BugReproduce(AnalysisModule):
         feature = 0
         # why don't we just enable namespace all the time?
 
-        skip_funcs = ["setup_usb();", "setup_leak();"]
+        skip_funcs = {"setup_usb();": "usb", "setup_leak();": "leak"}
         data = []
 
         if os.path.exists(dst):
@@ -362,8 +365,9 @@ class BugReproduce(AnalysisModule):
             for each in skip_funcs:
                 if regx_match(each, line):
                     data.pop()
-                    if each not in self.results[distro_name]['skip_funcs']:
-                        self.results[distro_name]['skip_funcs'].append(each)
+                    val = skip_funcs[each]
+                    if val not in self.results[distro_name]['skip_funcs']:
+                        self.results[distro_name]['skip_funcs'].append(val)
 
             # We dont have too much devices to connect, limit the number to 1
             if '*hash = \'0\' + (char)(a1 % 10);' in line:
