@@ -35,7 +35,6 @@ class Crawler:
             print("keyword must be a list")
         self.max_retrieve = max_retrieve
         self.cases = {}
-        self._patches = {}
         self._patch_info = {}
         self.include_high_risk = include_high_risk
         self._log_path = log_path
@@ -98,12 +97,6 @@ class Crawler:
                 self.logger.debug("Skip {} because it's filtered by hash_val match".format(each['Hash']))
                 continue
             patch_url = None
-            if 'Patch' in each:
-                patch_url = each['Patch']
-                if patch_url in self._patches or \
-                    (patch_url in high_risk_impacts and not self.include_high_risk):
-                    continue
-                self._patches[patch_url] = True
             self._patch_info['url'] = patch_url
             if self.filter_by_fixes_tag or self.filter_by_patch:
                 if patch_url == None or not self.check_excluded_distro(each['Hash'], patch_url):
