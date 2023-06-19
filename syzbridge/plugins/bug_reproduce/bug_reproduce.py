@@ -36,7 +36,7 @@ class BugReproduce(AnalysisModule):
         self.results = {}
         self.root_user = None
         self.normal_user = None
-        self.distro_lock = threading.Lock()
+        self.distro_lock = multiprocessing.Lock()
         self.repro_timeout = None
         self._skip_regular_reproduce = False
         self._addition_modules = []
@@ -169,6 +169,11 @@ class BugReproduce(AnalysisModule):
         self.info_msg("{} does not trigger any bugs, try to enable missing modules".format(distro.distro_name))
         m = self.get_missing_modules(distro.distro_name)
         missing_modules = [e['name'] for e in m if e['type'] != 0 ]
+        self.info_msg("preload all missing modules, testing triggerability")
+        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=([], [], missing_modules,), attempt=1, root=True, log_prefix='preload-modules', timeout=1 * 2 * self.repro_timeout + 300)
+        if not success:
+            q.put([distro.distro_name, res])
+            return
         success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, [], [],), attempt=1, root=True, log_prefix='missing-modules', timeout=len(missing_modules) * 2 * self.repro_timeout + 300)
         if success:
             self.results[distro.distro_name]['trigger'] = True
@@ -453,26 +458,7 @@ class BugReproduce(AnalysisModule):
         qemu.logger.info("Loading essential modules {}".format(essential_modules))
         if essential_modules != []:
             self._enable_missing_modules(qemu, essential_modules)
-            trigger = self._execute(root, qemu, distro_name, c_prog)
-            if trigger:
-                self.results[vm_tag]["repeat"] = False
-                result_queue.put(self.results)
-                return tested_modules
-            trigger = self._execute(root, qemu, distro_name, c_prog, namespace=True)
-            if trigger:
-                self.results[vm_tag]["repeat"] = False
-                self.results[vm_tag]["namespace"] = True
-                result_queue.put(self.results)
-                return tested_modules
-            trigger = self._execute(root, qemu, distro_name, c_prog, repeat=True)
-            if trigger:
-                self.results[vm_tag]["repeat"] = True
-                result_queue.put(self.results)
-                return tested_modules
-            trigger = self._execute(root, qemu, distro_name, c_prog, repeat=True, namespace=True)
-            if trigger:
-                self.results[vm_tag]["repeat"] = True
-                self.results[vm_tag]["namespace"] = True
+            if self._test_triggerability(qemu, distro_name, c_prog, vm_tag, root):
                 result_queue.put(self.results)
                 return tested_modules
         
@@ -484,26 +470,7 @@ class BugReproduce(AnalysisModule):
             if not self._enable_missing_modules(qemu, [module]):
                 continue
             tested_modules.append(module)
-            trigger = self._execute(root, qemu, distro_name, c_prog)
-            if trigger:
-                self.results[vm_tag]["repeat"] = False
-                result_queue.put(self.results)
-                return tested_modules
-            trigger = self._execute(root, qemu, distro_name, c_prog, namespace=True)
-            if trigger:
-                self.results[vm_tag]["repeat"] = False
-                self.results[vm_tag]["namespace"] = True
-                result_queue.put(self.results)
-                return tested_modules
-            trigger = self._execute(root, qemu, distro_name, c_prog, repeat=True)
-            if trigger:
-                self.results[vm_tag]["repeat"] = True
-                result_queue.put(self.results)
-                return tested_modules
-            trigger = self._execute(root, qemu, distro_name, c_prog, repeat=True, namespace=True)
-            if trigger:
-                self.results[vm_tag]["repeat"] = True
-                self.results[vm_tag]["namespace"] = True
+            if self._test_triggerability(qemu, distro_name, c_prog, vm_tag, root):
                 result_queue.put(self.results)
                 return tested_modules
             if self._modprobe_hang(qemu):
@@ -520,26 +487,9 @@ class BugReproduce(AnalysisModule):
             self.logger.info("Loading addition modules for environment setup: {}".format(self._addition_modules))
             self._enable_missing_modules(qemu, self._addition_modules)
 
-        trigger = self._execute(root, qemu, distro_name, c_prog)
-        if trigger:
-            self.results[vm_tag]["repeat"] = False
+        if self._test_triggerability(qemu, distro_name, c_prog, vm_tag, root):
             result_queue.put(self.results)
             return
-        trigger = self._execute(root, qemu, distro_name, c_prog, namespace=True)
-        if trigger:
-            self.results[vm_tag]["repeat"] = False
-            self.results[distro_name]['namespace'] = True
-            result_queue.put(self.results)
-            return
-        trigger = self._execute(root, qemu, distro_name, c_prog, repeat=True)
-        if trigger:
-            self.results[vm_tag]["repeat"] = True
-            result_queue.put(self.results)
-        trigger = self._execute(root, qemu, distro_name, c_prog, repeat=True, namespace=True)
-        if trigger:
-            self.results[vm_tag]["repeat"] = True
-            self.results[distro_name]['namespace'] = True
-            result_queue.put(self.results)
         return
 
     def set_history_status(self):
@@ -548,6 +498,27 @@ class BugReproduce(AnalysisModule):
                 self.set_stage_text("Triggered")
                 return
         self.set_stage_text("Failed")
+    
+    def _test_triggerability(self, qemu, distro_name, c_prog, vm_tag, root):
+        trigger = self._execute(root, qemu, distro_name, c_prog)
+        if trigger:
+            self.results[vm_tag]["repeat"] = False
+            return True
+        trigger = self._execute(root, qemu, distro_name, c_prog, namespace=True)
+        if trigger:
+            self.results[vm_tag]["repeat"] = False
+            self.results[vm_tag]["namespace"] = True
+            return True
+        trigger = self._execute(root, qemu, distro_name, c_prog, repeat=True)
+        if trigger:
+            self.results[vm_tag]["repeat"] = True
+            return True
+        trigger = self._execute(root, qemu, distro_name, c_prog, repeat=True, namespace=True)
+        if trigger:
+            self.results[vm_tag]["repeat"] = True
+            self.results[vm_tag]["namespace"] = True
+            return True
+        return False
 
     def _update_qemu_timer_status(self, index, qemu):
         while True:
@@ -628,13 +599,13 @@ class BugReproduce(AnalysisModule):
         return qemu.trigger_crash
 
     def _execute_poc(self, root, qemu: VMInstance, poc_feature, poc_src, repeat=False):
+        self.distro_lock.release()
         if root:
             user = self.root_user
         else:
             user = self.normal_user
         poc_path = os.path.join(self.path_case_plugin, poc_src)
         qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
-        self.distro_lock.release()
         if os.path.exists(os.path.join(self.path_case_plugin, "sandbox.h")):
             sandbox_src = os.path.join(self.path_case_plugin, "sandbox.h")
             qemu.upload(user=user, src=[sandbox_src], dst="~/", wait=True)
