@@ -462,6 +462,15 @@ class BugReproduce(AnalysisModule):
                 result_queue.put(self.results)
                 return tested_modules
         
+        if len(missing_modules) == 0:
+            if self._test_triggerability(qemu, distro_name, c_prog, vm_tag, root):
+                result_queue.put(self.results)
+                tested_modules.extend(essential_modules)
+                tested_modules.extend(preload_modules)
+                return tested_modules
+            if self._modprobe_hang(qemu):
+                raise ModprobePaniced(module)
+        
         for module in missing_modules:
             self.set_stage_text("testing {} on {}".format(module, qemu.tag))
             qemu.logger.info("****************************************")
