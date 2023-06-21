@@ -8,3 +8,8 @@ class ModprobePaniced(Exception):
         message = "Modprobe paniced when loading {}".format(mod)
         self.mod = mod
         super().__init__(message)
+
+class PlguinUnknownError(Exception):
+    def __init__(self, *args: object) -> None:
+        message = "Unknown error occurs"
+        super().__init__(message)
