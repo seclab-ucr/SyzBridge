@@ -662,6 +662,8 @@ class BugReproduce(AnalysisModule):
                     raise ModprobePaniced(each)
                 if 'Exec format error' in out[1]:
                     raise ModprobePaniced(each)
+                if 'No such device' in out[1]:
+                    return False
                 err_modprobe = True
             out = qemu.command(cmds="lsmod | grep {}".format(each), user=self.root_user, wait=True)
             if len(out) == 1:
