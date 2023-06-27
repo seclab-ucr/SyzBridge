@@ -71,7 +71,10 @@ class BugReproduce(AnalysisModule):
                 raise e
             except ModprobePaniced as e:
                 self.logger.exception("Modprobe paniced: {}".format(e.mod))
-                return e
+                raise e
+            except PlguinUnknownError as e:
+                self.logger.exception("Unknown error, check the log")
+                raise e
             except Exception as e:
                 raise e
             return ret
@@ -134,6 +137,8 @@ class BugReproduce(AnalysisModule):
 
         for distro in self.cfg.get_distros():
             [distro_name, m] = output.get(block=True)
+            if isinstance(distro_name, PlguinUnknownError):
+                raise PlguinUnknownError()
             self.logger.info("Receive result from {}: {}".format(distro_name, m))
             res[distro_name] = m
         
@@ -146,65 +151,68 @@ class BugReproduce(AnalysisModule):
         res["bug_title"] = ""
         res["root"] = True
         
-        if not self._skip_regular_reproduce:
-            success, _ = self.reproduce(distro, func=self.capture_kasan, timeout=self.repro_timeout * 2+100, root=True)
-            if success:
-                res["triggered"] = True
-                res["bug_title"] = self.bug_title
-                res["root"] = True
-                success, _ = self.reproduce(distro, func=self.capture_kasan, timeout=self.repro_timeout * 2+100, root=False)
+        try:
+            if not self._skip_regular_reproduce:
+                success, _ = self.reproduce(distro, func=self.capture_kasan, timeout=self.repro_timeout * 2+100, root=True)
                 if success:
                     res["triggered"] = True
                     res["bug_title"] = self.bug_title
-                    res["root"] = False
-                self.results[distro.distro_name]['root'] = res['root']
-                self.results[distro.distro_name]['trigger'] = True
-                q.put([distro.distro_name, res])
-                return
-        
-        if not self.plugin_finished("ModulesAnalysis"):
-            self.info_msg("BugReproduce will not locate missing modules due to incorrectly results from ModulesAnslysis")
-            q.put([distro.distro_name, res])
-            return
-        self.info_msg("{} does not trigger any bugs, try to enable missing modules".format(distro.distro_name))
-        m = self.get_missing_modules(distro.distro_name)
-        missing_modules = [e['name'] for e in m if e['type'] != 0 ]
-        self.info_msg("preload all missing modules, testing triggerability")
-        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=([], [], missing_modules,), attempt=1, root=True, log_prefix='preload-modules', timeout=1 * 2 * self.repro_timeout + 300)
-        if not success:
-            q.put([distro.distro_name, res])
-            return
-        success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, [], [],), attempt=1, root=True, log_prefix='missing-modules', timeout=len(missing_modules) * 2 * self.repro_timeout + 300)
-        if success:
-            self.results[distro.distro_name]['trigger'] = True
-            tested_modules = t[0]
-            res["triggered"] = True
-            res["bug_title"] = self.bug_title
-            res["root"] = True
-            if tested_modules == []:
-                self.err_msg("Tested modules are empty but trigger the bug. Please check if no modules are indeed required, or something wrong with the tested modules")
-                q.put([distro.distro_name, res])
-                return
-            essential_modules = self.minimize_modules(distro, tested_modules, [tested_modules[::-1][0]])
-            if essential_modules == None:
-                self.err_msg("{} trigger the bug, but essential modules are not stable, fail to minimize".format(distro.distro_name))
-                self.report.append("{} trigger the bug, but essential modules are not stable, fail to minimize".format(distro.distro_name))
-                self.report.append("{} requires loading [{}] to trigger the bug".format(distro.distro_name, ",".join(tested_modules)))
-                self.results[distro.distro_name]['missing_module'] = tested_modules
-                self.results[distro.distro_name]['minimized'] = False
-                self.results[distro.distro_name]['root'] = res['root']
-            else:
-                if self.check_module_priviledge(essential_modules):
-                    success, _ = self.reproduce(distro, func=self.tweak_modules, func_args=([], essential_modules, [],), attempt=1, root=False, log_prefix='verify_module_loading', timeout=2 * self.repro_timeout + 300)
+                    res["root"] = True
+                    success, _ = self.reproduce(distro, func=self.capture_kasan, timeout=self.repro_timeout * 2+100, root=False)
                     if success:
+                        res["triggered"] = True
+                        res["bug_title"] = self.bug_title
                         res["root"] = False
-                        self.results[distro.distro_name]['unprivileged_module_loading'] = True
-                self.report.append("{} requires loading [{}] to trigger the bug".format(distro.distro_name, ",".join(essential_modules)))
-                self.results[distro.distro_name]['missing_module'] = essential_modules
-                self.results[distro.distro_name]['minimized'] = True
-                self.results[distro.distro_name]['root'] = res['root']
+                    self.results[distro.distro_name]['root'] = res['root']
+                    self.results[distro.distro_name]['trigger'] = True
+                    q.put([distro.distro_name, res])
+                    return
+            
+            if not self.plugin_finished("ModulesAnalysis"):
+                self.info_msg("BugReproduce will not locate missing modules due to incorrectly results from ModulesAnslysis")
+                q.put([distro.distro_name, res])
+                return
+            self.info_msg("{} does not trigger any bugs, try to enable missing modules".format(distro.distro_name))
+            m = self.get_missing_modules(distro.distro_name)
+            missing_modules = [e['name'] for e in m if e['type'] != 0 ]
+            self.info_msg("preload all missing modules, testing triggerability")
+            success, t = self.reproduce(distro, func=self.tweak_modules, func_args=([], [], missing_modules,), attempt=1, root=True, log_prefix='preload-modules', timeout=1 * 2 * self.repro_timeout + 300)
+            if not success:
+                q.put([distro.distro_name, res])
+                return
+            success, t = self.reproduce(distro, func=self.tweak_modules, func_args=(missing_modules, [], [],), attempt=1, root=True, log_prefix='missing-modules', timeout=len(missing_modules) * 2 * self.repro_timeout + 300)
+            if success:
+                self.results[distro.distro_name]['trigger'] = True
+                tested_modules = t[0]
+                res["triggered"] = True
+                res["bug_title"] = self.bug_title
+                res["root"] = True
+                if tested_modules == []:
+                    self.err_msg("Tested modules are empty but trigger the bug. Please check if no modules are indeed required, or something wrong with the tested modules")
+                    q.put([distro.distro_name, res])
+                    return
+                essential_modules = self.minimize_modules(distro, tested_modules, [tested_modules[::-1][0]])
+                if essential_modules == None:
+                    self.err_msg("{} trigger the bug, but essential modules are not stable, fail to minimize".format(distro.distro_name))
+                    self.report.append("{} trigger the bug, but essential modules are not stable, fail to minimize".format(distro.distro_name))
+                    self.report.append("{} requires loading [{}] to trigger the bug".format(distro.distro_name, ",".join(tested_modules)))
+                    self.results[distro.distro_name]['missing_module'] = tested_modules
+                    self.results[distro.distro_name]['minimized'] = False
+                    self.results[distro.distro_name]['root'] = res['root']
+                else:
+                    if self.check_module_priviledge(essential_modules):
+                        success, _ = self.reproduce(distro, func=self.tweak_modules, func_args=([], essential_modules, [],), attempt=1, root=False, log_prefix='verify_module_loading', timeout=2 * self.repro_timeout + 300)
+                        if success:
+                            res["root"] = False
+                            self.results[distro.distro_name]['unprivileged_module_loading'] = True
+                    self.report.append("{} requires loading [{}] to trigger the bug".format(distro.distro_name, ",".join(essential_modules)))
+                    self.results[distro.distro_name]['missing_module'] = essential_modules
+                    self.results[distro.distro_name]['minimized'] = True
+                    self.results[distro.distro_name]['root'] = res['root']
 
-        q.put([distro.distro_name, res])
+            q.put([distro.distro_name, res])
+        except:
+            q.put([PlguinUnknownError(), 0])
         return
     
     def check_module_priviledge(self, essential_modules):
@@ -662,6 +670,8 @@ class BugReproduce(AnalysisModule):
                     raise ModprobePaniced(each)
                 if 'Exec format error' in out[1]:
                     raise ModprobePaniced(each)
+                if 'No such device' in out[1]:
+                    return False
                 err_modprobe = True
             out = qemu.command(cmds="lsmod | grep {}".format(each), user=self.root_user, wait=True)
             if len(out) == 1:
