@@ -45,10 +45,10 @@ class SyzbotCommand(Command):
         parser.add_argument('--filter-by-syz-prog', action='store_true',
                             help='[bool] filter bugs that do not have a syz reproducer\n')
         parser.add_argument('--filter-by-distro-cycle-start', action='store_true',
-                            help='[bool] filter bugs by the start date of distro effective cycle\n'
+                            help='[bool] filter bugs by the start date of distro effective cycle. (Bug reported earlier than distro start date)\n'
                             'Use \'effective_cycle_start\' in config file')
         parser.add_argument('--filter-by-distro-cycle-end', action='store_true',
-                            help='[bool] filter bugs by the end date distro effective cycle\n'
+                            help='[bool] filter bugs by the end date distro effective cycle. (Bug reported later than distro end date)\n'
                             'Use \'effective_cycle_end\' in config file')
         parser.add_argument('--filter-by-hash', nargs='?',
                             help='[file|string] Rule out specific hash or a file that contains a list of hashs\n')
