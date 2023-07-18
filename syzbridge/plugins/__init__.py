@@ -275,7 +275,7 @@ class AnalysisModule:
                     shutil.move(self.path_case_plugin, self.path_case_plugin+"-{}".format(i))
                     break
                 if i == 99:
-                    raise PluginFolderReachMaximumNumber
+                    raise PluginFolderReachMaximumNumber("Plugin {} in {} reach the maximum number".format(self.analyzor.name, self.case_hash))
         os.makedirs(self.path_case_plugin, exist_ok=True)
     
     def _log_subprocess_output(self, pipe):
