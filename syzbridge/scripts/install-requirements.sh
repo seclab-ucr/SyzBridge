@@ -5,7 +5,10 @@
 
 if [ ! -f "$(pwd)/tools/.stamp/ENV_SETUP" ]; then
   sudo apt-get update
-  sudo apt-get -y install git qemu-system-x86 debootstrap flex bison libssl-dev libelf-dev cmake libxml2-dev xz-utils
+  sudo apt-get -y install git qemu-system-x86 debootstrap flex bison libssl-dev libelf-dev cmake libxml2-dev xz-utils libmpfr-dev
+  if [ ! -f "/usr/lib/x86_64-linux-gnu/libmpfr.so.4" ]; then
+    sudo ln -s /usr/lib/x86_64-linux-gnu/libmpfr.so /usr/lib/x86_64-linux-gnu/libmpfr.so.4
+  fi
   touch $TOOLS_PATH/.stamp/ENV_SETUP
 fi
 
