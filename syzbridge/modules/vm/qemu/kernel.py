@@ -1,4 +1,4 @@
-from modules.vm.error import AngrRefuseToLoadKernel
+from modules.vm.qemu.error import AngrRefuseToLoadKernel
 import angr
 import json
 import re

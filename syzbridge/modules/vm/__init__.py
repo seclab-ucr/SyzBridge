@@ -1,14 +1,22 @@
-from .instance import VMInstance
-from .state import VMState
+from .qemu.instance import VMInstance
+from .qemu.state import VMState
+from .aemu.instance import AEmuInstance
 
-class VM(VMInstance, VMState):
+class VM(VMInstance, VMState, AEmuInstance):
+    DISTROS = 0
+    UPSTREAM = 1
+    ANDROID = 2
     def __init__(self, linux, kernel, port, image, hash_tag, key, vmlinux=None, tag='', arch='amd64', work_path='/tmp/', mem="4G", cpu="2", gdb_port=-1, mon_port=-1, timeout=None, debug=False, logger=None, log_name='vm.log', log_suffix="", snapshot=True):
         self.only_instance = True
-        VMInstance.__init__(self, tag=tag, work_path=work_path, log_name=log_name, log_suffix=log_suffix, logger=logger, hash_tag=hash_tag, debug=debug)
-        self.setup(linux=linux, kernel=kernel, port=port, image=image, mem=mem, cpu=cpu, key=key, gdb_port=gdb_port, mon_port=mon_port, timeout=timeout, snapshot=snapshot)
-        if vmlinux != None:
-            self.only_instance = False
-            VMState.__init__(self, vmlinux, gdb_port, arch, work_path=work_path, log_suffix=log_suffix, debug=debug)
+        if kernel.type == self.ANDROID:
+            AEmuInstance.__init__(self, tag=tag, work_path=work_path, log_name=log_name, log_suffix=log_suffix, logger=logger, hash_tag=hash_tag, debug=debug)
+            self.setup(linux=linux, kernel=kernel, port=port, image=image, mem=mem, cpu=cpu, key=key, gdb_port=gdb_port, mon_port=mon_port, timeout=timeout, snapshot=snapshot)
+        else:
+            VMInstance.__init__(self, tag=tag, work_path=work_path, log_name=log_name, log_suffix=log_suffix, logger=logger, hash_tag=hash_tag, debug=debug)
+            self.setup(linux=linux, kernel=kernel, port=port, image=image, mem=mem, cpu=cpu, key=key, gdb_port=gdb_port, mon_port=mon_port, timeout=timeout, snapshot=snapshot)
+            if vmlinux != None:
+                self.only_instance = False
+                VMState.__init__(self, vmlinux, gdb_port, arch, work_path=work_path, log_suffix=log_suffix, debug=debug)
     
     def destroy(self):
         self.logger.info("Destory QEMU on demand")
