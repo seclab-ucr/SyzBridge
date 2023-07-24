@@ -38,6 +38,10 @@ class Vendor():
             for key in ["ssh_key", "type", "distro_image", "distro_name"]:
                 if key not in cfg:
                     raise ParseConfigError(key)
+        if cfg["type"] == "android":
+            for key in ["distro_image", "distro_name"]:
+                if key not in cfg:
+                    raise ParseConfigError(key)
         for key in cfg:
             setattr(self, key, cfg[key])
     

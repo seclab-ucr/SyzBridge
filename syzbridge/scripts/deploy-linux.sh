@@ -152,8 +152,15 @@ if [ "$OLD_INDEX" != "$INDEX" ] || [ ! -e ./linux-$KERNEL ]; then
 fi
 
 if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
-    if [ "$KERNEL" != "stable" ] && [ "$KERNEL" != "upstream" ]; then
+    if [ "$KERNEL" == "linux-next" ]; then
       wget https://git.kernel.org/pub/scm/linux/kernel/git/next/$KERNEL.git/snapshot/$KERNEL-$COMMIT.tar.gz > /dev/null
+      tar xf $KERNEL-$COMMIT.tar.gz > /dev/null
+      rm $KERNEL-$COMMIT.tar.gz
+      rm -rf linux-$KERNEL || true
+      mv $KERNEL-$COMMIT linux-$KERNEL
+    fi
+    if [ "$KERNEL" == "net" ]; then
+      wget https://git.kernel.org/pub/scm/linux/kernel/git/netdev/$KERNEL.git/snapshot/$KERNEL-$COMMIT.tar.gz > /dev/null
       tar xf $KERNEL-$COMMIT.tar.gz > /dev/null
       rm $KERNEL-$COMMIT.tar.gz
       rm -rf linux-$KERNEL || true

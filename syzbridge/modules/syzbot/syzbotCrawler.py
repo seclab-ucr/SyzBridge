@@ -151,7 +151,7 @@ class Crawler:
         self.logger.debug("Create image {} from {}".format(dst, src))
         if os.path.isfile(dst):
             os.remove(dst)
-        cmd = ["qemu-img", "create", "-f", "qcow2", "-b", src, dst]
+        cmd = ["qemu-img", "create", "-f", "qcow2", "-b", src, "-F", "raw", dst]
         p = Popen(cmd, stderr=STDOUT, stdout=PIPE)
         p.wait()
         return dst

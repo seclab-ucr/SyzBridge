@@ -2148,7 +2148,7 @@ index 854bef0a0..e2b180ab8 100644
 +			if _, err := os.Stat(p); err != nil {
 +				src := image
 +				dst := p
-+				cmd := exec.Command("qemu-img", "create", "-f", "qcow2", "-b", src, dst)
++				cmd := exec.Command("qemu-img", "create", "-f", "qcow2", "-b", src, "-F", "raw", dst)
 +				cmd.Run()
 +				locked, err := (*plock).TryLock()
 +				//log.Logf(0, "0 acquiring lock %v: %v", imagelock, locked)

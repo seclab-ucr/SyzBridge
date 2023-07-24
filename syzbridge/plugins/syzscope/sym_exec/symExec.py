@@ -11,7 +11,7 @@ import sys
 
 from modules.vm import VM, VMInstance
 from math import e
-from modules.vm.error import QemuIsDead
+from modules.vm.qemu.error import QemuIsDead
 from .mem_instrument import MemInstrument
 from .error import VulnerabilityNotTrigger, ExecutionError, AbnormalGDBBehavior, InvalidCPU
 

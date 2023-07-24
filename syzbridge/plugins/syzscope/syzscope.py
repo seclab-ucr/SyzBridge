@@ -11,7 +11,7 @@ from plugins.syz_feature_minimize import SyzFeatureMinimize
 from plugins.bug_reproduce import BugReproduce
 from infra.config.vendor import Vendor
 from .sym_exec import *
-from modules.vm.error import *
+from modules.vm.qemu.error import *
 
 class Syzscope(AnalysisModule):
     NAME = "Syzscope"
@@ -46,7 +46,10 @@ class Syzscope(AnalysisModule):
                 repro_mode = 0
             elif plugin.repro_mode == 'syz':
                 repro_mode = 1
-            self.repro_timeout = int(plugin.repro_timeout)
+            try:
+                self.repro_timeout = int(plugin.repro_timeout)
+            except AttributeError:
+                self.repro_timeout = 300
         except AttributeError:
             self.err_msg("Failed to get timeout or repro_timeout or gdb_port or qemu_monitor_port or max_round")
             return False
@@ -65,6 +68,9 @@ class Syzscope(AnalysisModule):
     def run(self):
         self.syz_feature_mini = self.cfg.get_plugin(SyzFeatureMinimize.NAME).instance
         self.syz_feature_mini.path_case_plugin = os.path.join(self.path_case, SyzFeatureMinimize.NAME)
+        if not self.plugin_finished("SyzFeatureMinimize"):
+            self.logger.error("SyzFeatureMinimize plugin has not finished")
+            return False
         self.syz_feature = self.syz_feature_mini.results.copy()
         self.syz_feature.pop('prog_status')
         
