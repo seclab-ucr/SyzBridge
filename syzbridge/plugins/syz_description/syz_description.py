@@ -95,7 +95,7 @@ class SyzDescription(AnalysisModule):
         dst = "{}/{}-snapshot.img".format(img, distro_name)
         if os.path.isfile(dst):
             os.remove(dst)
-        cmd = ["qemu-img", "create", "-f", "qcow2", "-b", src, dst]
+        cmd = ["qemu-img", "create", "-f", "qcow2", "-b", src, "-F", "raw", dst]
         p = Popen(cmd, stderr=STDOUT, stdout=PIPE)
         exitcode = p.wait()
         return exitcode
