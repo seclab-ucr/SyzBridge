@@ -3,7 +3,7 @@ import logging
 import importlib
 
 from infra.error import *
-from syzbridge.modules.vm.instance import VMInstance
+from syzbridge.modules.vm import VM
 from .vendor import Vendor
 from infra.tool_box import *
 from typing import List
@@ -99,7 +99,7 @@ class Config:
         res = []
         for name in self.kernel.__dict__:
             distro = getattr(self.kernel, name)
-            if distro.type == VMInstance.DISTROS:
+            if distro.type == VM.DISTROS:
                 res.append(distro)
         return res
 
@@ -107,7 +107,7 @@ class Config:
         res = []
         for name in self.kernel.__dict__:
             distro = getattr(self.kernel, name)
-            if distro.type == VMInstance.DISTROS:
+            if distro.type == VM.DISTROS:
                 if not distro.is_inited():
                     continue
                 if not distro.repro.need_repro():
@@ -119,13 +119,25 @@ class Config:
         res = []
         for name in self.kernel.__dict__:
             distro = getattr(self.kernel, name)
-            if distro.type == VMInstance.UPSTREAM:
+            if distro.type == VM.UPSTREAM:
                 if not distro.is_inited():
                     continue
                 if not distro.repro.need_repro():
                     continue
                 res.append(distro)
         return res
+
+    def get_android(self)-> Vendor:
+        res = []
+        for name in self.kernel.__dict__:
+            distro = getattr(self.kernel, name)
+            if distro.type == VM.ANDROID:
+                if not distro.is_inited():
+                    continue
+                if not distro.repro.need_repro():
+                    continue
+                res.append(distro)
+        return res 
     
     def get_plugin(self, name)-> Plugin:
         try:

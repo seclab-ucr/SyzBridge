@@ -1,7 +1,7 @@
 import os, shutil
 import socket
 
-from modules.vm.instance import VMInstance
+from modules.vm import VM
 from subprocess import Popen, PIPE, STDOUT
 from infra.tool_box import *
 
@@ -35,9 +35,9 @@ class Build():
     def prepare(self):
         path_image = os.path.join(self.path_case, "img")
         os.makedirs(path_image, exist_ok=True)
-        if self.kernel.type == VMInstance.DISTROS:
+        if self.kernel.type == VM.DISTROS:
             self.create_snapshot(self.kernel.distro_image, path_image, self.kernel.distro_name)
-        if self.kernel.type == VMInstance.UPSTREAM:
+        if self.kernel.type == VM.UPSTREAM:
             self.create_snapshot(self.kernel.distro_image, path_image, self.kernel.distro_name)
     
     def _get_unused_port(self):
@@ -56,12 +56,12 @@ class Build():
             self.gdb_port = self.kernel.gdb_port
         if self.kernel.mon_port != None:
             self.mon_port = self.kernel.mon_port
-        if self.vmtype == VMInstance.DISTROS:
+        if self.vmtype == VM.DISTROS:
             self.image_path = "{}/img/{}-snapshot.img".format(self.path_case, self.kernel.distro_name)
             self.vmlinux = "{}/vmlinux".format(self.kernel.distro_src)
             self.ssh_key = self.kernel.ssh_key
             self.distro_name = self.kernel.distro_name
-        if self.vmtype == VMInstance.UPSTREAM:
+        if self.vmtype == VM.UPSTREAM:
             self.image_path = "{}/img/{}-snapshot.img".format(self.path_case, self.kernel.distro_name)
             self.vmlinux = "{}/linux-upstream/vmlinux".format(self.path_case)
             self.ssh_key = self.kernel.ssh_key
@@ -73,7 +73,7 @@ class Build():
         self.log("Create image {} from {}".format(dst, src))
         if os.path.isfile(dst):
             os.remove(dst)
-        cmd = ["qemu-img", "create", "-f", "qcow2", "-b", src, dst]
+        cmd = ["qemu-img", "create", "-f", "qcow2", "-b", src, "-F", "raw", dst]
         p = Popen(cmd, stderr=STDOUT, stdout=PIPE)
         exitcode = p.wait()
         return exitcode
