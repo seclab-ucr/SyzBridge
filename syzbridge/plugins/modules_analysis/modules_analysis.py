@@ -137,6 +137,7 @@ class ModulesAnalysis(AnalysisModule):
         imp_dev = self._check_implicit_module(begin_node.function_name)
         if imp_dev != None:
             potential_module = self._get_implicit_module(imp_dev)
+            self.results[potential_module] = {'name': potential_module, 'src_file': src_file, 'hook': hook_end_node != None, 'missing': {}}
             self.results[potential_module]['missing'][distro.distro_name] = {'distro_name': distro.distro_name, 'distro_version': distro.distro_version, 'type': self.MODULE_IS_IMPLICIT, 'missing_reason': 'Module is implicit'}
         ret = self.module_check(distro, src_file, skip_src_check=skip_src_check)
         self.info_msg("({})Module {} in {} {}".format(begin_node.function_name, self.vul_module, distro.distro_name, ret))
