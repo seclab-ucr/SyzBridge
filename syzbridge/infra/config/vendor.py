@@ -210,6 +210,9 @@ class Vendor():
         if value == "upstream":
             self._type = 1
             return
+        if value == "android":
+            self._type = 2
+            return
         raise KernelTypeError(value)
 
     @property

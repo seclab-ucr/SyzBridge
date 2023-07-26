@@ -90,15 +90,20 @@ class RawBugReproduce(AnalysisModule):
             self.syz_feature = self.syz_feature_mini.results.copy()
             self.logger.info("Receive syz_feature: {} {}".format(self.syz_feature, self.syz_feature_mini))
             self.syz_feature.pop('prog_status')
-        for distro in self.cfg.get_distros():
+        for distro in self.cfg.get_distros_and_android():
+            if distro.type == VMInstance.ANDROID:
+                use_c_prog = self.c_prog
+                self.c_prog = True
             self.info_msg("start reproducing bugs on {}".format(distro.distro_name))
             x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="{} reproduce_async-{}".format(self.case_hash, distro.distro_name))
             x.start()
             time.sleep(1)
             if self.debug:
                 x.join()
+            if distro.type == VMInstance.ANDROID:
+                self.c_prog = use_c_prog
 
-        for _ in self.cfg.get_distros():
+        for _ in self.cfg.get_distros_and_android():
             [distro_name, m] = output.get(block=True)
             res[distro_name] = m
         return res
@@ -227,6 +232,23 @@ class RawBugReproduce(AnalysisModule):
             user = self.normal_user
             poc_src = "poc_normal.c"
         poc_path = os.path.join(self.path_case_plugin, poc_src)
+        if self._is_android(qemu):
+            self._proceed_android_poc(qemu,poc_path)
+        else:
+            self._proceed_x86_poc(qemu, user, poc_path, poc_src)
+        return
+
+    def _is_android(self, qemu):
+        return qemu.kernel.type == 2
+
+    def _proceed_android_poc(self, qemu, poc_path):
+        compiler = qemu.kernel.cross_compiler
+        cmd = compiler + " -o /tmp/poc {} -static".format(poc_path)
+        local_command(cmd, shell=True, logger=self.logger)
+        qemu.upload(src='/tmp/poc', dst='/data/local/tmp', user='', wait=True)
+        qemu.command(cmds='/data/local/tmp/poc', timeout=self.repro_timeout, user='', wait=True)
+    
+    def _proceed_x86_poc(self, qemu, user, poc_path, poc_src):
         qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
         if '386' in self.case['manager']:
             qemu.command(cmds="gcc -m32 -pthread -o poc {}".format(poc_src), user=user, wait=True)
@@ -239,7 +261,6 @@ class RawBugReproduce(AnalysisModule):
         qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user=self.root_user, wait=True)
         qemu.command(cmds="chmod +x poc && ./poc", user=user, timeout=self.repro_timeout, wait=True)
         qemu.command(cmds="killall poc", user="root", wait=True)
-        return
     
     def _init_results(self):
         for distro in self.cfg.get_distros():

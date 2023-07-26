@@ -15,7 +15,7 @@ class TargetFormatNotMatch(Exception):
 
 class KernelTypeError(Exception):
     def __init__(self, type_wrong, *args: object) -> None:
-        message = "Kernel type must be either \"upstream\" or \"distro\", instead it is ".format(type_wrong)
+        message = "Kernel type must be either \"upstream\", \"distro\", or \"android\", instead it is ".format(type_wrong)
         super().__init__(message)
 
 class DuplicatedDistro(Exception):

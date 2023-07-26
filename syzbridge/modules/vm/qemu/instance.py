@@ -17,6 +17,7 @@ default_output_timer = 5
 class VMInstance(Network):
     DISTROS = 0
     UPSTREAM = 1
+    ANDROID = 2
 
     def __init__(self, hash_tag, tag='', work_path='/tmp/', log_name='vm.log', log_suffix="", logger=None, debug=False):
         self.work_path = work_path
@@ -281,6 +282,8 @@ class VMInstance(Network):
     
     def need_reboot(self):
         if self.kernel.type != VMInstance.UPSTREAM:
+            return False
+        if len(self.output) == 0:
             return False
         return 'reboot: machine restart' in self.output[-1]
 

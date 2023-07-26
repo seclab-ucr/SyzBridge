@@ -107,7 +107,19 @@ class Config:
         res = []
         for name in self.kernel.__dict__:
             distro = getattr(self.kernel, name)
-            if distro.type == VM.DISTROS:
+            if distro.type == VM.DISTROS or distro.type:
+                if not distro.is_inited():
+                    continue
+                if not distro.repro.need_repro():
+                    continue
+                res.append(distro)
+        return res
+
+    def get_distros_and_android(self)-> List[Vendor]:
+        res = []
+        for name in self.kernel.__dict__:
+            distro = getattr(self.kernel, name)
+            if distro.type == VM.DISTROS or distro.type == VM.ANDROID:
                 if not distro.is_inited():
                     continue
                 if not distro.repro.need_repro():
