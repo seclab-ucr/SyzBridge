@@ -20,7 +20,7 @@ class BugReproduce(AnalysisModule):
     REPORT_START = "======================BugReproduce Report======================"
     REPORT_END =   "==================================================================="
     REPORT_NAME = "Report_BugReproduce"
-    DEPENDENCY_PLUGINS = ["ModulesAnalysis", "CapabilityCheck", "SyzFeatureMinimize"]
+    DEPENDENCY_PLUGINS = ["ModulesAnalysis", "CapabilityCheck", "SyzFeatureMinimize", "RawBugReproduce"]
 
     FEATURE_LOOP_DEVICE = 1 << 0
     FEATURE_MOD4ENV = 1 << 1
@@ -123,8 +123,11 @@ class BugReproduce(AnalysisModule):
             self.syz_feature.pop('prog_status')
         
         raw_bug_reproduce = self.cfg.get_plugin(RawBugReproduce.NAME).instance
-        for distro in self.cfg.get_distros():
+        for distro in self.cfg.get_distros_and_android():
             self.info_msg("Reproducing bugs on {}".format(distro.distro_name))
+            if distro.type == VMInstance.ANDROID:
+                use_c_prog = self.c_prog
+                self.c_prog = True
             if self.syz_feature_mini != None and not raw_bug_reproduce.results[distro.distro_name]['trigger']:
                 for each in self.syz_feature:
                     if not self.syz_feature[each]:
@@ -134,8 +137,10 @@ class BugReproduce(AnalysisModule):
             time.sleep(1)
             if self.debug:
                 x.join()
+            if distro.type == VMInstance.ANDROID:
+                self.c_prog = use_c_prog
 
-        for distro in self.cfg.get_distros():
+        for distro in self.cfg.get_distros_and_android():
             [distro_name, m] = output.get(block=True)
             if isinstance(distro_name, PlguinUnknownError):
                 raise PlguinUnknownError()
@@ -622,6 +627,46 @@ class BugReproduce(AnalysisModule):
         else:
             user = self.normal_user
         poc_path = os.path.join(self.path_case_plugin, poc_src)
+        if qemu.kernel.type == VMInstance.ANDROID:
+            self._proceed_android_poc(qemu, poc_path, repeat)
+        else:
+            self._proceed_x86_poc(qemu, user, poc_path, poc_src, repeat, poc_feature)
+        
+        self.set_stage_text("gathering output")
+        time.sleep(5)
+        return qemu.trigger_crash
+
+    def _is_android(self, qemu):
+        return qemu.kernel.type == 2
+
+    def _proceed_android_poc(self, qemu, poc_path, repeat):
+        compiler = qemu.kernel.cross_compiler
+        if '386' in self.case['manager']:
+            cmd = compiler + " -m32"
+        else:
+            cmd = compiler
+        cmd = compiler + " -pthread -o /tmp/poc {} -static".format(poc_path)
+        local_command(cmd, shell=True, logger=self.logger)
+        qemu.upload(src='/tmp/poc', dst='/data/local/tmp', user='', wait=True)
+        if repeat:
+            script = os.path.join(self.path_package, "scripts/run-script.sh")
+            chmodX(script)
+            p = Popen([script, "-1", self.path_case_plugin, "", "", "/system/bin/sh"],
+                stderr=STDOUT,
+                stdout=PIPE)
+            with p.stdout:
+                log_anything(p.stdout, qemu.logger, self.debug)
+            # It looks like scp returned without waiting for all file finishing uploading.
+            # Sleeping for 1 second to ensure everything is ready in vm
+            time.sleep(1)
+            qemu.upload(src='{}/run.sh'.format(self.path_case_plugin), dst='/data/local/tmp', user='', wait=True)
+            qemu.command(cmds='chmod +x /data/local/tmp/run.sh && /data/local/tmp/run.sh', timeout=self.repro_timeout, user='', wait=True)
+        else:
+            qemu.command(cmds="rm -rf /data/local/tmp/tmp", timeout=self.repro_timeout, user='', wait=True)
+            qemu.command(cmds="mkdir /data/local/tmp/tmp && mv /data/local/tmp/poc /data/local/tmp/tmp && cd /data/local/tmp/tmp && chmod +x poc && ./poc", timeout=self.repro_timeout, user='', wait=True)
+        return
+
+    def _proceed_x86_poc(self, qemu, user, poc_path, poc_src, repeat, poc_feature):
         qemu.upload(user=user, src=[poc_path], dst="~/", wait=True)
         if os.path.exists(os.path.join(self.path_case_plugin, "sandbox.h")):
             sandbox_src = os.path.join(self.path_case_plugin, "sandbox.h")
@@ -637,7 +682,7 @@ class BugReproduce(AnalysisModule):
         if repeat and self.ori_c_prog:
             script = os.path.join(self.path_package, "scripts/run-script.sh")
             chmodX(script)
-            p = Popen([script, str(qemu.port), self.path_case_plugin, qemu.key, user],
+            p = Popen([script, str(qemu.port), self.path_case_plugin, qemu.key, user, "/bin/bash"],
                 stderr=STDOUT,
                 stdout=PIPE)
             with p.stdout:
@@ -656,9 +701,7 @@ class BugReproduce(AnalysisModule):
             qemu.command(cmds="mkdir ./tmp && mv ./poc ./tmp && cd ./tmp && chmod +x poc && ./poc", user=user, wait=True, timeout=self.repro_timeout)
         qemu.logger.info("Killing PoC")
         qemu.command(cmds="killall poc", user=self.root_user, wait=True)
-        self.set_stage_text("gathering output")
-        time.sleep(5)
-        return qemu.trigger_crash
+        return
 
     def _enable_missing_modules(self, qemu, manual_enable_modules):
         for each in manual_enable_modules:
@@ -717,7 +760,7 @@ class BugReproduce(AnalysisModule):
         return False
     
     def _init_results(self):
-        for distro in self.cfg.get_distros():
+        for distro in self.cfg.get_distros_and_android():
             distro_result = {}
 
             distro_result['missing_module'] = []

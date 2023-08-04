@@ -107,7 +107,7 @@ class Config:
         res = []
         for name in self.kernel.__dict__:
             distro = getattr(self.kernel, name)
-            if distro.type == VM.DISTROS or distro.type:
+            if distro.type == VM.DISTROS:
                 if not distro.is_inited():
                     continue
                 if not distro.repro.need_repro():

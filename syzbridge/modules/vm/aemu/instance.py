@@ -37,6 +37,7 @@ class AEmuInstance():
         self.alternative_func_finished = False
         self._qemu_return = queue.Queue()
         self.qemu_ready = False
+        self.avd_name = "emulator-"
         self.kill_qemu = False
         self.trigger_crash = False
         self._shutdown = False
@@ -100,8 +101,8 @@ class AEmuInstance():
             queue: queue of alternative_func's custom output
         """
         self.reset()
-        env = os.environ.copy()
-        p = Popen(self.cmd_launch, stdout=PIPE, stderr=STDOUT, cwd=self.android_root, env=env, shell=True)
+        env = self._prepare_android_env()
+        p = Popen(self.cmd_launch, stdout=PIPE, stderr=STDOUT, cwd=self.android_root, env=env)
         self.instance = p
 
         self.alternative_func = alternative_func
@@ -183,7 +184,7 @@ class AEmuInstance():
     def upload(self, user, src: list, dst, wait: bool):
         if type(src) != str:
             self.logger.error("src must be a str")
-        cmds = "adb push "
+        cmds = "adb -s {} push ".format(self.avd_name)
         cmds += src + " "
         cmds += dst
         self.logger.info(cmds)
@@ -200,7 +201,7 @@ class AEmuInstance():
     def download(self, user, src: list, dst, wait: bool):
         if type(src) != str:
             self.logger.error("src must be a str")
-        cmds = "adb pull "
+        cmds = "adb -s {} pull ".format(self.avd_name)
         cmds += src + " "
         cmds += dst
         self.logger.info(cmds)
@@ -229,7 +230,7 @@ class AEmuInstance():
     
     def _command(self, u_cmd, user, ret_queue, timeout=None):
         ret = []
-        cmds = "adb shell \""
+        cmds = "adb -s {} shell \"".format(self.avd_name)
         cmds += u_cmd
         cmds += "\""
         self.logger.info(cmds)
@@ -359,12 +360,10 @@ class AEmuInstance():
         self.image = image
         self.key = key
         self.timeout = timeout
-        self.cmd_launch = "/bin/bash -c \""
-        self.cmd_launch += "source build/envsetup.sh && lunch sdk_phone_x86_64-eng && "
-        self.cmd_launch += "emulator -memory {} ".format(mem)
-        self.cmd_launch += "-verbose -show-kernel -selinux permissive -writable-system -no-window -no-audio -no-boot-anim"
-        self.cmd_launch += "\""
-        self.write_cmd_to_script(self.cmd_launch, "launch_{}.sh".format(self.kernel.distro_name))
+        self.cmd_launch = ["emulator"]
+        self.cmd_launch.extend(["-memory", "{}".format(mem)])
+        self.cmd_launch.extend(["-verbose", "-show-kernel", "-selinux", "permissive", "-writable-system", "-no-window", "-no-audio", "-no-boot-anim"])
+        self.write_cmd_to_script(" ".join(self.cmd_launch), "launch_{}.sh".format(self.kernel.distro_name))
     
     @log_thread
     def _prepare_alternative_func(self):
@@ -418,6 +417,12 @@ class AEmuInstance():
                     self.case_logger.error("Booting qemu-{} failed".format(self.log_name))
                 if 'Dumping ftrace buffer' in line:
                     self.dumped_ftrace = True
+                if 'Adding boot property: \'net.wifi_mac_prefix\' =' in line:
+                    avd_id = utilities.regx_get(r'Adding boot property: \'net.wifi_mac_prefix\' = \'(\d+)\'', line, 0)
+                    if avd_id != None:
+                        self.avd_name += str(avd_id)
+                    else:
+                        self.logger.error("Fail to obtain the avd id")
                 if utilities.regx_match(r'Rebooting in \d+ seconds', line):
                     self.kill_qemu = True
                 self.logger.info(line)
@@ -455,3 +460,46 @@ class AEmuInstance():
             if pipe.close:
                 return output
         return output
+    
+    def _prepare_android_env(self):
+        env = os.environ.copy()
+        env["PATH"] = "{0}/prebuilts/jdk/jdk11/linux-x86/bin:"\
+            "{0}/out/soong/host/linux-x86/bin:"\
+            "{0}/out/host/linux-x86/bin:"\
+            "{0}/prebuilts/gcc/linux-x86/x86/x86_64-linux-android-4.9/bin:"\
+            "{0}/development/scripts:"\
+            "{0}/prebuilts/devtools/tools:"\
+            "{0}/external/selinux/prebuilts/bin:"\
+            "{0}/prebuilts/misc/linux-x86/dtc:"\
+            "{0}/prebuilts/misc/linux-x86/libufdt:"\
+            "{0}/prebuilts/clang/host/linux-x86/llvm-binutils-stable:"\
+            "{0}/prebuilts/android-emulator/linux-x86_64:"\
+            "{0}/prebuilts/asuite/acloud/linux-x86:"\
+            "{0}/prebuilts/asuite/aidegen/linux-x86:"\
+            "{0}/prebuilts/asuite/atest/linux-x86:".format(self.android_root) + env["PATH"]
+        env["TARGET_BUILD_APPS"] = ""
+        env["TARGET_PRODUCT"] = "sdk_phone_x86_64"
+        env["TARGET_BUILD_VARIANT"] = "eng"
+        env["TARGET_BUILD_TYPE"] = "release"
+        env["TARGET_GCC_VERSION"] = "4.9"
+        env["ANDROID_TOOLCHAIN"] = "{0}/prebuilts/gcc/linux-x86/x86/x86_64-linux-android-4.9/bin".format(self.android_root)
+        env["ANDROID_TOOLCHAIN_2ND_ARCH"] = ""
+        env["ANDROID_DEV_SCRIPTS"] = "{0}/development/scripts:{0}/prebuilts/devtools/tools:{0}/external/selinux/prebuilts/bin:{0}/prebuilts/misc/linux-x86/dtc:{0}/prebuilts/misc/linux-x86/libufdt".format(self.android_root)
+        env["ASAN_SYMBOLIZER_PATH"] = "{0}/prebuilts/clang/host/linux-x86/llvm-binutils-stable/llvm-symbolizer".format(self.android_root)
+        env["ANDROID_EMULATOR_PREBUILTS"] = "{0}/prebuilts/android-emulator/linux-x86_64".format(self.android_root)
+        env["ANDROID_BUILD_PATHS"] = "{0}/out/soong/host/linux-x86/bin:{0}/out/host/linux-x86/bin:{0}/prebuilts/gcc/linux-x86/x86/x86_64-linux-android-4.9/bin:{0}/development/scripts:{0}/prebuilts/devtools/tools:{0}/external/selinux/prebuilts/bin:{0}/prebuilts/misc/linux-x86/dtc:{0}/prebuilts/misc/linux-x86/libufdt:{0}/prebuilts/clang/host/linux-x86/llvm-binutils-stable:{0}/prebuilts/android-emulator/linux-x86_64:{0}/prebuilts/asuite/acloud/linux-x86:{0}/prebuilts/asuite/aidegen/linux-x86:{0}/prebuilts/asuite/atest/linux-x86:".format(self.android_root)
+        env["PYTHONPATH"] = "{0}/development/python-packages:".format(self.android_root)
+        env["ANDROID_PYTHONPATH"] = "{0}/development/python-packages:".format(self.android_root)
+        env["ANDROID_JAVA_HOME"] = "{0}/prebuilts/jdk/jdk11/linux-x86".format(self.android_root)
+        env["JAVA_HOME"] = "{0}/prebuilts/jdk/jdk11/linux-x86".format(self.android_root)
+        env["ANDROID_JAVA_TOOLCHAIN"] = "{0}/prebuilts/jdk/jdk11/linux-x86/bin".format(self.android_root)
+        env["ANDROID_PRE_BUILD_PATHS"] = "{0}/prebuilts/jdk/jdk11/linux-x86/bin:".format(self.android_root)
+        env["ANDROID_PRODUCT_OUT"] = "{0}/out/target/product/emulator_x86_64".format(self.android_root)
+        env["OUT"] = "{0}/out/target/product/emulator_x86_64".format(self.android_root)
+        env["ANDROID_HOST_OUT"] = "{0}/out/host/linux-x86".format(self.android_root)
+        env["ANDROID_SOONG_HOST_OUT"] = "{0}/out/soong/host/linux-x86".format(self.android_root)
+        env["ANDROID_HOST_OUT_TESTCASES"] = "{0}/out/host/linux-x86/testcases".format(self.android_root)
+        env["ANDROID_TARGET_OUT_TESTCASES"] = "{0}/out/target/product/emulator_x86_64/testcases".format(self.android_root)
+        env["BUILD_ENV_SEQUENCE_NUMBER"] = "13"
+        env["ANDROID_BUILD_TOP"] = "{0}".format(self.android_root)
+        return env

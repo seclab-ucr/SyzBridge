@@ -161,12 +161,15 @@ class Launcher(Build):
                         self._crash_start(line):
                     record_flag ^= 1
                     if crash_flag == 1 and crash != []:
-                        res.append(crash)
-                        crash = []
-                        trigger_hunted_bug = True
-                        qemu.kill_qemu = True
-                        qemu.trigger_crash = True
-                        break
+                        if not self.crash_title_check(qemu, crash):
+                            crash = []
+                        else:
+                            res.append(crash)
+                            crash = []
+                            trigger_hunted_bug = True
+                            qemu.kill_qemu = True
+                            qemu.trigger_crash = True
+                            break
                     crash_flag = 0
                 if regx_match(call_trace_regx, line) or \
                 regx_match(message_drop_regx, line):
@@ -177,17 +180,34 @@ class Launcher(Build):
                     self._crash_end(line) or \
                     (self._crash_start(line) and crash_flag):
                     if crash_flag == 1 and crash != []:
-                        res.append(crash)
-                        crash = []
-                        trigger_hunted_bug = True
-                        qemu.kill_qemu = True
-                        qemu.trigger_crash = True
-                        break
+                        if self.crash_title_check(qemu, crash):
+                            crash = []
+                        else:
+                            res.append(crash)
+                            crash = []
+                            trigger_hunted_bug = True
+                            qemu.kill_qemu = True
+                            qemu.trigger_crash = True
+                            break
                     record_flag = 0
                     crash_flag = 0
                     continue
             out_begin = out_end
         return res, trigger_hunted_bug
+
+    def crash_title_check(self, qemu, report):
+        title = report[0]
+        if boundary_regx in title:
+            title = report[1]
+        if qemu.kernel.include != []:
+            for each in qemu.kernel.include:
+                if each in title:
+                    return True 
+        if qemu.kernel.exclude != []:
+            for each in qemu.kernel.exclude:
+                if each in title:
+                    return False
+        return True
     
     def _kernel_config_pre_check(self, qemu, config):
         out = qemu.command(cmds="ls /boot/config-`uname -r`".format(config), user=self.root_user, wait=True)

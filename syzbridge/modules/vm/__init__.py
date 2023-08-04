@@ -15,7 +15,7 @@ class VM():
             self._vm_instance = AEmuInstance(tag=tag, work_path=work_path, log_name=log_name, log_suffix=log_suffix, logger=logger, hash_tag=hash_tag, debug=debug)
             self._vm_instance.setup(linux=linux, kernel=kernel, port=port, image=image, mem=mem, cpu=cpu, key=key, gdb_port=gdb_port, mon_port=mon_port, timeout=timeout, snapshot=snapshot)
         else:
-            self._vm_instance = VMInstance(self, tag=tag, work_path=work_path, log_name=log_name, log_suffix=log_suffix, logger=logger, hash_tag=hash_tag, debug=debug)
+            self._vm_instance = VMInstance(tag=tag, work_path=work_path, log_name=log_name, log_suffix=log_suffix, logger=logger, hash_tag=hash_tag, debug=debug)
             self._vm_instance.setup(linux=linux, kernel=kernel, port=port, image=image, mem=mem, cpu=cpu, key=key, gdb_port=gdb_port, mon_port=mon_port, timeout=timeout, snapshot=snapshot)
             if vmlinux != None:
                 self.only_instance = False

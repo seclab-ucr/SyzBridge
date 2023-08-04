@@ -7,7 +7,7 @@ set -ex
 
 echo "running run-script.sh"
 
-if [ $# -ne 4 ]; then
+if [ $# -ne 5 ]; then
     echo "Usage ./run-script.sh ssh_port case_path ssh_key user"
     exit 1
 fi
@@ -16,14 +16,11 @@ PORT=$1
 CASE_PATH=$2
 KEY=$3
 USER=$4
+BASH_PATH=$5
 
 cd $CASE_PATH
 cat << EOF > run.sh
-#!/bin/bash
-set -ex
-
-chmod +x ./poc
-set +ex
+#!$BASH_PATH
 while [ 1 ]
 do
     rm -rf ./tmp || true
@@ -33,6 +30,9 @@ do
 done
 EOF
 
+if [ $PORT -eq -1 ]; then
+    exit 0
+fi
 CMD="scp -F /dev/null -o UserKnownHostsFile=/dev/null \
     -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=no \
     -i $KEY -P $PORT ./run.sh $USER@localhost:~"

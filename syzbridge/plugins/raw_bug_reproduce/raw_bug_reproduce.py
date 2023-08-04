@@ -243,7 +243,11 @@ class RawBugReproduce(AnalysisModule):
 
     def _proceed_android_poc(self, qemu, poc_path):
         compiler = qemu.kernel.cross_compiler
-        cmd = compiler + " -o /tmp/poc {} -static".format(poc_path)
+        if '386' in self.case['manager']:
+            cmd = compiler + " -m32"
+        else:
+            cmd = compiler
+        cmd += " -pthread -o /tmp/poc {} -static".format(poc_path)
         local_command(cmd, shell=True, logger=self.logger)
         qemu.upload(src='/tmp/poc', dst='/data/local/tmp', user='', wait=True)
         qemu.command(cmds='/data/local/tmp/poc', timeout=self.repro_timeout, user='', wait=True)
@@ -263,7 +267,7 @@ class RawBugReproduce(AnalysisModule):
         qemu.command(cmds="killall poc", user="root", wait=True)
     
     def _init_results(self):
-        for distro in self.cfg.get_distros():
+        for distro in self.cfg.get_distros_and_android():
             distro_result = {}
 
             distro_result['missing_module'] = []

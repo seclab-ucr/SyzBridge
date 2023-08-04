@@ -19,6 +19,8 @@ class Vendor():
         self._mon_port = None
         self._distro_image = None
         self._vmlinux = None
+        self._exclude = []
+        self._include = []
         self._ssh_key = None
         self._vendor_src = None
         self._distro_name = None
@@ -39,7 +41,7 @@ class Vendor():
                 if key not in cfg:
                     raise ParseConfigError(key)
         if cfg["type"] == "android":
-            for key in ["distro_image", "distro_name"]:
+            for key in ["distro_image", "distro_name", "cross_compiler"]:
                 if key not in cfg:
                     raise ParseConfigError(key)
         for key in cfg:
@@ -338,3 +340,23 @@ class Vendor():
     @effective_cycle_end.setter
     def effective_cycle_end(self, time_str):
         self._effective_cycle_end = time_str
+    
+    @property
+    def include(self):
+        return self._include
+    
+    @include.setter
+    def include(self, val):
+        if type(val) != list:
+            raise TargetFormatNotMatch(val, type(val), list)
+        self._include = val
+    
+    @property
+    def exclude(self):
+        return self._exclude
+    
+    @exclude.setter
+    def exclude(self, val):
+        if type(val) != list:
+            raise TargetFormatNotMatch(val, type(val), list)
+        self._exclude = val
