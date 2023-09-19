@@ -140,32 +140,16 @@ if [ "$OLD_INDEX" != "$INDEX" ] || [ ! -e ./linux-$KERNEL ]; then
   if [[ $KERNEL =~ linux-[0-9]+\.[0-9]+\.y$ ]]; then
     KERNEL="stable"
   fi
-  if [ "$KERNEL" == "stable" ] || [ "$KERNEL" == "upstream" ]; then
-    LINUX0=$PROJECT_PATH/tools/linux-$KERNEL-0
-    ls $LINUX0 || LINUX0="LINUX0"
-    ls $PROJECT_PATH/tools/linux-$KERNEL-$INDEX || build_linux_folder $PROJECT_PATH/tools/linux-$KERNEL-$INDEX $LINUX0 $KERNEL
-    ln -s $PROJECT_PATH/tools/linux-$KERNEL-$INDEX ./linux-$KERNEL
-    if [ -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
-        rm $CASE_PATH/.stamp/BUILD_KERNEL
-    fi
+  LINUX0=$PROJECT_PATH/tools/linux-$KERNEL-0
+  ls $LINUX0 || LINUX0="LINUX0"
+  ls $PROJECT_PATH/tools/linux-$KERNEL-$INDEX || build_linux_folder $PROJECT_PATH/tools/linux-$KERNEL-$INDEX $LINUX0 $KERNEL
+  ln -s $PROJECT_PATH/tools/linux-$KERNEL-$INDEX ./linux-$KERNEL
+  if [ -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
+      rm $CASE_PATH/.stamp/BUILD_KERNEL
   fi
 fi
 
 if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
-    if [ "$KERNEL" == "linux-next" ]; then
-      wget https://git.kernel.org/pub/scm/linux/kernel/git/next/$KERNEL.git/snapshot/$KERNEL-$COMMIT.tar.gz > /dev/null
-      tar xf $KERNEL-$COMMIT.tar.gz > /dev/null
-      rm $KERNEL-$COMMIT.tar.gz
-      rm -rf linux-$KERNEL || true
-      mv $KERNEL-$COMMIT linux-$KERNEL
-    fi
-    if [ "$KERNEL" == "net" ]; then
-      wget https://git.kernel.org/pub/scm/linux/kernel/git/netdev/$KERNEL.git/snapshot/$KERNEL-$COMMIT.tar.gz > /dev/null
-      tar xf $KERNEL-$COMMIT.tar.gz > /dev/null
-      rm $KERNEL-$COMMIT.tar.gz
-      rm -rf linux-$KERNEL || true
-      mv $KERNEL-$COMMIT linux-$KERNEL
-    fi
     if [ -z $LINUX_REPO ]; then
       cd linux-$KERNEL
     else

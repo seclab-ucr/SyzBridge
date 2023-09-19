@@ -128,10 +128,11 @@ class BugReproduce(AnalysisModule):
             if distro.type == VMInstance.ANDROID:
                 use_c_prog = self.c_prog
                 self.c_prog = True
-            if self.syz_feature_mini != None and not raw_bug_reproduce.results[distro.distro_name]['trigger']:
-                for each in self.syz_feature:
-                    if not self.syz_feature[each]:
-                        self.results[distro.distro_name]['skip_funcs'].append(each)
+            if self.plugin_finished("RawBugReproduce"):
+                if self.syz_feature_mini != None and not raw_bug_reproduce.results[distro.distro_name]['trigger']:
+                    for each in self.syz_feature:
+                        if not self.syz_feature[each]:
+                            self.results[distro.distro_name]['skip_funcs'].append(each)
             x = threading.Thread(target=self.reproduce_async, args=(distro, output ), name="{} reproduce_async-{}".format(self.case_hash, distro.distro_name))
             x.start()
             time.sleep(1)

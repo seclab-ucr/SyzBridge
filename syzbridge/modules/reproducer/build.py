@@ -38,7 +38,7 @@ class Build():
         if self.kernel.type == VM.DISTROS:
             self.create_snapshot(self.kernel.distro_image, path_image, self.kernel.distro_name)
         if self.kernel.type == VM.UPSTREAM:
-            self.create_snapshot(self.kernel.distro_image, path_image, self.kernel.distro_name)
+            self.create_snapshot(self.kernel.distro_image, path_image, self.kernel.distro_name, target_format="raw")
         if self.kernel.type == VM.ANDROID:
             self.create_snapshot(self.kernel.distro_image, path_image, self.kernel.distro_name, target_format="raw")
     
