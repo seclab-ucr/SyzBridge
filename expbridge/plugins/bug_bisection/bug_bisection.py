@@ -1,15 +1,6 @@
-from ast import Import
-import os, logging
-import shutil
-import threading
-import queue
-
 from modules.vm import VM
 from infra.tool_box import *
 from plugins import AnalysisModule
-from plugins.syzkaller_interface import SyzkallerInterface
-
-qemu_output_window = 15
 
 class BugBisection(AnalysisModule):
     NAME = "BugBisection"
