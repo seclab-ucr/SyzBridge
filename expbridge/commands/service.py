@@ -108,7 +108,7 @@ class ServiceCommand(Command):
                 continue
 
     def custom_subparser(self, parser, cmd):
-        return parser.add_parser(cmd, help='Run expbridge as system service.')
+        return parser.add_parser(cmd, help='Run expbridge as non-stop service.')
 
     def parse_config(self, config):
         from expbridge.infra.config.config import Config
