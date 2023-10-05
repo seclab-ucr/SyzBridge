@@ -12,4 +12,4 @@ Exploitability assessment is a popular topic in cybersecurity. Most exploitabili
 - [Install Instructions](https://github.com/plummm/ExpBridge/wiki)
 - [Documentation](https://github.com/plummm/ExpBridge/wiki)
 - [API reference](https://github.com/plummm/ExpBridge/wiki/API-Reference)
-- [Example Plugins]([https://github.com/plummm/ExpBridge/wiki](https://github.com/plummm/ExpBridge/wiki/Plugins)https://github.com/plummm/ExpBridge/wiki/Plugins)
+- [Example Plugins](https://github.com/plummm/ExpBridge/wiki/Plugins)
