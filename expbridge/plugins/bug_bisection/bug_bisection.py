@@ -39,8 +39,8 @@ class BugBisection(AnalysisModule):
         return self._move_to_success
     
     def build_upstream_kernel(self, kernel_version):
-        #if self._check_stamp("BUILD_KERNEL"):
-        #    self._remove_stamp("BUILD_KERNEL")
+        if self._check_stamp("BUILD_KERNEL"):
+            self._remove_stamp("BUILD_KERNEL")
         ret = self.build_mainline_kernel(commit=kernel_version, keep_ori_config=True)
         if ret == 0:
             self._create_stamp("BUILD_SYZ_FEATURE_MINIMIZE_KERNEL")
