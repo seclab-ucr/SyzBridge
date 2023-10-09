@@ -2,8 +2,8 @@
 
 ## What is ExpBridge
 
-ExpBridge is a research project that aims to adapt Linux upstream PoCs to downstream distributions.
-It provides rich interfaces that let you do a lot of cool things with Syzbot bugs
+ExpBridge is a research project that adapts Linux upstream PoCs to downstream distributions.
+It provides rich interfaces that allow you to do a lot of cool things with Syzbot bugs
 
 - Bug Reproduce (Upstream/Downstream)
 - VM Management
