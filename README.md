@@ -19,7 +19,7 @@ Exploitability assessment is a popular topic in cybersecurity. Most exploitabili
 ### Build your own plugin
 It's super easy to integrate other bug assessment tools or build your own plugin on ExpBridge.
 
-Here is a tutorial for building a bug-bisection plugin: [BugBisection]()
+Here is a tutorial for building a bug-bisection plugin: [BugBisection](https://github.com/plummm/ExpBridge/wiki/Plugins#write-your-own-plugin)
 
 ## Quick Start
 - [Install Instructions](https://github.com/plummm/ExpBridge/wiki)
