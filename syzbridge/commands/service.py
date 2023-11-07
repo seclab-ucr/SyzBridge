@@ -9,9 +9,9 @@ import importlib
 from datetime import datetime, timedelta
 from time import sleep
 from pytz import timezone, utc
-from expbridge.commands import Command
+from syzbridge.commands import Command
 from deployer.deployer import Deployer
-from expbridge.modules.syzbot import Crawler
+from syzbridge.modules.syzbot import Crawler
 from infra.error import *
 
 from queue import Empty
@@ -89,7 +89,7 @@ class ServiceCommand(Command):
         parser.add_argument('--console', action='store_true',
                             help='Enable console mode')
     def add_arguments_for_plugins(self, parser):
-        proj_dir = os.path.join(os.getcwd(), "expbridge")
+        proj_dir = os.path.join(os.getcwd(), "syzbridge")
         modules_dir = os.path.join(proj_dir, "plugins")
         module_folder = [ cmd for cmd in os.listdir(modules_dir)
                     if not cmd.endswith('.py') and not cmd == "__pycache__" ]
@@ -108,10 +108,10 @@ class ServiceCommand(Command):
                 continue
 
     def custom_subparser(self, parser, cmd):
-        return parser.add_parser(cmd, help='Run expbridge as non-stop service.')
+        return parser.add_parser(cmd, help='Run syzbridge as non-stop service.')
 
     def parse_config(self, config):
-        from expbridge.infra.config.config import Config
+        from syzbridge.infra.config.config import Config
         
         cfg = Config()
         cfg.load_from_file(config)

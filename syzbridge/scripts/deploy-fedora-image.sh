@@ -38,7 +38,7 @@ function install_necessary_packages() {
     if [ ! -f ~/.stamp/INSTALL_PACKAGES ]; then
         dnf install -y fedpkg fedora-packager rpmdevtools ncurses-devel pesign grubby psmisc trace-cmd glibc-devel.i686 glibc-devel
 
-        useradd -m expbridge || true
+        useradd -m syzbridge || true
         touch ~/.stamp/INSTALL_PACKAGES
     fi
 }

@@ -37,7 +37,7 @@ class FuzzCommand(Command):
         return parser.add_parser(cmd, help='Fuzz for new crashes')
     
     def add_arguments_for_plugins(self, parser):
-        proj_dir = os.path.join(os.getcwd(), "expbridge")
+        proj_dir = os.path.join(os.getcwd(), "syzbridge")
         modules_dir = os.path.join(proj_dir, "plugins")
         self._module_folder = [ cmd for cmd in os.listdir(modules_dir)
                     if not cmd.endswith('.py') and not cmd == "__pycache__" ]
@@ -152,7 +152,7 @@ class FuzzCommand(Command):
         return detail
     
     def parse_config(self, config):
-        from expbridge.infra.config.config import Config
+        from syzbridge.infra.config.config import Config
         
         cfg = Config()
         cfg.load_from_file(config)

@@ -129,7 +129,7 @@ EOF
 
         systemctl disable hv-kvp-daemon.service
 
-        useradd -m expbridge || true
+        useradd -m syzbridge || true
         touch ~/.stamp/INSTALL_PACKAGES
     fi
 }

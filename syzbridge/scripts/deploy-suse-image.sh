@@ -55,7 +55,7 @@ function install_necessary_packages() {
     if [ ! -f ~/.stamp/INSTALL_PACKAGES ]; then
         zypper install rpm-build rpmdevtools git bc flex bison openssl-devel ncurses-devel zlib-devel
         zypper install trace-cmd psmisc fakeroot libncurses5 gawk flex bison openssl libopenssl-devel dkms pciutils-devel libudev-devel libpci3 autoconf glibc-devel-32bit glibc-32bit gcc-32bit
-        useradd -m expbridge || true
+        useradd -m syzbridge || true
         touch ~/.stamp/INSTALL_PACKAGES
     fi
 }

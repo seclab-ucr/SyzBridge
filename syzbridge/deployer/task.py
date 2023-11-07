@@ -58,7 +58,7 @@ class Task:
         self.task |= cap
 
     def _build_tasks(self):
-        proj_dir = os.path.join(os.getcwd(), "expbridge")
+        proj_dir = os.path.join(os.getcwd(), "syzbridge")
         modules_dir = os.path.join(proj_dir, "plugins")
         module_folder = [ cmd for cmd in os.listdir(modules_dir)
                     if not cmd.endswith('.py') and not cmd == "__pycache__" ]

@@ -162,7 +162,7 @@ class ImageCommand(Command):
         distro_cfg['ssh_port'] = self.kernel.ssh_port
         distro_cfg['type'] = self.kernel.type
         distro_cfg['root_user'] = self.kernel.root_user
-        distro_cfg['normal_user'] = 'expbridge'
+        distro_cfg['normal_user'] = 'syzbridge'
         cfg['kernel']["{}-{}".format(self.distro, self.kernel_package_version)] = distro_cfg
 
         json.dump(cfg, open(config, 'w'), indent=4)
@@ -554,7 +554,7 @@ class ImageCommand(Command):
         out = qemu.command(user=self.ssh_user, cmds="lsb_release -c | awk  '{print $2}'", wait=True)
         self.code_name = out[1]
 
-        proj_path = os.path.join(os.getcwd(), "expbridge")
+        proj_path = os.path.join(os.getcwd(), "syzbridge")
         image_building_script = "deploy-{}-image.sh".format(self.distro)
         image_building_script_path = os.path.join(proj_path, "scripts/{}".format(image_building_script))
 

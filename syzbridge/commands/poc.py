@@ -9,7 +9,7 @@ class PocCommand(Command):
 
     def __init__(self):
         super().__init__()
-        self.path_package = os.getcwd() + '/expbridge'
+        self.path_package = os.getcwd() + '/syzbridge'
         self.logger = init_logger(__name__, handler_type=STREAM_HANDLER)
 
     def add_arguments(self, parser):
@@ -80,7 +80,7 @@ do
     sleep 1
 done
 """
-        from expbridge.modules.syzbot import Crawler
+        from syzbridge.modules.syzbot import Crawler
 
         crawler = Crawler()
 

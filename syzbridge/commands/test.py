@@ -3,7 +3,7 @@ import logging
 import os
 
 from infra.error import *
-from expbridge.commands import Command
+from syzbridge.commands import Command
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ class TestCommand(Command):
         return parser.add_parser(cmd, help='Modular test (Debug only)')
     
     def parse_config(self, config):
-        from expbridge.infra.config.config import Config
+        from syzbridge.infra.config.config import Config
         
         cfg = Config()
         cfg.load_from_file(config)
@@ -30,7 +30,7 @@ class TestCommand(Command):
         return cfg
     
     def add_arguments_for_plugins(self, parser):
-        proj_dir = os.path.join(os.getcwd(), "expbridge")
+        proj_dir = os.path.join(os.getcwd(), "syzbridge")
         modules_dir = os.path.join(proj_dir, "plugins")
         module_folder = [ cmd for cmd in os.listdir(modules_dir)
                     if not cmd.endswith('.py') and not cmd == "__pycache__" ]
@@ -74,9 +74,9 @@ class TestCommand(Command):
     
     def test_target(self, name):
         try:
-            module = importlib.import_module("expbridge.test.{}_test".format(name))
+            module = importlib.import_module("syzbridge.test.{}_test".format(name))
         except ModuleNotFoundError:
-            logger.error("expbridge.test.{}_test module not found".format(name))
+            logger.error("syzbridge.test.{}_test module not found".format(name))
             return
         self._test(module)
 

@@ -37,7 +37,7 @@ if [ ! -f "$TOOLS_PATH/.stamp/BUILD_IMAGE" ]; then
   fi
   cd img
   if [ ! -f "stretch.img" ]; then
-    cp $PROJECT_PATH/expbridge/scripts/create-image.sh ./
+    cp $PROJECT_PATH/syzbridge/scripts/create-image.sh ./
     chmod +x ./create-image.sh
     ./create-image.sh -s 10240
     rm stretch.img.key || true

@@ -55,7 +55,7 @@ class RunCommand(Command):
                             help='Enable console mode')
     
     def add_arguments_for_plugins(self, parser):
-        proj_dir = os.path.join(os.getcwd(), "expbridge")
+        proj_dir = os.path.join(os.getcwd(), "syzbridge")
         modules_dir = os.path.join(proj_dir, "plugins")
         self._module_folder = [ cmd for cmd in os.listdir(modules_dir)
                     if not cmd.endswith('.py') and not cmd == "__pycache__" ]
@@ -114,7 +114,7 @@ class RunCommand(Command):
         self.logger.info("Thread {} exit->".format(index))
 
     def parse_config(self, config):
-        from expbridge.infra.config.config import Config
+        from syzbridge.infra.config.config import Config
         
         cfg = Config()
         cfg.load_from_file(config)
@@ -217,7 +217,7 @@ class RunCommand(Command):
             from infra.console import CoolConsole
 
             self.console_queue = multiprocessing.Queue()
-            self.console = CoolConsole("ExpBridge", self.args.parallel_max, self.console_queue)
+            self.console = CoolConsole("SyzBridge", self.args.parallel_max, self.console_queue)
         self.print_args_info()
 
         if self.args.console:

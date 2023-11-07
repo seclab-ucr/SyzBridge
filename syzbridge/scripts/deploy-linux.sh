@@ -14,7 +14,7 @@ function clean_and_jump() {
 
 function compile_with_patches() {
   grep -E "New address family defined, please update secclass_map" make.log || false
-  patch -p1 -i $PROJECT_PATH/expbridge/resources/PF_MAX.patch
+  patch -p1 -i $PROJECT_PATH/syzbridge/resources/PF_MAX.patch
   make -j$N_CORES CC=$COMPILER > make.log 2>&1
 }
 
@@ -159,7 +159,7 @@ if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
       if [ $COMMIT == "0" ]; then
         cd linux-$LINUX_VERSION || get_linux $LINUX_REPO $LINUX_VERSION
       else
-        # If terminate expbridge with ctrl+c, some git repo may still be protected
+        # If terminate syzbridge with ctrl+c, some git repo may still be protected
         rm .git/index.lock || true 
         git stash || echo "it's ok"
         make clean > /dev/null || echo "it's ok"

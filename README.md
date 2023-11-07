@@ -22,10 +22,10 @@ It's super easy to integrate other bug assessment tools or build your own plugin
 Here is a tutorial for building a bug-bisection plugin: [BugBisection](../../wiki/Plugins#write-your-own-plugin)
 
 ## Request module fuzzing
-We used a customized syzkaller to fuzz `request_module`. The repo links [here](https://github.com/plummm/syzkaller-capability_inference/tree/module_fuzzing)
-
-## Quick Start
-- [Install Instructions](../../wiki)
+We used a customized syzkaller to fuzz `request_modSyzBridge repo links [here](https://github.com/plummm/syzkaller-capability_inference/tree/module_fuzzing)
+SyzBridge
+## Quick StartSyzBridge
+- [Install Instructions](../../wiki)SyzBridge
 - [Documentation](../../wiki)
 - [API reference](../../wiki/API-Reference)
 - [Example Plugins](../../wiki/Plugins)

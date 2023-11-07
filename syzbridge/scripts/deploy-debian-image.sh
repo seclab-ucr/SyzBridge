@@ -71,7 +71,7 @@ function install_necessary_packages() {
 
         systemctl disable hv-kvp-daemon.service || true
 
-        useradd -m expbridge || true
+        useradd -m syzbridge || true
         touch ~/.stamp/INSTALL_PACKAGES
     fi
 }

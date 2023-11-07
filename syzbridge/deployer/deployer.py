@@ -83,10 +83,11 @@ class Deployer(Case, Task):
     # This function iterates all enabled tasks, runs corresponding analysis and save bugs to their folders.
     def deploy(self):
         error = False
-        for task in self.iterate_enabled_tasks():
-            if self.capable(task) and not self.is_service(task):
-                if self.do_task(task) == 1:
-                    error = True
+        if self._ready_to_run():
+            for task in self.iterate_enabled_tasks():
+                if self.capable(task) and not self.is_service(task):
+                    if self.do_task(task) == 1:
+                        error = True
 
         self.case_logger.info("Case finished")
         if self._success:
@@ -98,11 +99,11 @@ class Deployer(Case, Task):
             self.logger.info("Copy to {}".format(folder))
             return False
     
-    # This function provides a interface that you can run another ExpBridge instance
+    # This function provides a interface that you can run another SyzBridge instance
     # It returns the stnadar output of this instance
     def call_expbridge(self, cmd, args):
         out = []
-        run_cmd = ['python3', 'expbridge', cmd]
+        run_cmd = ['python3', 'syzbridge', cmd]
         run_cmd.extend(args)
         p = Popen(run_cmd, stdout=PIPE, stderr=STDOUT, shell=False, cwd=self.path_expbridge, env=os.environ.copy())
         with p.stdout:
@@ -120,7 +121,7 @@ class Deployer(Case, Task):
     
     def _build_analyzor_modules(self):
         res = []
-        proj_dir = os.path.join(os.getcwd(), "expbridge")
+        proj_dir = os.path.join(os.getcwd(), "syzbridge")
         modules_dir = os.path.join(proj_dir, "plugins")
         module_folder = [ cmd for cmd in os.listdir(modules_dir)
                     if not cmd.endswith('.py') and not cmd == "__pycache__" ]
@@ -168,6 +169,11 @@ class Deployer(Case, Task):
                 self._build_dependency_module(getattr(Task, depend_cap_text), A)
                 self.build_task_class(getattr(Task, depend_cap_text), A)
         self.ts[task_id] = dst_node
+    
+    def _ready_to_run(self):
+        if self.case['syz_repro'] == None:
+            return False
+        return True
 
     def _get_plugin_instance_by_name(self, name):
         plugin = self.cfg.get_plugin(name)

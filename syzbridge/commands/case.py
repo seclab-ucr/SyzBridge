@@ -307,7 +307,7 @@ class CaseCommand(Command):
         return folder
     
     def _call_ftraceparser(self, trace_path):
-        ftraceparser_path = os.path.join(os.getcwd(), 'expbridge/infra/ftraceparser/')
+        ftraceparser_path = os.path.join(os.getcwd(), 'syzbridge/infra/ftraceparser/')
         run_cmd = ['python3', 'ftraceparser', trace_path]
         call(run_cmd, shell=False, cwd=ftraceparser_path, env=os.environ.copy())
 

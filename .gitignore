@@ -1,0 +1,5 @@
+*.pyc
+.vscode/*
+venv/*
+tools/*
+projects/*

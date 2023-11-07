@@ -1,6 +1,6 @@
-[submodule "expbridge/infra/ftraceparser"]
-	path = expbridge/infra/ftraceparser
+[submodule "syzbridge/infra/ftraceparser"]
+	path = syzbridge/infra/ftraceparser
 	url = https://github.com/plummm/ftraceparser.git
-[submodule "expbridge/infra/SmartPatch"]
-	path = expbridge/infra/SmartPatch
+[submodule "syzbridge/infra/SmartPatch"]
+	path = syzbridge/infra/SmartPatch
 	url = https://github.com/plummm/SmartPatch.git

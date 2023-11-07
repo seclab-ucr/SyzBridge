@@ -3,7 +3,7 @@ import logging
 import importlib
 
 from infra.error import *
-from expbridge.modules.vm import VM
+from syzbridge.modules.vm import VM
 from .vendor import Vendor
 from infra.tool_box import *
 from typing import List
@@ -51,7 +51,7 @@ class Config:
             else:
                 raise DuplicatedDistro(_cfg.distro_name)
 
-        proj_dir = os.path.join(os.getcwd(), "expbridge")
+        proj_dir = os.path.join(os.getcwd(), "syzbridge")
         modules_dir = os.path.join(proj_dir, "plugins")
         module_folder = [ cmd for cmd in os.listdir(modules_dir)
                     if not cmd.endswith('.py') and not cmd == "__pycache__" ]

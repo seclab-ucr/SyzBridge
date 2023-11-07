@@ -2,7 +2,7 @@ import os, queue
 import multiprocessing
 
 from commands import Command
-from expbridge.infra.tool_box import *
+from syzbridge.infra.tool_box import *
 from subprocess import Popen, STDOUT, PIPE, TimeoutExpired
 
 class BitcodeCommand(Command):
@@ -45,7 +45,7 @@ class BitcodeCommand(Command):
         exitcode = 0
 
         if not os.path.exists(os.path.join(self.source_path, 'clang_log')):
-            proj_path = os.path.join(os.getcwd(), "expbridge")
+            proj_path = os.path.join(os.getcwd(), "syzbridge")
             script_path = os.path.join(proj_path, "scripts/deploy-bc.sh")
             st = os.stat(script_path)
             os.chmod(script_path, st.st_mode | stat.S_IEXEC)
