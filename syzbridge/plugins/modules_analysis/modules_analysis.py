@@ -9,7 +9,7 @@ from plugins.error import *
 from plugins.trace_analysis import TraceAnalysis
 from infra.ftraceparser.ftraceparser.trace import Trace
 from modules.vm import VM, VMInstance
-from expbridge.infra.config.vendor import Vendor
+from syzbridge.infra.config.vendor import Vendor
 
 class TraceAnalysisError(Exception):
     pass

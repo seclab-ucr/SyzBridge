@@ -65,7 +65,7 @@ class SyzbotCommand(Command):
         return parser.add_parser(cmd, help='Get a case by hash or a file contains multiple hashs.')
     
     def parse_config(self, config):
-        from expbridge.infra.config.config import Config
+        from syzbridge.infra.config.config import Config
         
         cfg = Config()
         cfg.load_from_file(config)
@@ -109,7 +109,7 @@ class SyzbotCommand(Command):
         if self.proj_dir == None:
             return
 
-        from expbridge.modules.syzbot import Crawler
+        from syzbridge.modules.syzbot import Crawler
 
         crawler = Crawler(url=self.args.url, keyword=self.args.key, max_retrieve=int(self.args.max_retrieval), 
             filter_by_reported=self.args.filter_by_reported, filter_by_closed=self.args.filter_by_closed, 

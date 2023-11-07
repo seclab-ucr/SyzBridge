@@ -1,6 +1,6 @@
 import logging, sys
 
-from expbridge.plugins.modules_analysis import ModulesAnalysis
+from syzbridge.plugins.modules_analysis import ModulesAnalysis
 from .config_test import create_mini_cfg
 
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)

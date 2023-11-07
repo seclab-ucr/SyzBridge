@@ -3,7 +3,7 @@ from rich.table import Table
 from rich.console import Console
 from rich import box
 
-from expbridge.infra.console.message import ConsoleMessage
+from syzbridge.infra.console.message import ConsoleMessage
 from .routine import Routine
 from .layout import BuildLayout
 

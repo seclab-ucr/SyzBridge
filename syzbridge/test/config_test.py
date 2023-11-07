@@ -1,7 +1,7 @@
 import json
 import logging
 
-from expbridge.infra.config.config import Config
+from syzbridge.infra.config.config import Config
 
 logger = logging.getLogger(__name__)
 

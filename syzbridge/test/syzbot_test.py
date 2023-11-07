@@ -1,4 +1,4 @@
-from expbridge.modules.syzbot import Crawler
+from syzbridge.modules.syzbot import Crawler
 
 def get_case(hash_val, **kwargs):
     syzbot = Crawler(**kwargs)

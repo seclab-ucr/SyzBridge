@@ -4,11 +4,11 @@ import requests
 import time
 import pandas as pd
 import re, os, shutil
-from expbridge.infra.config.config import Config
-from expbridge.infra.config.vendor import Vendor
-from expbridge.modules.vm import VM
+from syzbridge.infra.config.config import Config
+from syzbridge.infra.config.vendor import Vendor
+from syzbridge.modules.vm import VM
 
-from expbridge.infra.tool_box import *
+from syzbridge.infra.tool_box import *
 from bs4 import BeautifulSoup
 from bs4 import element
 from datetime import date, timedelta

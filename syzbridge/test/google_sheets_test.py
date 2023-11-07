@@ -1,6 +1,6 @@
 import logging, sys
 
-from expbridge.plugins.google_sheets import GoogleSheets
+from syzbridge.plugins.google_sheets import GoogleSheets
 from .config_test import create_mini_cfg
 from .syzbot_test import get_case
 

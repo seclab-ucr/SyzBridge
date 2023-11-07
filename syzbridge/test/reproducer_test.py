@@ -1,5 +1,5 @@
 import logging
-from expbridge.modules.reproducer import Reproducer
+from syzbridge.modules.reproducer import Reproducer
 
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 logger = logging.getLogger(__name__)

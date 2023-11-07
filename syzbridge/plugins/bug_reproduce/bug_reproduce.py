@@ -10,8 +10,8 @@ from infra.strings import *
 from infra.config.vendor import Vendor
 from subprocess import Popen, STDOUT, PIPE, call
 from plugins.modules_analysis import ModulesAnalysis
-from expbridge.plugins.syz_feature_minimize.syz_feature_minimize import SyzFeatureMinimize
-from expbridge.plugins.raw_bug_reproduce.raw_bug_reproduce import RawBugReproduce
+from syzbridge.plugins.syz_feature_minimize.syz_feature_minimize import SyzFeatureMinimize
+from syzbridge.plugins.raw_bug_reproduce.raw_bug_reproduce import RawBugReproduce
 from .error import *
 
 qemu_output_window = 15

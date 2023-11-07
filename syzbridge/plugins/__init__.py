@@ -9,7 +9,7 @@ from infra.console.message import ConsoleMessage
 from infra.tool_box import *
 from dateutil import parser as time_parser
 from .error import *
-from expbridge.deployer.error import PluginRuntimeError
+from syzbridge.deployer.error import PluginRuntimeError
 
 logger = logging.getLogger(__name__)
 
