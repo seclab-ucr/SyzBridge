@@ -76,16 +76,23 @@ class ServiceCommand(Command):
                             help='[list] filter by targeting kernel.\n\
                             e.g., --filter-by-kernel=upstream --filter-by-kernel=linux-next')
         parser.add_argument('--filter-by-c-prog', action='store_true',
-                            help='[bool] filter bugs do not have a c reproducer\n')
-        parser.add_argument('--filter-by-distro-effective-cycle', action='store_true',
-                            help='[bool] filter bugs by distro effective cycle\n'
-                            'Use \'effective_cycle_start\' and \'effective_cycle_end\' in config file')
+                            help='[bool] filter bugs that do not have a c reproducer\n')
+        parser.add_argument('--filter-by-syz-prog', action='store_true',
+                            help='[bool] filter bugs that do not have a syz reproducer\n')
+        parser.add_argument('--filter-by-distro-cycle-start', action='store_true',
+                            help='[bool] filter bugs by the start date of distro effective cycle. (Bug reported earlier than distro start date)\n'
+                            'Use \'effective_cycle_start\' in config file')
+        parser.add_argument('--filter-by-distro-cycle-end', action='store_true',
+                            help='[bool] filter bugs by the end date distro effective cycle. (Bug reported later than distro end date)\n'
+                            'Use \'effective_cycle_end\' in config file')
         parser.add_argument('--filter-by-hash', nargs='?',
                             help='[file|string] Rule out specific hash or a file that contains a list of hashs\n')
         parser.add_argument('--filter-by-fixes-tag', action='store_true',
                             help='[bool] Check if patch fixes tag exist in target kernel, this option only applies on fixed section\n')
         parser.add_argument('--filter-by-patch', action='store_true',
                             help='[bool] Check if patch exist  in target kernel, this option only applies on fixed section\n')
+        parser.add_argument('--match-single-distro', action='store_true',
+                            help='[bool] Match the closest distro from date\n')
         parser.add_argument('--console', action='store_true',
                             help='Enable console mode')
     def add_arguments_for_plugins(self, parser):
@@ -175,12 +182,14 @@ class ServiceCommand(Command):
             bk_cases = {}
         if not self.args.skip_today or self.skiped:
             crawler = Crawler(url=self.args.url, keyword=self.args.key, max_retrieve=int(self.args.max_retrieval), 
-                filter_by_reported=self.args.filter_by_reported, filter_by_closed=self.args.filter_by_closed, 
-                filter_by_c_prog=int(self.args.filter_by_c_prog), filter_by_kernel=self.args.filter_by_kernel,
-                filter_by_distro_effective_cycle=self.args.filter_by_distro_effective_cycle,
-                filter_by_fixes_tag=self.args.filter_by_fixes_tag, filter_by_patch=self.args.filter_by_patch,
-                filter_by_hashs=filter_by_hash,
-                debug=self.args.debug, log_path = self.proj_dir)
+            filter_by_reported=self.args.filter_by_reported, filter_by_closed=self.args.filter_by_closed, 
+            filter_by_c_prog=self.args.filter_by_c_prog, filter_by_kernel=self.args.filter_by_kernel,
+            filter_by_distro_cycle_start=self.args.filter_by_distro_cycle_start,
+            filter_by_distro_cycle_end=self.args.filter_by_distro_cycle_end,
+            filter_by_syz_prog=self.args.filter_by_syz_prog,
+            filter_by_fixes_tag=self.args.filter_by_fixes_tag, filter_by_patch=self.args.filter_by_patch,
+            filter_by_hashs=filter_by_hash, match_single_distro=self.args.match_single_distro,
+            cfg=self.cfg, debug=self.args.debug, log_path = self.proj_dir)
 
             crawler.run()
             tmp_cases = crawler.cases.copy()

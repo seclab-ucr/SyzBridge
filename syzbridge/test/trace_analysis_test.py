@@ -1,7 +1,7 @@
 import logging, sys
 
-from expbridge.plugins.trace_analysis import TraceAnalysis
-from expbridge.infra.ftraceparser.ftraceparser.trace import Trace
+from syzbridge.plugins.trace_analysis import TraceAnalysis
+from syzbridge.infra.ftraceparser.ftraceparser.trace import Trace
 from .config_test import create_mini_cfg
 from .syzbot_test import get_case
 
