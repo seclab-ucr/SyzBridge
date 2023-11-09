@@ -1,7 +1,5 @@
 # SyzBridge
 
-## THIS VERSION CONDUCTED ALL THE EXPERIMENT FOR NDSS 2024, PURSUING NEW FEATURES, FOLLOW-> [SyzBridge](https://github.com/plummm/SyzBridge)
-
 ## What is SyzBridge
 
 SyzBridge is a research project that adapts Linux upstream PoCs to downstream distributions.
