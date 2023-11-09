@@ -8,7 +8,9 @@ It provides rich interfaces that allow you to do a lot of cool things with Syzbo
 - Bug Reproduce (Upstream/Downstream)
 - VM Management
 - Kernel Tracing
-- Integration with other Syzbot-based tools [[SyzScope](https://github.com/plummm/SyzScope)]
+- Integration with other Syzbot-based tools [SyzScope](https://github.com/plummm/SyzScope)
+
+Access to our [paper](./SyzBridge-Camera_Ready.pdf) for more details
 
 ## Why did we develop SyzBridge
 
