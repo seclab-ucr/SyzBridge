@@ -493,11 +493,7 @@ def convert_folder_name_to_plugin_name(file):
     return res
 
 def unique(seq):
-    res = []
-    for each in seq:
-        if each not in res:
-            res.append(each)
-    return res
+    return list(set(seq))
 
 def kasan_mem_to_shadow(addr):
     return (addr >> 3) + 0xdffffc0000000000
