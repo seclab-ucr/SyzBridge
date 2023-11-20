@@ -234,7 +234,21 @@ def chmodX(path):
     os.chmod(path, st.st_mode | stat.S_IEXEC)
 
 def request_get(url):
-    return requests.request(method='GET', url=url)
+    '''
+    Try request a url for 5 times with Chrome's User-Agent
+    '''
+    headers={'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'}
+    failed=0
+    while failed<5:
+        r=requests.request(method='GET', url=url,headers=headers)
+        if r.status_code==200:
+            print(f'[+]Success on crawl {url}')
+            return r
+        failed+=1
+        print(f'[*]Failed on crawl {url} for {failed} times')
+        time.sleep(5)
+    #Ok... let's just return
+    return requests.request(method='GET', url=url,headers=headers)
 
 def init_logger(logger_id, cus_format='%(asctime)s %(message)s', debug=False, propagate=False, handler_type = FILE_HANDLER):
     ran = random.getrandbits(8)

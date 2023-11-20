@@ -366,7 +366,7 @@ class Crawler:
         return res
     
     def check_excluded_distro(self, hash_val, patch_url):
-        req = requests.request(method='GET', url=patch_url)
+        req = request_get(patch_url)
         if req.status_code == 429:
             self.slow_request = True
         soup = BeautifulSoup(req.text, "html.parser")
@@ -488,7 +488,7 @@ class Crawler:
     def get_linux_commit_date_online(self, hash_val):
         url = "https://github.com/torvalds/linux/search?q={}&type=commits".format(hash_val)
         while True:
-            req = requests.request(method='GET', url=url)
+            req = request_get(url=url)
             if req.status_code == 429:
                 self.slow_request = True
             time.sleep(5)
@@ -556,7 +556,7 @@ class Crawler:
             return None
         if hash_val!=None:
             url = self._get_case_url(hash_val)
-            req = requests.request(method='GET', url=url)
+            req = request_get(url=url)
             if req.status_code == 429:
                 self.slow_request = True
             soup = BeautifulSoup(req.text, "html.parser")
@@ -797,7 +797,7 @@ class Crawler:
 
     def __get_table(self, url):
         self.logger.debug("Get table from {}".format(url))
-        req = requests.request(method='GET', url=url)
+        req = request_get(url=url)
         if req.status_code == 429:
             self.slow_request = True
         soup = BeautifulSoup(req.text, "html.parser")
