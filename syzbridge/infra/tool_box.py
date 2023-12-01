@@ -1,5 +1,5 @@
 import os, re, stat, sys
-from time import sleep
+import time
 import requests
 import logging
 import random
