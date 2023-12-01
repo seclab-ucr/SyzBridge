@@ -11,6 +11,14 @@ It provides rich interfaces that allow you to do a lot of cool things with Syzbo
 - Integration with other Syzbot-based tools [SyzScope](https://github.com/plummm/SyzScope)
 
 Access to our [paper](./SyzBridge-Camera_Ready.pdf) for more details
+```
+@inproceedings{syzbridge,
+  author    = {Xiaochen Zou and Yu Hao and Zheng Zhang and Juefei Pu and Weiteng Chen and Zhiyun Qian},
+  title     = {{SyzBridge: Bridging the Gap in Exploitability Assessment of Linux Kernel Bugs in the Linux Ecosystem}},
+  booktitle = {31st Annual Network and Distributed System Security Symposium, {NDSS}},
+  year      = {2024},
+}
+```
 
 ## Why did we develop SyzBridge
 
