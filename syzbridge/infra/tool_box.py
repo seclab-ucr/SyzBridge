@@ -246,7 +246,7 @@ def request_get(url):
             return r
         failed+=1
         print(f'[*]Failed on crawl {url} for {failed} times')
-        sleep(5)
+        time.sleep(5)
     #Ok... let's just return
     return requests.request(method='GET', url=url,headers=headers)
 
