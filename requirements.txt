@@ -17,3 +17,4 @@ protobuf==3.19.4
 pygsheets==2.0.5
 rich==12.5.1
 filelock==3.0.12
+importlib-resources==6.1.1
