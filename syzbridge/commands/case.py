@@ -24,9 +24,10 @@ class CaseCommand(Command):
         parser.add_argument('--incomplete', action='store_true', help='Get incomplete case info')
         parser.add_argument('--succeed', action='store_true', help='Get succeed case info')
         parser.add_argument('--error', action='store_true', help='Get error case info')
+        parser.add_argument('--case-hash', action='store_true', help='Get case hash')
         parser.add_argument('--case-title', action='store_true', help='Get case title')
+        parser.add_argument('--case-patch', action='store_true', help='Get case patch')
         parser.add_argument('--remove-stamp', action='append', default=[], help='Remove finish stamp')
-        parser.add_argument('--show', action='store_true', help='Show case info')
 
         parser.add_argument('--config', nargs='?', action='store', help='config file of a project')
         parser.add_argument('--launch-qemu', nargs='?', action='store', help='launch qemu of specified distro')
@@ -72,29 +73,24 @@ class CaseCommand(Command):
         if args.parse_trace != None:
             self.parse_trace(args.parse_trace)
             return
-        if args.show:
-            for hash_val in self.cases:
-                print(json.dumps(self.cases[hash_val], indent=4))
         work_folder = []
         if args.all:
             work_folder = ['succeed', 'error', 'incomplete', 'completed']
-            self.print_case_info()
+        case_hash = []
         if args.completed:
             work_folder.append('completed')
-            show = self.read_case_from_folder('completed')
-            self.print_case_info(show)
+            case_hash = self.read_case_from_folder('completed')
         if args.incomplete:
             work_folder.append('incomplete')
-            show = self.read_case_from_folder('incomplete')
-            self.print_case_info(show)
+            case_hash = self.read_case_from_folder('incomplete')
         if args.succeed:
             work_folder.append('succeed')
-            show = self.read_case_from_folder('succeed')
-            self.print_case_info(show)
+            case_hash = self.read_case_from_folder('succeed')
         if args.error:
             work_folder.append('error')
-            show = self.read_case_from_folder('error')
-            self.print_case_info(show)
+            case_hash = self.read_case_from_folder('error')
+        
+        self.print_case_info(case_hash)
         n = 0
         if args.remove_stamp != []:
             for hash_val in self.cases:
@@ -160,9 +156,23 @@ class CaseCommand(Command):
     def print_case_info(self, show=[]):
         for hash_val in self.cases:
             if hash_val in show or show == []:
-                line = hash_val
+                line = ''
+                if self.args.case_hash:
+                    line += hash_val
                 if self.args.case_title:
-                    line += ' | ' + self.cases[hash_val]['title']
+                    if line != '':
+                        line += ' | '
+                    try:
+                        line += self.cases[hash_val]['title']
+                    except:
+                        line += "TITLE MISSING"
+                if self.args.case_patch:
+                    if line != '':
+                        line += ' | '
+                    try:
+                        line += self.cases[hash_val]['patch']['url']
+                    except:
+                        line += "PATCH MISSING"
                 print(line)
             
     def parse_trace(self, value):

@@ -180,7 +180,7 @@ class Launcher(Build):
                     self._crash_end(line) or \
                     (self._crash_start(line) and crash_flag):
                     if crash_flag == 1 and crash != []:
-                        if self.crash_title_check(qemu, crash):
+                        if not self.crash_title_check(qemu, crash):
                             crash = []
                         else:
                             res.append(crash)

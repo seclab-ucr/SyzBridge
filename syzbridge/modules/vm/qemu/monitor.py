@@ -163,8 +163,7 @@ class Monitor:
         return text.decode("utf-8")
     
     def close(self):
-        if self.mon_inst != None:
-            self.mon_inst.close()
+        self.mon_inst.close()
 
     def _sendline(self, cmd):
         self.mon_inst.sendline(cmd)

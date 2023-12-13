@@ -47,6 +47,7 @@ class Crawler:
         self.filter_by_distro_cycle_end = filter_by_distro_cycle_end or match_single_distro
         self.filter_by_distro_effective_cycle = filter_by_distro_cycle_start or filter_by_distro_cycle_end
         self.distro_vm = {}
+        self.slow_request = False
         self.match_single_distro = match_single_distro
         if filter_by_reported != "":
             n = filter_by_reported.split('-')
@@ -365,7 +366,9 @@ class Crawler:
         return res
     
     def check_excluded_distro(self, hash_val, patch_url):
-        req = requests.request(method='GET', url=patch_url)
+        req = request_get(patch_url)
+        if req.status_code == 429:
+            self.slow_request = True
         soup = BeautifulSoup(req.text, "html.parser")
         self._patch_info['url'] = patch_url
         patch_hash = patch_url.split("id=")[1]
@@ -485,9 +488,9 @@ class Crawler:
     def get_linux_commit_date_online(self, hash_val):
         url = "https://github.com/torvalds/linux/search?q={}&type=commits".format(hash_val)
         while True:
-            req = requests.request(method='GET', url=url)
-            if req.status_code != 429:
-                break
+            req = request_get(url=url)
+            if req.status_code == 429:
+                self.slow_request = True
             time.sleep(5)
         soup = BeautifulSoup(req.text, "html.parser")
         try:
@@ -553,7 +556,9 @@ class Crawler:
             return None
         if hash_val!=None:
             url = self._get_case_url(hash_val)
-            req = requests.request(method='GET', url=url)
+            req = request_get(url=url)
+            if req.status_code == 429:
+                self.slow_request = True
             soup = BeautifulSoup(req.text, "html.parser")
         else:
             soup = BeautifulSoup(text, "html.parser")
@@ -562,6 +567,8 @@ class Crawler:
 
     def retreive_case(self, hash_val):
         self.cases[hash_val] = {}
+        if self.slow_request:
+            time.sleep(1)
         detail = self.request_detail(hash_val)
         url = self._get_case_url(hash_val)
         if len(detail) < num_of_elements:
@@ -790,7 +797,9 @@ class Crawler:
 
     def __get_table(self, url):
         self.logger.debug("Get table from {}".format(url))
-        req = requests.request(method='GET', url=url)
+        req = request_get(url=url)
+        if req.status_code == 429:
+            self.slow_request = True
         soup = BeautifulSoup(req.text, "html.parser")
         tables = soup.find_all('table', {"class": "list_table"})
         if len(tables) == 0:

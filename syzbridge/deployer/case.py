@@ -17,9 +17,9 @@ class Case:
         self.debug = self.args.debug
         self.case_hash = case_hash[:7]
         self._success = False
-        self.path_syzbridge = os.getcwd()
+        self.path_expbridge = os.getcwd()
         self.path_project = owner.proj_dir
-        self.path_package = os.path.join(self.path_syzbridge, "syzbridge")
+        self.path_package = os.path.join(self.path_expbridge, "syzbridge")
         self.path_case = self._get_case_path()
         self.path_ori_case = self.path_case
         self.case = case
@@ -80,6 +80,9 @@ class Case:
         if c_prog == None:
             c_prog = ""
             self.has_c_repro = False
+        if syz_prog == None:
+            self.case_logger.warning("Syzkaller repro prog is missing")
+            return
         
         script = os.path.join(self.path_package, "scripts/init-case.sh")
         chmodX(script)

@@ -83,10 +83,11 @@ class Deployer(Case, Task):
     # This function iterates all enabled tasks, runs corresponding analysis and save bugs to their folders.
     def deploy(self):
         error = False
-        for task in self.iterate_enabled_tasks():
-            if self.capable(task) and not self.is_service(task):
-                if self.do_task(task) == 1:
-                    error = True
+        if self._ready_to_run():
+            for task in self.iterate_enabled_tasks():
+                if self.capable(task) and not self.is_service(task):
+                    if self.do_task(task) == 1:
+                        error = True
 
         self.case_logger.info("Case finished")
         if self._success:
@@ -100,11 +101,11 @@ class Deployer(Case, Task):
     
     # This function provides a interface that you can run another SyzBridge instance
     # It returns the stnadar output of this instance
-    def call_syzbridge(self, cmd, args):
+    def call_expbridge(self, cmd, args):
         out = []
         run_cmd = ['python3', 'syzbridge', cmd]
         run_cmd.extend(args)
-        p = Popen(run_cmd, stdout=PIPE, stderr=STDOUT, shell=False, cwd=self.path_syzbridge, env=os.environ.copy())
+        p = Popen(run_cmd, stdout=PIPE, stderr=STDOUT, shell=False, cwd=self.path_expbridge, env=os.environ.copy())
         with p.stdout:
             try:
                 for line in iter(p.stdout.readline, b''):
@@ -168,6 +169,11 @@ class Deployer(Case, Task):
                 self._build_dependency_module(getattr(Task, depend_cap_text), A)
                 self.build_task_class(getattr(Task, depend_cap_text), A)
         self.ts[task_id] = dst_node
+    
+    def _ready_to_run(self):
+        if self.case['syz_repro'] == None:
+            return False
+        return True
 
     def _get_plugin_instance_by_name(self, name):
         plugin = self.cfg.get_plugin(name)

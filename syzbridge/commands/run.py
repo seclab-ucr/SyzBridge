@@ -74,7 +74,7 @@ class RunCommand(Command):
                 continue
 
     def custom_subparser(self, parser, cmd):
-        return parser.add_parser(cmd, help='Run bug reproduce process or bug analysis')
+        return parser.add_parser(cmd, help='Run the analysis')
 
     def read_cases(self, name):
         cases = {}

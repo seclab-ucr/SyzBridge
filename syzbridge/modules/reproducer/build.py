@@ -14,7 +14,7 @@ class Build():
         self.ssh_key = None
         self.distro_name = ""
         self.path_case = manager.path_case
-        self.path_syzbridge = manager.path_syzbridge
+        self.path_expbridge = manager.path_expbridge
         self.path_linux = None
         self.index = manager.index
         self.root_user = None
@@ -38,7 +38,9 @@ class Build():
         if self.kernel.type == VM.DISTROS:
             self.create_snapshot(self.kernel.distro_image, path_image, self.kernel.distro_name)
         if self.kernel.type == VM.UPSTREAM:
-            self.create_snapshot(self.kernel.distro_image, path_image, self.kernel.distro_name)
+            self.create_snapshot(self.kernel.distro_image, path_image, self.kernel.distro_name, target_format="raw")
+        if self.kernel.type == VM.ANDROID:
+            self.create_snapshot(self.kernel.distro_image, path_image, self.kernel.distro_name, target_format="raw")
     
     def _get_unused_port(self):
         so = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -68,12 +70,12 @@ class Build():
             self.path_linux = "{}/linux-{}".format(self.path_case, self.kernel.distro_name)
             self.distro_name = self.kernel.distro_name
 
-    def create_snapshot(self, src, img, image_name):
-        dst = "{}/{}-snapshot.img".format(img, image_name)
+    def create_snapshot(self, src, img_dir, image_name, target_format="qcow2"):
+        dst = "{}/{}-snapshot.img".format(img_dir, image_name)
         self.log("Create image {} from {}".format(dst, src))
         if os.path.isfile(dst):
             os.remove(dst)
-        cmd = ["qemu-img", "create", "-f", "qcow2", "-b", src, "-F", "raw", dst]
+        cmd = ["qemu-img", "create", "-f", "qcow2", "-b", src, "-F", target_format, dst]
         p = Popen(cmd, stderr=STDOUT, stdout=PIPE)
         exitcode = p.wait()
         return exitcode

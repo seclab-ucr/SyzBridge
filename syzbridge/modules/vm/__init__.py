@@ -4,7 +4,7 @@ from .qemu.instance import VMInstance
 from .qemu.state import VMState
 from .aemu.instance import AEmuInstance
 
-class VM():
+class VM(VMState):
     DISTROS = 0
     UPSTREAM = 1
     ANDROID = 2

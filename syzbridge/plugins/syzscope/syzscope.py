@@ -50,22 +50,37 @@ class Syzscope(AnalysisModule):
                 self.repro_timeout = int(plugin.repro_timeout)
             except AttributeError:
                 self.repro_timeout = 300
+            try:
+                run_when_distro_success = plugin.run_when_distro_success
+            except AttributeError:
+                run_when_distro_success = False
         except AttributeError:
             self.err_msg("Failed to get timeout or repro_timeout or gdb_port or qemu_monitor_port or max_round")
             return False
-        return self.prepare_on_demand(timeout, max_round, repro_mode)
+        return self.prepare_on_demand(timeout, max_round, repro_mode, run_when_distro_success)
     
-    def prepare_on_demand(self, timeout, max_round, repro_mode):
+    def prepare_on_demand(self, timeout, max_round, repro_mode, run_when_distro_success):
         self._prepared = True
         self.timeout = timeout
         self.max_round = max_round
         self.repro_mode = repro_mode
+        self.run_when_distro_success = run_when_distro_success
         return True
     
     def success(self):
         return self._move_to_success
 
     def run(self):
+        if self.run_when_distro_success:
+            allow_syzscope = False
+            bug_reproduce = self.cfg.get_plugin(BugReproduce.NAME).instance
+            for distro in bug_reproduce.results:
+                if bug_reproduce.results[distro]['trigger']:
+                    allow_syzscope = True
+                    break
+            if not allow_syzscope:
+                self.logger.info("No distro has been triggered, skip syzscope")
+                return True
         self.syz_feature_mini = self.cfg.get_plugin(SyzFeatureMinimize.NAME).instance
         self.syz_feature_mini.path_case_plugin = os.path.join(self.path_case, SyzFeatureMinimize.NAME)
         if not self.plugin_finished("SyzFeatureMinimize"):

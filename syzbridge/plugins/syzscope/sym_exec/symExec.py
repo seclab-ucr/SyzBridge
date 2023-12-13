@@ -82,7 +82,7 @@ class SymExec(MemInstrument):
             self.logger.error("Call setup_vm() to initialize the vm first")
             return True
 
-        self.vm.timeout = 5*60
+        self.vm.timeout = self._timeout
         if not self.vm.gdb_connect(self.gdb_port):
             self.logger.error("SyzScope does not support current gdb, please change to pwndbg in ~/.gdbinit")
             qemu.destroy()
