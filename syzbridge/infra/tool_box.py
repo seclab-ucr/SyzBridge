@@ -1,5 +1,4 @@
 import os, re, stat, sys
-import time
 import requests
 import logging
 import random
@@ -9,6 +8,7 @@ from os import get_terminal_size
 from platform import platform, system
 
 from .strings import *
+from time import sleep
 
 FILE_HANDLER = 0
 STREAM_HANDLER = 1
@@ -246,7 +246,7 @@ def request_get(url):
             return r
         failed+=1
         print(f'[*]Failed on crawl {url} for {failed} times')
-        time.sleep(5)
+        sleep(5)
     #Ok... let's just return
     return requests.request(method='GET', url=url,headers=headers)
 
