@@ -98,14 +98,14 @@ class RunCommand(Command):
 
     def prepare_cases(self, index,):
         while(1):
-            self.lock.acquire(blocking=True)
             try:
                 hash_val = self.queue.get(block=True, timeout=3)
-                self.logger.info("Thread {}: run case {} [{}/{}] left".format(index, hash_val, self.rest.value-1, self.total))
-                self.rest.value -= 1
-                self.lock.release()
                 x = multiprocessing.Process(target=self.deploy_one_case, args=(index, hash_val,), name="lord-{}".format(index))
                 x.start()
+                self.lock.acquire(blocking=True)
+                self.logger.info("Thread {}: run case {} in proc {} [{}/{}] left".format(index, hash_val, x.pid, self.rest.value-1, self.total))
+                self.rest.value -= 1
+                self.lock.release()
                 x.join()
                 gc.collect()
             except Empty:
@@ -200,6 +200,7 @@ class RunCommand(Command):
         if self.check_essential_args():
             return
 
+        print("Main Proc: {}".format(os.getpid()))
         try:
             if self.args.config != None:
                 self.cfg = self.parse_config(self.args.config)

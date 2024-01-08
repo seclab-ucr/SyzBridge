@@ -102,7 +102,7 @@ class AnalysisModule:
     
     @check
     def prepare(self, **kwargs):
-        self.main_logger.debug("Preparing {}".format(self.analyzor.NAME))
+        self.case_logger.info("Preparing {}".format(self.analyzor.NAME))
         if not self._check_dependencies_finished():
             return False
         return self.analyzor.prepare(**kwargs)

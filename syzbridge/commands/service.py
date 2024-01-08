@@ -24,6 +24,7 @@ class ServiceCommand(Command):
         self.lock = threading.Lock()
         self.queue = multiprocessing.Queue()
         self.skiped = False
+        self.cases: dict = {}
 
     def add_arguments(self, parser):
         super().add_arguments(parser)
@@ -178,6 +179,10 @@ class ServiceCommand(Command):
         self.cases = self.read_cases(self.args.proj)
         if self.cases != None:
             bk_cases = self.cases.copy()
+            for hash_val in bk_cases:
+                if not self.finished_case(hash_val):
+                    del self.cases[hash_val]
+            bk_cases = self.cases.copy()
         else:
             bk_cases = {}
         if not self.args.skip_today or self.skiped:
@@ -207,10 +212,20 @@ class ServiceCommand(Command):
     
     def finished_case(self, hash_val):
         hash_val = hash_val[:7]
-        return os.path.exists(os.path.join(self.proj_dir, "completed", hash_val)) or \
-            os.path.exists(os.path.join(self.proj_dir, "succeed", hash_val)) or \
-            os.path.exists(os.path.join(self.proj_dir, "error", hash_val))
+        case_path = os.path.join(self.proj_dir, "completed", hash_val)
+        if not os.path.exists(case_path):
+            case_path = os.path.join(self.proj_dir, "succeed", hash_val)
+        if not os.path.exists(case_path):
+            case_path = os.path.join(self.proj_dir, "error", hash_val)
+        if not os.path.exists(case_path):
+            return False
+        return self.finished_bug_reproduce(case_path)
+        
     
+    def finished_bug_reproduce(self, case_path):
+        stamp = os.path.join(case_path, ".stamp/FINISH_BUGREPRODUCE")
+        return os.path.exists(stamp)
+        
     def deploy_one_case(self, index, hash_val):
         case = self.cases[hash_val]
         dp = Deployer(owner=self, index=index, case_hash=hash_val, case=case)
@@ -219,18 +234,17 @@ class ServiceCommand(Command):
 
     def prepare_cases(self, index,):
         while(1):
-            self.lock.acquire(blocking=True)
             try:
                 hash_val = self.queue.get(block=True, timeout=3)
-                print("Thread {}: run case {} [{}/{}] left".format(index, hash_val, self.rest.value-1, self.total))
-                self.rest.value -= 1
-                self.lock.release()
                 x = multiprocessing.Process(target=self.deploy_one_case, args=(index, hash_val,), name="lord-{}".format(index))
                 x.start()
+                self.lock.acquire(blocking=True)
+                print("Thread {}: run case {} in proc {} [{}/{}] left".format(index, hash_val, x.pid, self.rest.value-1, self.total))
+                self.rest.value -= 1
+                self.lock.release()
                 x.join()
                 gc.collect()
             except Empty:
-                self.lock.release()
                 break
         print("Thread {} exit->".format(index))
     
@@ -244,6 +258,7 @@ class ServiceCommand(Command):
         if self.check_essential_args():
             return
 
+        print("Main Proc: {}".format(os.getpid()))
         try:
             if self.args.config != None:
                 self.cfg = self.parse_config(self.args.config)
