@@ -575,6 +575,7 @@ class Crawler:
             self.logger.error("Failed to get detail of a case {}".format(url))
             self.cases.pop(hash_val)
             return -1
+        self.logger.info("Success on getting case {}".format(url))
         self.cases[hash_val]["commit"] = detail[0]
         self.cases[hash_val]["syzkaller"] = detail[1]
         self.cases[hash_val]["config"] = detail[2]
@@ -756,7 +757,7 @@ class Crawler:
                             syz_repro = syzbot_host_url + repros[2].next.attrs['href']
                             self.logger.debug("Testcase URL: {}".format(syz_repro))
                         except:
-                            self.logger.debug("[Failed] {} Repro is missing".format(url))
+                            self.logger.warn("[Failed] {} Repro is missing".format(url))
                             if self.filter_by_syz_prog:
                                 continue
                         try:
@@ -764,7 +765,7 @@ class Crawler:
                             self.logger.debug("C prog URL: {}".format(c_repro))
                         except:
                             c_repro = None
-                            self.logger.debug("No c prog found")
+                            self.logger.warn("No c prog found")
                             if self.filter_by_c_prog:
                                 continue
 

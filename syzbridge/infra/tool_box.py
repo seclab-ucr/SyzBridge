@@ -242,10 +242,10 @@ def request_get(url):
     while failed<5:
         r=requests.request(method='GET', url=url,headers=headers)
         if r.status_code==200:
-            print(f'[+]Success on crawl {url}')
+            #print(f'[+]Success on crawl {url}')
             return r
         failed+=1
-        print(f'[*]Failed on crawl {url} for {failed} times')
+        #print(f'[*]Failed on crawl {url} for {failed} times')
         sleep(5)
     #Ok... let's just return
     return requests.request(method='GET', url=url,headers=headers)

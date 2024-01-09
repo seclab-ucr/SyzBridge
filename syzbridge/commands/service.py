@@ -182,7 +182,8 @@ class ServiceCommand(Command):
             for hash_val in bk_cases:
                 if not self.finished_case(hash_val):
                     del self.cases[hash_val]
-            bk_cases = self.cases.copy()
+                else:
+                    filter_by_hash.append(hash_val)
         else:
             bk_cases = {}
         if not self.args.skip_today or self.skiped:
@@ -197,11 +198,6 @@ class ServiceCommand(Command):
             cfg=self.cfg, debug=self.args.debug, log_path = self.proj_dir)
 
             crawler.run()
-            tmp_cases = crawler.cases.copy()
-            if self.cases != None:
-                for hash_val in tmp_cases:
-                    if hash_val in self.cases and self.finished_case(hash_val):
-                        del crawler.cases[hash_val]
             self.cases = crawler.cases
         if self.args.skip_today:
             self.skiped = True
