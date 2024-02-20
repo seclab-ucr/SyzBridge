@@ -232,7 +232,7 @@ class ServiceCommand(Command):
         while(1):
             try:
                 hash_val = self.queue.get(block=True, timeout=3)
-                x = multiprocessing.Process(target=self.deploy_one_case, args=(index, hash_val,), name="lord-{}".format(index))
+                x = multiprocessing.Process(target=self.deploy_one_case, args=(index, hash_val,), name="worker-{}".format(index))
                 x.start()
                 self.lock.acquire(blocking=True)
                 print("Thread {}: run case {} in proc {} [{}/{}] left".format(index, hash_val, x.pid, self.rest.value-1, self.total))

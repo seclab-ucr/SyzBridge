@@ -109,7 +109,6 @@ class RunCommand(Command):
                 x.join()
                 gc.collect()
             except Empty:
-                self.lock.release()
                 break
         self.logger.info("Thread {} exit->".format(index))
 
