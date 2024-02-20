@@ -155,20 +155,19 @@ if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
     else
       cd $LINUX_REPO
     fi
-    if [ "$KERNEL" == "stable" ] || [ "$KERNEL" == "upstream" ]; then
-      if [ $COMMIT == "0" ]; then
-        cd linux-$LINUX_VERSION || get_linux $LINUX_REPO $LINUX_VERSION
-      else
-        # If terminate syzbridge with ctrl+c, some git repo may still be protected
-        rm .git/index.lock || true 
-        git stash || echo "it's ok"
-        make clean > /dev/null || echo "it's ok"
-        git clean -fdx > /dev/null || echo "it's ok"
-        if [ ! -z $BRANCH ]; then
-          git checkout -f $BRANCH || (git reset --hard HEAD && git fetch --all --tags > /dev/null && git checkout remotes/origin/master && git pull --tags origin master > /dev/null && git reset --hard origin/master > /dev/null && git checkout -f $BRANCH)
-        fi
-        git checkout -f $COMMIT || (git reset --hard HEAD && git fetch --all --tags > /dev/null && git pull --tags origin master > /dev/null && git reset --hard origin/master > /dev/null && git checkout -f $COMMIT)
+
+    if [ $COMMIT == "0" ]; then
+      cd linux-$LINUX_VERSION || get_linux $LINUX_REPO $LINUX_VERSION
+    else
+      # If terminate syzbridge with ctrl+c, some git repo may still be protected
+      rm .git/index.lock || true 
+      git stash || echo "it's ok"
+      make clean > /dev/null || echo "it's ok"
+      git clean -fdx > /dev/null || echo "it's ok"
+      if [ ! -z $BRANCH ]; then
+        git checkout -f $BRANCH || (git reset --hard HEAD && git fetch --all --tags > /dev/null && git checkout remotes/origin/master && (git pull --tags origin master > /dev/null || git pull --tags origin main > /dev/null) && git reset --hard origin/master > /dev/null && git checkout -f $BRANCH)
       fi
+      git checkout -f $COMMIT || (git reset --hard HEAD && git fetch --all --tags > /dev/null && (git pull --tags origin master > /dev/null || git pull --tags origin main > /dev/null) && git reset --hard origin/master > /dev/null && git checkout -f $COMMIT)
     fi
     curl $CONFIG > .config
     # Panic on data corruption may stop the fuzzing session
@@ -270,6 +269,20 @@ if [ ! -f "$CASE_PATH/.stamp/BUILD_KERNEL" ]; then
       for key in $CONFIGKEYSENABLE;
       do
         config_enable $key
+      done
+    fi
+
+    if [ -f "$CASE_PATH/enable_config" ]; then
+      cat $CASE_PATH/enable_config |
+      while read -r line; do \
+          config_enable $line; \
+      done
+    fi
+
+    if [ -f "$CASE_PATH/disable_config" ]; then
+      cat $CASE_PATH/disable_config |
+      while read -r line; do \
+          config_disable $line; \
       done
     fi
 

@@ -115,7 +115,7 @@ class Syzscope(AnalysisModule):
         return True
     
     def build_env_upstream(self):
-        return self.build_mainline_kernel(keep_ori_config=True)
+        return self.build_mainline_kernel(keep_ori_config=True, config_enable=["CONFIG_KASAN_OUTLINE"], config_disable=["CONFIG_KASAN_INLINE"])
     
     def run_symbolic_execution(self, distro: Vendor):
         sub_dir = os.path.join(self.path_case_plugin, distro.distro_name)
