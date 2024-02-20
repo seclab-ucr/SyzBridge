@@ -3,6 +3,7 @@
 #
 # Usage ./requirements.sh
 
+set -ex
 PROJECT_PATH=$(pwd)
 TOOLS_PATH="$(pwd)/tools"
 if [ ! -f "$(pwd)/tools/.stamp/ENV_SETUP" ]; then
@@ -22,8 +23,9 @@ cd $TOOLS_PATH
 
 echo "[+] Download pwndbg"
 if [ ! -f "$TOOLS_PATH/.stamp/SETUP_PWNDBG" ]; then
-  git clone https://github.com/plummm/pwndbg_linux_kernel.git pwndbg
+  git clone https://github.com/pwndbg/pwndbg.git pwndbg
   cd pwndbg
+  git checkout f642efbd92e30c7b892b5e816d353cc5a03e5cb5
   ./setup.sh
   touch $TOOLS_PATH/.stamp/SETUP_PWNDBG
   cd ..

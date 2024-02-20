@@ -170,7 +170,7 @@ class AnalysisModule:
         self.console_msg.module[module_name] = [ConsoleMessage.INFO, "Preparing {}".format(module_name), ""]
         self.manager.send_to_console()
     
-    def build_mainline_kernel(self, commit=None, config=None, image=None, gcc_version=None, kernel=None, patch="", keep_ori_config=False, extra_cmd="", kernel_repo="", branch=""):
+    def build_mainline_kernel(self, commit=None, config=None, image=None, gcc_version=None, kernel=None, patch="", keep_ori_config=False, extra_cmd="", kernel_repo="", branch="", config_enable=[], config_disable=[]):
         self.set_stage_text("Building mainline kernel")
         if commit == None:
             commit = self.case["commit"]
@@ -193,6 +193,15 @@ class AnalysisModule:
         else:
             keep_ori_config = "0"
         
+        with open(os.path.join(self.path_case, 'enable_config'), 'w') as f:
+            f.writelines(config_enable)
+            f.write('\n')
+            f.truncate()
+        with open(os.path.join(self.path_case, 'disable_config'), 'w') as f:
+            f.writelines(config_disable)
+            f.write('\n')
+            f.truncate()
+            
         script = os.path.join(self.path_package, "scripts/deploy-linux.sh")
         chmodX(script)
         
