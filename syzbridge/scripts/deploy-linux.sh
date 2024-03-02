@@ -26,18 +26,22 @@ function copy_log_then_exit() {
 
 function config_disable() {
   key=$1
-  sed -i "s/$key=n/# $key is not set/g" .config
-  sed -i "s/$key=m/# $key is not set/g" .config
-  sed -i "s/$key=y/# $key is not set/g" .config
-  grep $key .config || echo "# $key is not set" >> .config
+  if [ "$key" != "" ]; then
+    sed -i "s/$key=n/# $key is not set/g" .config
+    sed -i "s/$key=m/# $key is not set/g" .config
+    sed -i "s/$key=y/# $key is not set/g" .config
+    grep $key .config || echo "# $key is not set" >> .config
+  fi
 }
 
 function config_enable() {
   key=$1
-  sed -i "s/$key=n/$key=y/g" .config
-  sed -i "s/$key=m/$key=y/g" .config
-  sed -i "s/# $key is not set/$key=y/g" .config
-  grep $key .config || echo "$key=y" >> .config
+  if [ "$key" != "" ]; then
+    sed -i "s/$key=n/$key=y/g" .config
+    sed -i "s/$key=m/$key=y/g" .config
+    sed -i "s/# $key is not set/$key=y/g" .config
+    grep $key .config || echo "$key=y" >> .config
+  fi
 }
 
 function get_linux() {

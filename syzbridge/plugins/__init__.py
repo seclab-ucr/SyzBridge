@@ -195,11 +195,13 @@ class AnalysisModule:
         
         with open(os.path.join(self.path_case, 'enable_config'), 'w') as f:
             f.writelines(config_enable)
-            f.write('\n')
+            if config_enable != []:
+                f.write('\n')
             f.truncate()
         with open(os.path.join(self.path_case, 'disable_config'), 'w') as f:
             f.writelines(config_disable)
-            f.write('\n')
+            if config_disable != []:
+                f.write('\n')
             f.truncate()
             
         script = os.path.join(self.path_package, "scripts/deploy-linux.sh")
