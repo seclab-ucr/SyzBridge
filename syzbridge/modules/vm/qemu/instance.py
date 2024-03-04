@@ -206,6 +206,8 @@ class VMInstance(Network):
         while not self.func_finished() and (self.timeout == None or self.timer <self.timeout) and booting_timer < 180:
             if self.kill_qemu:
                 self.case_logger.info('Signal kill qemu received.')
+                if not self.qemu_ready:
+                    self._send_return_value(False)
                 self.kill_vm()
                 return
             self.timer += 1

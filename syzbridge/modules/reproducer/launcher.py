@@ -262,7 +262,7 @@ class Launcher(Build):
                     try:
                         main_ret = main_func_q.get(block=True, timeout=10)
                     except queue.Empty:
-                        self.logger.error("crash capturer has finished {} seconds routine but PoC is still running ")
+                        self.logger.error("crash capturer has finished but PoC is still running ")
                         main_ret = None
                     self.logger.info("Reproduce finished, triggered the bug")
                     return [res, trigger, qemu.qemu_fail, main_ret]
@@ -272,7 +272,7 @@ class Launcher(Build):
         try:
             main_ret = main_func_q.get(block=True, timeout=10)
         except queue.Empty:
-            self.logger.error("crash capturer has finished {} seconds routine but PoC is still running ")
+            self.logger.error("crash capturer has finished but PoC is still running ")
             main_ret = None
         self.logger.info("Reproduce finished, didn't trigger bug")
         return [[], False, qemu.qemu_fail, main_ret]

@@ -218,24 +218,18 @@ class GoogleSheets(AnalysisModule):
         hash_value = self.case['hash']
         i = 2
         self.n_distro = len(self.cfg.get_distros())
-        while i >= 0:
-            val = wks.get_value('A'+str(i))
-            title = wks.get_value('B'+str(i))
-            if val == hash_value:
-                wks.insert_rows(i-1, number=self.n_distro)
-                return i
-            if val == "":
-                wks.insert_rows(1, number=self.n_distro)
-                return 2
-            try:
-                n_line = int(regx_get(r'(\d+):.*', title, 0))
-                if n_line == 0:
-                    wks.insert_rows(1, number=self.n_distro)
-                    return 2
-            except:
-                wks.insert_rows(1, number=self.n_distro)
-                return 2
-            i+= n_line
+        upper = 100
+        while True:
+            val = wks.get_values(start='A1', end='A{}'.format(upper))
+            if len(val) == upper:
+                upper *= 2
+                continue
+            for i in range(len(val)):
+                if hash_value in val[i]:
+                    wks.insert_rows(i, number=self.n_distro)
+                    return i
+            wks.insert_rows(1, number=self.n_distro)
+            return 2
     
     def _merge_cell(self, column, wks):
         if self.n_distro > 1:

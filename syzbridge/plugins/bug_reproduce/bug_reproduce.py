@@ -1,7 +1,7 @@
 from audioop import reverse
 import queue, multiprocessing
 import re, os, time, shutil, threading
-from unittest import result
+import traceback
 
 from plugins import AnalysisModule
 from modules.vm import VMInstance
@@ -31,6 +31,7 @@ class BugReproduce(AnalysisModule):
         self.c_prog = False
         self.ori_c_prog = False
         self.syz_feature = {}
+        self.syz_root_feature = ['tun', 'usb']
         self.syz_feature_mini = None
         self.bug_title = ''
         self.results = {}
@@ -38,6 +39,7 @@ class BugReproduce(AnalysisModule):
         self.normal_user = None
         self.distro_lock = multiprocessing.Lock()
         self.repro_timeout = None
+        self.rule_out_features = []
         self._skip_regular_reproduce = False
         self._addition_modules = []
         
@@ -115,8 +117,11 @@ class BugReproduce(AnalysisModule):
             self.info_msg("BugReproduce will use C Prog instead")
             self.ori_c_prog = True
             self.c_prog = True
+            self.syz_feature = self._get_syz_features()
         else:
+            self.syz_feature_mini.prepare()
             self.syz_feature = self.syz_feature_mini.results.copy()
+            self.rule_out_features = self._get_rule_out_features()
             self.logger.info("Receive syz_feature: {} {}".format(self.syz_feature, self.syz_feature_mini))
             if self.syz_feature['prog_status'] == SyzFeatureMinimize.C_PROG:
                 self.c_prog = False
@@ -217,7 +222,10 @@ class BugReproduce(AnalysisModule):
                     self.results[distro.distro_name]['root'] = res['root']
 
             q.put([distro.distro_name, res])
-        except:
+        except Exception as e:
+            tb = traceback.format_exc()
+            self.logger.error("Exception occurs: {}".format(e))
+            self.logger.error(tb)
             q.put([PlguinUnknownError(), 0])
         return
     
@@ -278,6 +286,14 @@ class BugReproduce(AnalysisModule):
             if triggered:
                 title = self._BugChecker(report)
                 self.bug_title = title
+                if t[0] != []:
+                    self.syz_feature_mini.kernel = distro.distro_name
+                    feature = self.syz_feature.copy()
+                    for e in t[0]:
+                        if e in feature:
+                            feature[e] = True
+                    esse_features, _ = self.syz_feature_mini.minimize_syz_feature(feature, root=root)
+                    self.report.append("Features {} are essential for reproducing bug on {}".format(esse_features, distro.distro_name))
                 return triggered, t
             if len(t) == 1: # only if expt is the type of ModeprobePaniced, we proceed
                 expt = t[0]
@@ -512,8 +528,8 @@ class BugReproduce(AnalysisModule):
 
         if self._test_triggerability(qemu, distro_name, c_prog, vm_tag, root):
             result_queue.put(self.results)
-            return
-        return
+            return self.rule_out_features
+        return self.rule_out_features
 
     def set_history_status(self):
         for name in self.results:
@@ -584,14 +600,23 @@ class BugReproduce(AnalysisModule):
                     poc_name = "poc_root_no_repeat.c"
             dst = os.path.join(self.path_case_plugin, poc_name)
         poc_feature = self.tune_poc(root, distro_name, src, dst, namespace)
+        self.distro_lock.release()
         
         if c_prog:
             return self._execute_poc(root, qemu, poc_feature, poc_name, repeat)
         else:
-            return self._execute_syz(root, qemu, poc_feature, repeat, namespace)
+            triggered = self._execute_syz(root, qemu, poc_feature, [], repeat, namespace)
+            if triggered:
+                self.rule_out_features = []
+                return triggered
+            
+            triggered = self._execute_syz(root, qemu, poc_feature, self.rule_out_features, repeat, namespace)
+            if triggered:
+                for e in self.rule_out_features:
+                    self.syz_feature[e] = True
+            return triggered
     
-    def _execute_syz(self, root, qemu: VMInstance, poc_feature, repeat=False, namespace=False):
-        self.distro_lock.release()
+    def _execute_syz(self, root, qemu: VMInstance, poc_feature, force_feature: list, repeat=False, namespace=False):
         if root:
             user = self.root_user
         else:
@@ -611,10 +636,19 @@ class BugReproduce(AnalysisModule):
         self._check_poc_feature(poc_feature, qemu, user)
         testcase_text = open(testcase, "r").readlines()
 
+        feature = self.syz_feature.copy()
+        for e in force_feature:
+            if e in feature:
+                feature[e] = True
+        
+        if not root:
+            for e in self.syz_root_feature:
+                if e in feature:
+                    feature[e] = False
         if namespace:
-            cmds = self.syz_feature_mini.make_syz_command(testcase_text, self.syz_feature, i386, repeat=repeat, sandbox="namespace", root=root)
+            cmds = self.syz_feature_mini.make_syz_command(testcase_text, feature, i386, repeat=repeat, sandbox="namespace", root=root)
         else:
-            cmds = self.syz_feature_mini.make_syz_command(testcase_text, self.syz_feature, i386, repeat=repeat, root=root)
+            cmds = self.syz_feature_mini.make_syz_command(testcase_text, feature, i386, repeat=repeat, root=root)
         qemu.command(cmds=cmds, user=user, wait=True, timeout=self.repro_timeout)
         qemu.command(cmds="killall syz-executor && killall syz-execprog", user="root", wait=True)
 
@@ -622,7 +656,6 @@ class BugReproduce(AnalysisModule):
         return qemu.trigger_crash
 
     def _execute_poc(self, root, qemu: VMInstance, poc_feature, poc_src, repeat=False):
-        self.distro_lock.release()
         if root:
             user = self.root_user
         else:
@@ -752,6 +785,37 @@ class BugReproduce(AnalysisModule):
         if out == None:
             self.err_msg("kernel config check failed due to ssh problem")
         return False
+    
+    def _get_syz_features(self):
+        features = {}
+        
+        testcase = os.path.join(self.path_case, "testcase")
+        syz_repro = open(testcase, 'r').readlines()
+        for line in syz_repro:
+            if line.find('{') != -1 and line.find('}') != -1:
+                try:
+                    pm = json.loads(line[1:])
+                except json.JSONDecodeError:
+                    self.case_logger.info("Using old syz_repro")
+                    pm = syzrepro_convert_format(line[1:])
+                
+                for each in ["tun", "binfmt_misc", "cgroups", "close_fds", "devlinkpci", "netdev", "resetnet", "usb", "ieee802154", "sysctl", "vhci", "wifi"]:
+                    if each in pm:
+                        features[each] = pm[each]
+                break
+        self.info_msg("features: {}".format(features))
+        return features 
+
+    def _get_rule_out_features(self):
+        res = []
+        path_rule_out = os.path.join(self.syz_feature_mini.path_case_plugin, "rule_out_features")
+        with open(path_rule_out, 'r') as f:
+            rule_out_features = f.readlines()
+            for line in rule_out_features:
+                line = line.strip()
+                res.append(line)
+            return res
+        return res
     
     def _init_results(self):
         for distro in self.cfg.get_distros_and_android():

@@ -73,12 +73,12 @@ class SyzFeatureMinimize(AnalysisModule):
             return -1
         return 0
     
-    def minimize_syz_feature(self, features):
+    def minimize_syz_feature(self, features, root=True):
         self.report.append("PoC originally requires {}".format(features))
-        return self._minimize_syz_feature(features)
+        return self._minimize_syz_feature(features, root)
     
     def test_two_prog(self, features):
-        if self._test_feature(None, features, repeat=True):
+        if self._test_feature(None, features, root=True, repeat=True):
             return self.SYZ_PROG
         if self.has_c_repro and self.test_PoC(features, repeat=True):
             return self.C_PROG
@@ -113,15 +113,12 @@ class SyzFeatureMinimize(AnalysisModule):
         features['prog_status'] = prog_status
         self.results = features
         self.info_msg("self.results: {} {}".format(self.results, self))
-        if prog_status == self.BOTH_FAIL:
-            return self.generate_new_PoC(features)
-        if prog_status == self.C_PROG:
-            return self.generate_new_PoC(features)
-        features = self.minimize_syz_feature(features)
+        features, rule_out = self.minimize_syz_feature(features)
+        self._write_to("\n".join(rule_out), "rule_out_features")
         return self.generate_new_PoC(features)
 
     def test_PoC(self, features: list, repeat=False):
-        if not self._test_feature(None, features, test_c_prog=True, repeat=repeat):
+        if not self._test_feature(None, features, root=True, test_c_prog=True, repeat=repeat):
             return False
         return True
     
@@ -179,38 +176,50 @@ class SyzFeatureMinimize(AnalysisModule):
             self.results[each] = features[each]
         return features 
     
-    def _minimize_syz_feature(self, features: list):
+    def _minimize_syz_feature(self, features: list, root):
+        rule_out = []
         essential_features = features.copy()
         for rule_out_feature in features:
             if features[rule_out_feature]:
-                if self._test_feature(rule_out_feature, essential_features, repeat=True):
+                if self._test_feature(rule_out_feature, essential_features, repeat=True, root=root):
                     essential_features[rule_out_feature] = False
+                    rule_out.append(rule_out_feature)
         essential_features['no_sandbox'] = True
-        if not self._test_feature(None, essential_features, repeat=True):
+        if not self._test_feature(None, essential_features, repeat=True, root=root):
             essential_features['no_sandbox'] = False
         self.results = essential_features
-        return essential_features
+        return essential_features, rule_out
     
-    def _test_feature(self, rule_out_feature, essential_features: list, test_c_prog=False, repeat=False, sandbox=""):
+    def _test_feature(self, rule_out_feature, essential_features: list, root, test_c_prog=False, repeat=False, sandbox=""):
         self.info_msg("=======================================")
         self.info_msg("Testing ruling out feature: {}".format(rule_out_feature))
         self.info_msg("Testing essential feature: {}".format(essential_features))
         new_features = essential_features.copy()
         if rule_out_feature in new_features:
             new_features[rule_out_feature] = False
-        upstream = self.cfg.get_kernel_by_name(self.kernel)
-        if upstream == None:
+        distro = self.cfg.get_kernel_by_name(self.kernel)
+        if distro == None:
             self.logger.exception("Fail to get {} kernel".format(self.kernel))
             return False
-        upstream.repro.init_logger(self.logger)
-        _, triggered, _ = upstream.repro.reproduce(func=self._capture_crash, func_args=(new_features, test_c_prog, repeat, sandbox), vm_tag='test feature {}'.format(rule_out_feature),\
-            timeout=self.repro_timeout + 100, attempt=self.repro_attempt, root=True, work_dir=self.path_case_plugin, c_hash=self.case_hash)
+        self.root_user = distro.repro.root_user
+        self.normal_user = distro.repro.normal_user
+        distro.repro.init_logger(self.logger)
+        _, triggered, _ = distro.repro.reproduce(func=self._capture_crash, func_args=(new_features, test_c_prog, repeat, sandbox), vm_tag='test feature {}'.format(rule_out_feature),\
+            timeout=self.repro_timeout + 100, attempt=self.repro_attempt, root=root, work_dir=self.path_case_plugin, c_hash=self.case_hash)
         self.info_msg("crash triggered: {}".format(triggered))
         return triggered
 
     def _capture_crash(self, qemu: VM, root:bool, features: list, test_c_prog: bool, repeat: bool, sandbox: str):
+        if root:
+            user = self.root_user
+        else:
+            user = self.normal_user
+            
         syz_prog_path = os.path.join(self.path_case_plugin, 'testcase')
-        qemu.upload(user='root', src=[syz_prog_path], dst='/root', wait=True)
+        if root:
+            qemu.upload(user=user, src=[syz_prog_path], dst='/root', wait=True)
+        else:
+            qemu.upload(user=user, src=[syz_prog_path], dst='/home/{}'.format(user), wait=True)
         qemu.command(cmds="echo \"6\" > /proc/sys/kernel/printk", user='root', wait=True)
         
         if test_c_prog:
@@ -218,23 +227,23 @@ class SyzFeatureMinimize(AnalysisModule):
             local_command(command='chmod +x syz-prog2c && {} > {}/poc.c'.format(prog2c_cmd, self.path_case_plugin), logger=self.logger,\
                 shell=True, cwd=self.syz.path_case_plugin)
             self.info_msg("Convert syz-prog to c prog: {}".format(prog2c_cmd))
-            qemu.upload(user='root', src=[os.path.join(self.path_case_plugin, 'poc.c')], dst='/root', wait=True)
+            qemu.upload(user=user, src=[os.path.join(self.path_case_plugin, 'poc.c')], dst='/root', wait=True)
             if self.i386:
-                qemu.command(cmds="gcc -m32 -pthread -o poc poc.c", user="root", wait=True)
+                qemu.command(cmds="gcc -m32 -pthread -o poc poc.c", user=user, wait=True)
             else:
-                qemu.command(cmds="gcc -pthread -o poc poc.c", user="root", wait=True)
+                qemu.command(cmds="gcc -pthread -o poc poc.c", user=user, wait=True)
             
-            qemu.command(cmds="./poc", user="root", wait=True, timeout=self.repro_timeout)
+            qemu.command(cmds="./poc", user=user, wait=True, timeout=self.repro_timeout)
         else:
             executor_path = os.path.join(self.path_case_plugin, 'syz-executor')
             execprog_path = os.path.join(self.path_case_plugin, 'syz-execprog')
-            qemu.upload(user='root', src=[execprog_path, executor_path], dst='/tmp', wait=True)
-            qemu.command(cmds="chmod +x /tmp/syz-executor && chmod +x /tmp/syz-execprog", user='root', wait=True, timeout=self.repro_timeout)
+            qemu.upload(user=user, src=[execprog_path, executor_path], dst='/tmp', wait=True)
+            qemu.command(cmds="chmod +x /tmp/syz-executor && chmod +x /tmp/syz-execprog", user=user, wait=True, timeout=self.repro_timeout)
 
             syz_prog = open(syz_prog_path, 'r').readlines()
-            cmd = self.make_syz_command(syz_prog, features, self.i386, repeat=repeat, sandbox=sandbox)
+            cmd = self.make_syz_command(syz_prog, features, self.i386, repeat=repeat, sandbox=sandbox, root=root)
             self.info_msg("syz command: {}".format(cmd))
-            qemu.command(cmds=cmd, user='root', wait=True, timeout=self.repro_timeout)
+            qemu.command(cmds=cmd, user=user, wait=True, timeout=self.repro_timeout)
         return
     
     def _extract_prog_options(self, prog):

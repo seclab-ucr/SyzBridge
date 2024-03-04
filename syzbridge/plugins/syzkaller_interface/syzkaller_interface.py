@@ -209,7 +209,7 @@ class SyzkallerInterface(AnalysisModule):
                         continue
                     if line == "dfd609eca1871f01757d6b04b19fc273c87c14e5":
                         self._support_enable = True
-        return False
+        return self._support_enable
     
     def success(self):
         return self._move_to_success
