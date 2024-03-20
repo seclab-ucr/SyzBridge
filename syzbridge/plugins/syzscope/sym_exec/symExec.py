@@ -122,6 +122,7 @@ class SymExec(MemInstrument):
                   #angr.options.CONSERVATIVE_WRITE_STRATEGY,
                   #angr.options.SYMBOL_FILL_UNCONSTRAINED_MEMORY,
                   angr.options.KEEP_IP_SYMBOLIC,
+                  angr.options.USE_SYSTEM_TIMES,
                   angr.options.CONSTRAINT_TRACKING_IN_SOLVER,
                   angr.options.REGION_MAPPING,
                   angr.options.ZERO_FILL_UNCONSTRAINED_REGISTERS}
