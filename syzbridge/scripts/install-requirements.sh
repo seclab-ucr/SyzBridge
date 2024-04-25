@@ -38,13 +38,13 @@ if [ ! -f "$TOOLS_PATH/.stamp/BUILD_IMAGE" ]; then
     mkdir img
   fi
   cd img
-  if [ ! -f "stretch.img" ]; then
-    cp $PROJECT_PATH/syzbridge/scripts/create-image.sh ./
+  if [ ! -f "*.img" ]; then
+    wget https://raw.githubusercontent.com/google/syzkaller/master/tools/create-image.sh
     chmod +x ./create-image.sh
-    ./create-image.sh -s 10240
-    rm stretch.img.key || true
-    mv stretch.id_rsa stretch.img.key
-    chmod 400 stretch.img.key
+    ./create-image.sh -s 10240 -d bullseye
+    rm bullseye.img.key || true
+    mv bullseye.id_rsa bullseye.img.key
+    chmod 400 bullseye.img.key
     touch $TOOLS_PATH/.stamp/BUILD_IMAGE
   fi
   cd ..

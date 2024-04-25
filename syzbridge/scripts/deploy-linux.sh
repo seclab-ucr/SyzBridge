@@ -129,11 +129,11 @@ if [ ! -d "$CASE_PATH/img" ]; then
   mkdir -p $CASE_PATH/img
 fi
 cd img
-if [ ! -L "$CASE_PATH/img/stretch.img" ]; then
-  ln -s $PROJECT_PATH/tools/img/$IMAGE.img ./stretch.img
+if [ ! -L "$CASE_PATH/img/bullseye.img" ]; then
+  ln -s $PROJECT_PATH/tools/img/$IMAGE.img ./bullseye.img
 fi
-if [ ! -L "$CASE_PATH/img/stretch.img.key" ]; then
-  ln -s $PROJECT_PATH/tools/img/$IMAGE.img.key ./stretch.img.key
+if [ ! -L "$CASE_PATH/img/bullseye.img.key" ]; then
+  ln -s $PROJECT_PATH/tools/img/$IMAGE.img.key ./bullseye.img.key
 fi
 cd ..
 
