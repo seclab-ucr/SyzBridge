@@ -1,6 +1,7 @@
 from modules.vm import VM
 from infra.tool_box import *
 from plugins import AnalysisModule
+from .error import *
 
 class BugBisection(AnalysisModule):
     NAME = "BugBisection"
@@ -50,17 +51,54 @@ class BugBisection(AnalysisModule):
         i386 = False
         if regx_match(r'386', self.case["manager"]):
             i386 = True
-        for version in self.kernel_version[self.case_hash]:
-            self.logger.info("Now testing {}".format(version))
-            if self.build_upstream_kernel(kernel_version=version) != 0:
-                self.err_msg("Failed to build upstream kernel")
-                return False
-            if not self.test_poc(i386=i386, version=version):
-                self.report.append("Bug doesn't reproduce on {}".format(version))
-                return True
-            self.report.append("Bug triggered on {}".format(version))
+        reverse = 0
+        l = 0
+        r = len(self.kernel_version[self.case_hash]) - 1
+        self.report.append("bound [{}-{}]".format(l,r))
+        low = self.test_version(l, i386)
+        high = self.test_version(r, i386)
+        if low and not high:
+            reverse = 0
+        if not low and high:
+            reverse = 1
+        if low and high:
+            self.err_msg("head and tail are both reproducible")
+            return True
+        if not low and not high:
+            self.err_msg("head and tail are not reproducible")
+            return True
+        l += 1
+        r -= 1
+        while l < r:
+            mid = (l+r)//2
+            success = self.test_version(mid, i386)
+            if success:
+                if reverse:
+                    r = mid - 1
+                else:
+                    l = mid + 1
+            else:
+                if reverse:
+                    l = mid
+                else:
+                    r = mid
+        version = self.kernel_version[self.case_hash][l]
+        self.report.append("{} is a blaming commit".format(version))
         return False
 
+    def test_version(self, mid, i386):
+        version = self.kernel_version[self.case_hash][mid]
+        self.logger.info("Now testing {}".format(version))
+        if self.build_upstream_kernel(kernel_version=version) != 0:
+            self.err_msg("Failed to build upstream kernel")
+            #raise FailToBuildKernel(mid)
+            return False
+        if not self.test_poc(i386=i386, version=version):
+            self.report.append("Bug doesn't reproduce on {} [{}]".format(version, mid))
+            return False
+        self.report.append("Bug triggered on {}".format(version))
+        return True
+            
     def test_poc(self, i386, version):
         upstream = self.cfg.get_kernel_by_name(self.kernel)
         if upstream == None:

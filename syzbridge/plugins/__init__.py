@@ -177,7 +177,7 @@ class AnalysisModule:
         if config == None:
             config = self.case["config"]
         if image == None:
-            image = "stretch"
+            image = "bullseye"
         if gcc_version == None:
             gcc_version = set_compiler_version(time_parser.parse(self.case["time"]), self.case["config"])
 
