@@ -754,7 +754,15 @@ class Crawler:
                             self.logger.exception("Failed to retrieve case \"offset\" and \"size\" {}: {}".format(url, e))
                         
                         try:
-                            syz_repro = syzbot_host_url + repros[2].next.attrs['href']
+                            for e in repros[2].contents:
+                                if e == '\n':
+                                    continue
+                                else:
+                                    repro_tag = e
+                                    break
+                            # If not tag was found, next line will raise an exception 
+                            # because repro_tag if not defined.
+                            syz_repro = syzbot_host_url + repro_tag.attrs['href']
                             self.logger.debug("Testcase URL: {}".format(syz_repro))
                         except:
                             self.logger.warn("[Failed] {} Repro is missing".format(url))
